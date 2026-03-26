@@ -206,6 +206,7 @@ export default function SuperAdmin() {
 
   const [stores, setStores] = useState<StoreSummary[]>([]);
   const [plansMap, setPlansMap] = useState<Record<string, PlanRow>>({});
+  const [ordersForChart, setOrdersForChart] = useState<OrderRow[]>([]);
 
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState<'all' | 'active' | 'suspended' | 'inactive'>(
@@ -213,8 +214,6 @@ export default function SuperAdmin() {
   );
   const [planFilter, setPlanFilter] = useState<'all' | 'iniciante' | 'pro' | 'premium'>('all');
   const [sortBy, setSortBy] = useState<'revenue' | 'orders' | 'name' | 'createdAt'>('orders');
-
-  const [ordersForChart, setOrdersForChart] = useState<OrderRow[]>([]);
 
   const generatedSlug = useMemo(() => {
     return slugify(form.username || form.loja);
@@ -410,16 +409,13 @@ export default function SuperAdmin() {
     setFeedback({ type: null, message: '' });
 
     try {
-      const {
-        data: { session: currentSession },
-        error: sessionError,
-      } = await supabase.auth.getSession();
+      const { data: sessionData, error: sessionError } = await supabase.auth.getSession();
 
       if (sessionError) {
         throw new Error('Não foi possível validar sua sessão. Faça login novamente.');
       }
 
-      let session = currentSession;
+      let session = sessionData.session;
 
       if (!session) {
         throw new Error('Sessão inválida. Faça login novamente.');
@@ -439,18 +435,22 @@ export default function SuperAdmin() {
       }
 
       const accessToken = session.access_token;
+      const anonKey = import.meta.env.VITE_SUPABASE_ANON_KEY as string;
+      const supabaseUrl = import.meta.env.VITE_SUPABASE_URL as string;
 
       if (!accessToken) {
         throw new Error('Token inválido. Faça login novamente.');
       }
 
-      const functionUrl = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/create-admin-store`;
+      if (!anonKey || !supabaseUrl) {
+        throw new Error('Variáveis do Supabase não configuradas corretamente.');
+      }
 
-      const response = await fetch(functionUrl, {
+      const response = await fetch(`${supabaseUrl}/functions/v1/create-admin-store`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          apikey: import.meta.env.VITE_SUPABASE_ANON_KEY as string,
+          apikey: anonKey,
           Authorization: `Bearer ${accessToken}`,
         },
         body: JSON.stringify({
@@ -884,7 +884,9 @@ export default function SuperAdmin() {
 
         <Card className="mb-6 border border-emerald-500/10 bg-black/55 shadow-[0_20px_60px_rgba(0,0,0,0.45)] backdrop-blur-xl">
           <CardHeader className="border-b border-white/5">
-            <CardTitle className="text-xl font-black text-white">Criar novo admin</CardTitle>
+            <CardTitle className="text-xl font-black text-white">
+              Criar novo admin
+            </CardTitle>
           </CardHeader>
 
           <CardContent className="space-y-6 pt-6">
