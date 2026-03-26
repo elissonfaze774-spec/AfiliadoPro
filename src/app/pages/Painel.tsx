@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   Package,
@@ -12,6 +12,8 @@ import {
   LogOut,
   Crown,
   TrendingUp,
+  RefreshCw,
+  Store as StoreIcon,
 } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import { useAuth } from '../context/AuthTemp';
@@ -27,6 +29,31 @@ type StoreData = {
   niche: string | null;
 };
 
+type AuthUserLike = {
+  id?: string;
+  email?: string | null;
+  role?: string | null;
+  storeId?: string | null;
+};
+
+function normalizeStore(raw: any): StoreData | null {
+  if (!raw) return null;
+
+  const id = raw.id ?? '';
+  const name = raw.name ?? raw.store_name ?? '';
+  const slug = raw.slug ?? '';
+  const niche = raw.niche ?? null;
+
+  if (!id || !name || !slug) return null;
+
+  return {
+    id,
+    name,
+    slug,
+    niche,
+  };
+}
+
 export default function Painel() {
   const navigate = useNavigate();
   const { user, authLoading, logout } = useAuth();
@@ -34,57 +61,219 @@ export default function Painel() {
 
   const [store, setStore] = useState<StoreData | null>(null);
   const [loadingStore, setLoadingStore] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
 
-  useEffect(() => {
-    let mounted = true;
+  const storeChannelRef = useRef<ReturnType<typeof supabase.channel> | null>(null);
+  const onboardingRedirectRef = useRef(false);
+  const lastStoreIdRef = useRef<string | null>(null);
 
-    async function loadStore() {
-      if (authLoading) return;
+  const resolveStoreForAdmin = useCallback(async (authUser: AuthUserLike): Promise<StoreData | null> => {
+    const authUserId = authUser?.id ?? null;
+    const authEmail = authUser?.email?.trim().toLowerCase() ?? null;
+    const directStoreId = authUser?.storeId ?? null;
 
-      if (!user) {
-        navigate('/login', { replace: true });
-        return;
-      }
+    if (directStoreId) {
+      const { data, error } = await supabase
+        .from('stores')
+        .select('id, name, store_name, slug, niche')
+        .eq('id', directStoreId)
+        .maybeSingle();
 
-      if (user.role === 'super-admin') {
-        navigate('/super-admin', { replace: true });
-        return;
-      }
-
-      if (!user.storeId) {
-        navigate('/onboarding', { replace: true });
-        return;
-      }
-
-      try {
-        setLoadingStore(true);
-
-        const { data, error } = await supabase
-          .from('stores')
-          .select('id, name, slug, niche')
-          .eq('id', user.storeId)
-          .single();
-
-        if (error) throw error;
-
-        if (!mounted) return;
-        setStore(data);
-      } catch (error) {
-        console.error('Erro ao carregar loja:', error);
-        if (!mounted) return;
-        setStore(null);
-        toast.error('Não foi possível carregar sua loja.');
-      } finally {
-        if (mounted) setLoadingStore(false);
+      if (!error) {
+        const normalized = normalizeStore(data);
+        if (normalized) return normalized;
       }
     }
 
+    if (authEmail) {
+      const { data: adminByEmail, error: adminEmailError } = await supabase
+        .from('admins')
+        .select('store_id')
+        .eq('email', authEmail)
+        .maybeSingle();
+
+      if (!adminEmailError && adminByEmail?.store_id) {
+        const { data: storeByAdminEmail, error: storeByAdminEmailError } = await supabase
+          .from('stores')
+          .select('id, name, store_name, slug, niche')
+          .eq('id', adminByEmail.store_id)
+          .maybeSingle();
+
+        if (!storeByAdminEmailError) {
+          const normalized = normalizeStore(storeByAdminEmail);
+          if (normalized) return normalized;
+        }
+      }
+    }
+
+    if (authUserId) {
+      const { data: storeByOwner, error: storeByOwnerError } = await supabase
+        .from('stores')
+        .select('id, name, store_name, slug, niche')
+        .eq('owner_user_id', authUserId)
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
+      if (!storeByOwnerError) {
+        const normalized = normalizeStore(storeByOwner);
+        if (normalized) return normalized;
+      }
+    }
+
+    if (authUserId) {
+      const { data: profile, error: profileError } = await supabase
+        .from('profiles')
+        .select('id, email')
+        .eq('id', authUserId)
+        .maybeSingle();
+
+      if (!profileError && profile?.email) {
+        const profileEmail = String(profile.email).trim().toLowerCase();
+
+        const { data: adminByProfileEmail, error: adminByProfileEmailError } = await supabase
+          .from('admins')
+          .select('store_id')
+          .eq('email', profileEmail)
+          .maybeSingle();
+
+        if (!adminByProfileEmailError && adminByProfileEmail?.store_id) {
+          const { data: storeByProfileEmail, error: storeByProfileEmailError } = await supabase
+            .from('stores')
+            .select('id, name, store_name, slug, niche')
+            .eq('id', adminByProfileEmail.store_id)
+            .maybeSingle();
+
+          if (!storeByProfileEmailError) {
+            const normalized = normalizeStore(storeByProfileEmail);
+            if (normalized) return normalized;
+          }
+        }
+      }
+    }
+
+    return null;
+  }, []);
+
+  const loadStore = useCallback(
+    async (options?: { silent?: boolean }) => {
+      const silent = options?.silent ?? false;
+
+      if (authLoading) return null;
+
+      const localUser = user as AuthUserLike | null;
+
+      if (!localUser) {
+        navigate('/login', { replace: true });
+        return null;
+      }
+
+      if (localUser.role === 'super-admin') {
+        navigate('/super-admin', { replace: true });
+        return null;
+      }
+
+      try {
+        if (!silent) {
+          setLoadingStore(true);
+        } else {
+          setRefreshing(true);
+        }
+
+        const {
+          data: { user: sessionUser },
+        } = await supabase.auth.getUser();
+
+        const mergedUser: AuthUserLike = {
+          ...localUser,
+          id: localUser.id ?? sessionUser?.id,
+          email: localUser.email ?? sessionUser?.email ?? null,
+        };
+
+        const resolvedStore = await resolveStoreForAdmin(mergedUser);
+
+        if (resolvedStore) {
+          onboardingRedirectRef.current = false;
+          setStore((current) => {
+            if (
+              current?.id === resolvedStore.id &&
+              current?.name === resolvedStore.name &&
+              current?.slug === resolvedStore.slug &&
+              current?.niche === resolvedStore.niche
+            ) {
+              return current;
+            }
+
+            return resolvedStore;
+          });
+
+          return resolvedStore;
+        }
+
+        setStore(null);
+
+        if (!onboardingRedirectRef.current) {
+          onboardingRedirectRef.current = true;
+          navigate('/onboarding', { replace: true });
+        }
+
+        return null;
+      } catch (error) {
+        console.error('Erro ao carregar loja do admin:', error);
+        toast.error('Não foi possível carregar sua loja agora.');
+        return null;
+      } finally {
+        setLoadingStore(false);
+        setRefreshing(false);
+      }
+    },
+    [authLoading, navigate, resolveStoreForAdmin, user],
+  );
+
+  useEffect(() => {
     void loadStore();
+  }, [loadStore]);
+
+  useEffect(() => {
+    const currentStoreId = store?.id ?? null;
+    const lastStoreId = lastStoreIdRef.current;
+
+    if (lastStoreId === currentStoreId) return;
+
+    if (storeChannelRef.current) {
+      void supabase.removeChannel(storeChannelRef.current);
+      storeChannelRef.current = null;
+    }
+
+    lastStoreIdRef.current = currentStoreId;
+
+    if (!currentStoreId) return;
+
+    const channel = supabase
+      .channel(`painel-store-${currentStoreId}`)
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'stores',
+          filter: `id=eq.${currentStoreId}`,
+        },
+        async () => {
+          await loadStore({ silent: true });
+        },
+      )
+      .subscribe();
+
+    storeChannelRef.current = channel;
 
     return () => {
-      mounted = false;
+      if (storeChannelRef.current) {
+        void supabase.removeChannel(storeChannelRef.current);
+        storeChannelRef.current = null;
+      }
     };
-  }, [user, authLoading, navigate]);
+  }, [store?.id, loadStore]);
 
   const handleLogout = async () => {
     try {
@@ -94,6 +283,11 @@ export default function Painel() {
       console.error('Erro ao sair:', error);
       toast.error('Erro ao sair.');
     }
+  };
+
+  const handleRefresh = async () => {
+    await loadStore({ silent: true });
+    toast.success('Painel atualizado.');
   };
 
   const estimatedEarnings = useMemo(() => {
@@ -131,7 +325,7 @@ export default function Painel() {
     { text: 'Cadastrar primeiro produto', done: products.length > 0 },
     { text: 'Gerar primeiro conteúdo', done: contents.length > 0 },
     { text: 'Acessar sua loja pública', done: Boolean(store?.slug) },
-    { text: 'Compartilhar seu link', done: false },
+    { text: 'Personalizar a loja', done: Boolean(store?.name && store?.slug) },
   ];
 
   if (authLoading || loadingStore) {
@@ -155,18 +349,30 @@ export default function Painel() {
       <div className="min-h-screen bg-[radial-gradient(circle_at_top_left,_rgba(34,197,94,0.16),_transparent_28%),radial-gradient(circle_at_bottom_right,_rgba(16,185,129,0.12),_transparent_24%),linear-gradient(180deg,_#020202_0%,_#050505_45%,_#07110a_100%)] text-white">
         <div className="mx-auto flex min-h-screen max-w-3xl flex-col items-center justify-center px-6 text-center">
           <div className="mb-6 flex h-20 w-20 items-center justify-center rounded-3xl border border-emerald-500/20 bg-emerald-500/10 text-emerald-400">
-            <TrendingUp className="h-10 w-10" />
+            <StoreIcon className="h-10 w-10" />
           </div>
           <h1 className="text-3xl font-black">Sua loja ainda não está pronta</h1>
           <p className="mt-3 max-w-xl text-zinc-400">
-            Vamos continuar sua configuração inicial para liberar o painel completo.
+            Não encontramos uma loja vinculada a este admin. Vamos continuar sua configuração inicial.
           </p>
-          <Button
-            className="mt-6 rounded-2xl bg-emerald-500 font-bold text-black hover:bg-emerald-400"
-            onClick={() => navigate('/onboarding', { replace: true })}
-          >
-            Continuar configuração
-          </Button>
+          <div className="mt-6 flex flex-wrap items-center justify-center gap-3">
+            <Button
+              className="rounded-2xl bg-emerald-500 font-bold text-black hover:bg-emerald-400"
+              onClick={() => navigate('/onboarding', { replace: true })}
+            >
+              Continuar configuração
+            </Button>
+
+            <Button
+              variant="outline"
+              className="rounded-2xl border-white/10 bg-black/20 text-white hover:bg-white/5"
+              onClick={handleRefresh}
+              disabled={refreshing}
+            >
+              <RefreshCw className={`mr-2 h-4 w-4 ${refreshing ? 'animate-spin' : ''}`} />
+              Tentar novamente
+            </Button>
+          </div>
         </div>
       </div>
     );
@@ -190,7 +396,17 @@ export default function Painel() {
               </div>
             </div>
 
-            <div className="flex items-center gap-3">
+            <div className="flex flex-wrap items-center gap-3">
+              <Button
+                variant="outline"
+                className="border-white/10 bg-black/30 text-white hover:bg-white/5"
+                onClick={handleRefresh}
+                disabled={refreshing}
+              >
+                <RefreshCw className={`mr-2 h-4 w-4 ${refreshing ? 'animate-spin' : ''}`} />
+                Atualizar
+              </Button>
+
               <Button
                 variant="outline"
                 className="border-emerald-500/20 bg-black/30 text-white hover:bg-emerald-500/10"

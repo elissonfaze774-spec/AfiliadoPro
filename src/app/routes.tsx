@@ -1,4 +1,4 @@
-import { createBrowserRouter } from 'react-router-dom';
+import { Navigate, Outlet, createBrowserRouter } from 'react-router-dom';
 import LandingPage from './pages/LandingPage';
 import { Login } from './pages/Login';
 import RecuperarSenha from './pages/RecuperarSenha';
@@ -10,6 +10,73 @@ import GerarConteudo from './pages/GerarConteudo';
 import LojaPublica from './pages/LojaPublica';
 import SuperAdmin from './pages/SuperAdmin';
 import App from './App';
+import { useAuth } from './context/AuthTemp';
+
+function AdminRoute() {
+  const { user, authLoading } = useAuth();
+
+  if (authLoading) {
+    return (
+      <div className="min-h-screen bg-black flex items-center justify-center text-white">
+        Carregando...
+      </div>
+    );
+  }
+
+  if (!user) {
+    return <Navigate to="/login" replace />;
+  }
+
+  if (user.role === 'super-admin') {
+    return <Navigate to="/super-admin" replace />;
+  }
+
+  return <Outlet />;
+}
+
+function SuperAdminRoute() {
+  const { user, authLoading } = useAuth();
+
+  if (authLoading) {
+    return (
+      <div className="min-h-screen bg-black flex items-center justify-center text-white">
+        Carregando...
+      </div>
+    );
+  }
+
+  if (!user) {
+    return <Navigate to="/login" replace />;
+  }
+
+  if (user.role !== 'super-admin') {
+    return <Navigate to="/painel" replace />;
+  }
+
+  return <Outlet />;
+}
+
+function GuestRoute() {
+  const { user, authLoading } = useAuth();
+
+  if (authLoading) {
+    return (
+      <div className="min-h-screen bg-black flex items-center justify-center text-white">
+        Carregando...
+      </div>
+    );
+  }
+
+  if (user?.role === 'super-admin') {
+    return <Navigate to="/super-admin" replace />;
+  }
+
+  if (user?.role === 'admin') {
+    return <Navigate to={user.storeId ? '/painel' : '/onboarding'} replace />;
+  }
+
+  return <Outlet />;
+}
 
 export const router = createBrowserRouter([
   {
@@ -21,40 +88,55 @@ export const router = createBrowserRouter([
         Component: LandingPage,
       },
       {
-        path: 'login',
-        Component: Login,
+        element: <GuestRoute />,
+        children: [
+          {
+            path: 'login',
+            Component: Login,
+          },
+          {
+            path: 'recuperar-senha',
+            Component: RecuperarSenha,
+          },
+        ],
       },
       {
-        path: 'recuperar-senha',
-        Component: RecuperarSenha,
-      },
-      {
-        path: 'onboarding',
-        Component: Onboarding,
-      },
-      {
-        path: 'painel',
-        Component: Painel,
-      },
-      {
-        path: 'adicionar-produto',
-        Component: AdicionarProduto,
-      },
-      {
-        path: 'produto/:id',
-        Component: ProdutoView,
-      },
-      {
-        path: 'gerar-conteudo',
-        Component: GerarConteudo,
+        element: <AdminRoute />,
+        children: [
+          {
+            path: 'onboarding',
+            Component: Onboarding,
+          },
+          {
+            path: 'painel',
+            Component: Painel,
+          },
+          {
+            path: 'adicionar-produto',
+            Component: AdicionarProduto,
+          },
+          {
+            path: 'produto/:id',
+            Component: ProdutoView,
+          },
+          {
+            path: 'gerar-conteudo',
+            Component: GerarConteudo,
+          },
+        ],
       },
       {
         path: 'loja/:username',
         Component: LojaPublica,
       },
       {
-        path: 'super-admin',
-        Component: SuperAdmin,
+        element: <SuperAdminRoute />,
+        children: [
+          {
+            path: 'super-admin',
+            Component: SuperAdmin,
+          },
+        ],
       },
     ],
   },

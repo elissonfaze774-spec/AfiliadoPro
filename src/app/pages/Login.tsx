@@ -86,7 +86,7 @@ export function Login() {
   const whatsappLink = useMemo(
     () =>
       'https://wa.me/5582987227433?text=Ol%C3%A1%21%20Tenho%20interesse%20em%20obter%20acesso%20ao%20AfiliadoPRO.%20Pode%20me%20passar%20mais%20informa%C3%A7%C3%B5es%3F',
-    []
+    [],
   );
 
   useEffect(() => {
@@ -95,7 +95,7 @@ export function Login() {
 
     const timer = window.setTimeout(() => {
       navigate(getRedirect(user), { replace: true });
-    }, 120);
+    }, 80);
 
     return () => window.clearTimeout(timer);
   }, [user, authLoading, navigate]);
@@ -160,10 +160,7 @@ export function Login() {
       }
 
       toast.success('Login realizado com sucesso!');
-
-      window.setTimeout(() => {
-        navigate(getRedirect(appUser), { replace: true });
-      }, 120);
+      navigate(getRedirect(appUser), { replace: true });
     } catch (error) {
       const friendlyMessage = getFriendlyLoginError(error);
       setFormError(friendlyMessage);
@@ -289,16 +286,12 @@ export function Login() {
                     setEmail(e.target.value);
                     if (formError) setFormError('');
                   }}
-                  onBlur={() =>
-                    setTouched((prev) => ({ ...prev, email: true }))
-                  }
+                  onBlur={() => setTouched((prev) => ({ ...prev, email: true }))}
                   required
                   disabled={isSubmitting}
                   className="mt-2 h-14 rounded-2xl border border-white/10 bg-white/5 text-white placeholder:text-zinc-500 focus-visible:ring-1 focus-visible:ring-emerald-500"
                 />
-                {emailError ? (
-                  <p className="mt-2 text-xs text-red-300">{emailError}</p>
-                ) : null}
+                {emailError ? <p className="mt-2 text-xs text-red-300">{emailError}</p> : null}
               </div>
 
               <div>
@@ -315,16 +308,12 @@ export function Login() {
                     setPassword(e.target.value);
                     if (formError) setFormError('');
                   }}
-                  onBlur={() =>
-                    setTouched((prev) => ({ ...prev, password: true }))
-                  }
+                  onBlur={() => setTouched((prev) => ({ ...prev, password: true }))}
                   required
                   disabled={isSubmitting}
                   className="mt-2 h-14 rounded-2xl border border-white/10 bg-white/5 text-white placeholder:text-zinc-500 focus-visible:ring-1 focus-visible:ring-emerald-500"
                 />
-                {passwordError ? (
-                  <p className="mt-2 text-xs text-red-300">{passwordError}</p>
-                ) : null}
+                {passwordError ? <p className="mt-2 text-xs text-red-300">{passwordError}</p> : null}
               </div>
 
               <Button

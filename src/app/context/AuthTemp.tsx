@@ -51,6 +51,54 @@ function isInvalidLoginError(message: string) {
   );
 }
 
+async function resolveStoreId(authUserId: string, authUserEmail: string) {
+  const normalizedEmail = normalizeEmail(authUserEmail);
+
+  const { data: adminByUserId, error: adminByUserIdError } = await supabase
+    .from('admins')
+    .select('store_id')
+    .eq('user_id', authUserId)
+    .maybeSingle();
+
+  if (adminByUserIdError) {
+    throw new Error('Não foi possível carregar os dados administrativos da conta.');
+  }
+
+  if (adminByUserId?.store_id) {
+    return adminByUserId.store_id as string;
+  }
+
+  if (normalizedEmail) {
+    const { data: adminByEmail, error: adminByEmailError } = await supabase
+      .from('admins')
+      .select('store_id')
+      .eq('email', normalizedEmail)
+      .maybeSingle();
+
+    if (adminByEmailError) {
+      throw new Error('Não foi possível localizar a loja do admin.');
+    }
+
+    if (adminByEmail?.store_id) {
+      return adminByEmail.store_id as string;
+    }
+  }
+
+  const { data: storeByOwner, error: storeByOwnerError } = await supabase
+    .from('stores')
+    .select('id')
+    .eq('owner_user_id', authUserId)
+    .order('created_at', { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  if (storeByOwnerError) {
+    throw new Error('Não foi possível localizar a loja vinculada ao admin.');
+  }
+
+  return storeByOwner?.id ?? null;
+}
+
 async function loadAppUser(): Promise<AppUser | null> {
   const {
     data: { session },
@@ -78,25 +126,17 @@ async function loadAppUser(): Promise<AppUser | null> {
   }
 
   const profileRole = normalizeRole(profile?.role);
+  const profileEmail = normalizeEmail(profile?.email) || authUserEmail;
+
   let storeId: string | null = null;
 
   if (profileRole === 'admin') {
-    const { data: adminRow, error: adminError } = await supabase
-      .from('admins')
-      .select('store_id')
-      .eq('user_id', authUserId)
-      .maybeSingle();
-
-    if (adminError) {
-      throw new Error('Não foi possível carregar os dados administrativos da conta.');
-    }
-
-    storeId = adminRow?.store_id ?? null;
+    storeId = await resolveStoreId(authUserId, profileEmail);
   }
 
   return {
     id: authUserId,
-    email: normalizeEmail(profile?.email) || authUserEmail,
+    email: profileEmail,
     name: (profile?.name ?? '').trim(),
     role: profileRole,
     storeId,
@@ -116,8 +156,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       } = await supabase.auth.getSession();
 
       if (!session?.user) {
-        if (isMountedRef.current) setUser(null);
-        if (isMountedRef.current) setAuthLoading(false);
+        if (isMountedRef.current) {
+          setUser(null);
+          setAuthLoading(false);
+        }
         return null;
       }
     }
@@ -132,10 +174,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
 
       return appUser;
-    } catch {
+    } catch (error) {
+      console.error('Erro ao atualizar usuário:', error);
+
       if (isMountedRef.current) {
         setUser(null);
       }
+
       return null;
     } finally {
       refreshingRef.current = false;
@@ -195,6 +240,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     if (isMountedRef.current) {
       setUser(appUser);
+      setAuthLoading(false);
     }
 
     return appUser;
@@ -217,7 +263,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       logout,
       refreshUser,
     }),
-    [user, authLoading, login, logout, refreshUser]
+    [user, authLoading, login, logout, refreshUser],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
