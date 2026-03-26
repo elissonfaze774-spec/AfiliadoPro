@@ -10,8 +10,6 @@ import {
   Link2,
   Loader2,
   ShieldCheck,
-  TrendingUp,
-  Sparkles,
   AlertTriangle,
   X,
   RefreshCw,
@@ -20,7 +18,6 @@ import {
   Crown,
   Wallet,
   ShoppingCart,
-  Package,
   Users,
   BarChart3,
   Power,
@@ -212,10 +209,12 @@ export default function SuperAdmin() {
 
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState<'all' | 'active' | 'suspended' | 'inactive'>(
-    'all'
+    'all',
   );
   const [planFilter, setPlanFilter] = useState<'all' | 'iniciante' | 'pro' | 'premium'>('all');
   const [sortBy, setSortBy] = useState<'revenue' | 'orders' | 'name' | 'createdAt'>('orders');
+
+  const [ordersForChart, setOrdersForChart] = useState<OrderRow[]>([]);
 
   const generatedSlug = useMemo(() => {
     return slugify(form.username || form.loja);
@@ -258,21 +257,11 @@ export default function SuperAdmin() {
           .from('stores')
           .select('id, store_name, slug, status, plan, created_at')
           .order('created_at', { ascending: false }),
-        supabase
-          .from('admins')
-          .select('id, store_id, email, created_at'),
-        supabase
-          .from('profiles')
-          .select('id, name, email, role, created_at'),
-        supabase
-          .from('orders')
-          .select('id, store_id, total, created_at'),
-        supabase
-          .from('products')
-          .select('id, store_id, created_at'),
-        supabase
-          .from('plans')
-          .select('id, name, price, max_products, max_orders'),
+        supabase.from('admins').select('id, store_id, email, created_at'),
+        supabase.from('profiles').select('id, name, email, role, created_at'),
+        supabase.from('orders').select('id, store_id, total, created_at'),
+        supabase.from('products').select('id, store_id, created_at'),
+        supabase.from('plans').select('id, name, price, max_products, max_orders'),
       ]);
 
       if (storesResponse.error) throw storesResponse.error;
@@ -295,7 +284,7 @@ export default function SuperAdmin() {
       const profileByEmail = new Map(
         profileRows
           .filter((profile) => normalizeText(profile.email))
-          .map((profile) => [normalizeText(profile.email).toLowerCase(), profile])
+          .map((profile) => [normalizeText(profile.email).toLowerCase(), profile]),
       );
 
       const adminsByStore = new Map<string, AdminRow[]>();
@@ -366,9 +355,31 @@ export default function SuperAdmin() {
     }
   }, []);
 
+  const loadOrdersForChart = useCallback(async () => {
+    try {
+      const since = new Date();
+      since.setDate(since.getDate() - 6);
+
+      const { data, error } = await supabase
+        .from('orders')
+        .select('id, store_id, total, created_at')
+        .gte('created_at', since.toISOString());
+
+      if (error) throw error;
+
+      setOrdersForChart((data ?? []) as OrderRow[]);
+    } catch {
+      setOrdersForChart([]);
+    }
+  }, []);
+
   useEffect(() => {
     void loadDashboard();
   }, [loadDashboard]);
+
+  useEffect(() => {
+    void loadOrdersForChart();
+  }, [loadOrdersForChart]);
 
   const handleCreate = async () => {
     if (loading) return;
@@ -399,21 +410,40 @@ export default function SuperAdmin() {
     setFeedback({ type: null, message: '' });
 
     try {
-      const { data, error } = await supabase.functions.invoke<CreateAdminStoreResponse>(
-        'create-admin-store',
+      const { data: sessionData, error: sessionError } = await supabase.auth.getSession();
+
+      if (sessionError) {
+        throw new Error('Não foi possível validar sua sessão. Faça login novamente.');
+      }
+
+      const token = sessionData.session?.access_token;
+
+      if (!token) {
+        throw new Error('Sessão inválida. Faça login novamente.');
+      }
+
+      const response = await fetch(
+        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/create-admin-store`,
         {
-          body: {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify({
             adminName: name,
             adminEmail: email,
             adminPassword: password,
             storeName: loja,
             storeSlug: slug,
-          },
-        }
+          }),
+        },
       );
 
-      if (error) {
-        throw new Error(error.message || 'Não foi possível criar o admin e a estrutura.');
+      const data = (await response.json().catch(() => null)) as CreateAdminStoreResponse | null;
+
+      if (!response.ok) {
+        throw new Error(data?.message || 'Não foi possível criar o admin e a estrutura.');
       }
 
       if (!data?.success) {
@@ -457,7 +487,7 @@ export default function SuperAdmin() {
   const handleUpdateStoreField = async (
     storeId: string,
     payload: Partial<Pick<StoreRow, 'status' | 'plan'>>,
-    successMessage: string
+    successMessage: string,
   ) => {
     setActionLoading(storeId);
     setFeedback({ type: null, message: '' });
@@ -524,7 +554,7 @@ export default function SuperAdmin() {
 
   const handleDeleteStructure = async (store: StoreSummary) => {
     const confirmed = window.confirm(
-      `Tem certeza que deseja excluir a estrutura "${store.name}"?\n\nEssa ação remove loja, pedidos, produtos, categorias, cupons e vínculo do admin da estrutura.`
+      `Tem certeza que deseja excluir a estrutura "${store.name}"?\n\nEssa ação remove loja, pedidos, produtos, categorias, cupons e vínculo do admin da estrutura.`,
     );
 
     if (!confirmed) return;
@@ -611,74 +641,6 @@ export default function SuperAdmin() {
   const recurringRevenue = stores.reduce((sum, store) => sum + store.monthlyPlanPrice, 0);
   const activeStores = stores.filter((store) => store.status === 'active').length;
   const suspendedStores = stores.filter((store) => store.status === 'suspended').length;
-
-  const chartData = useMemo(() => {
-    const labels = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'];
-    const today = new Date();
-    const days = Array.from({ length: 7 }).map((_, index) => {
-      const date = new Date(today);
-      date.setDate(today.getDate() - (6 - index));
-      return {
-        key: getDayKey(date),
-        label: labels[date.getDay()],
-        revenue: 0,
-        orders: 0,
-      };
-    });
-
-    const map = new Map(days.map((day) => [day.key, day]));
-
-    stores.forEach(() => {});
-
-    return map;
-  }, [stores]);
-
-  const dailyMetrics = useMemo(() => {
-    const labels = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'];
-    const today = new Date();
-
-    const base = Array.from({ length: 7 }).map((_, index) => {
-      const date = new Date(today);
-      date.setDate(today.getDate() - (6 - index));
-      return {
-        key: getDayKey(date),
-        label: labels[date.getDay()],
-        revenue: 0,
-        orders: 0,
-      };
-    });
-
-    const keyed = new Map(base.map((item) => [item.key, item]));
-
-    const applyFromOrders = async () => {};
-    void applyFromOrders;
-
-    return keyed;
-  }, []);
-
-  const [ordersForChart, setOrdersForChart] = useState<OrderRow[]>([]);
-
-  const loadOrdersForChart = useCallback(async () => {
-    try {
-      const since = new Date();
-      since.setDate(since.getDate() - 6);
-
-      const { data, error } = await supabase
-        .from('orders')
-        .select('id, store_id, total, created_at')
-        .gte('created_at', since.toISOString());
-
-      if (error) throw error;
-
-      setOrdersForChart((data ?? []) as OrderRow[]);
-    } catch {
-      setOrdersForChart([]);
-    }
-  }, []);
-
-  useEffect(() => {
-    void loadOrdersForChart();
-  }, [loadOrdersForChart]);
 
   const sevenDayMetrics = useMemo(() => {
     const labels = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'];
@@ -820,7 +782,10 @@ export default function SuperAdmin() {
             <CardContent className="p-5">
               <div className="grid grid-cols-7 gap-3">
                 {sevenDayMetrics.map((item) => {
-                  const percent = Math.max((item.revenue / maxRevenue) * 100, item.revenue > 0 ? 8 : 2);
+                  const percent = Math.max(
+                    (item.revenue / maxRevenue) * 100,
+                    item.revenue > 0 ? 8 : 2,
+                  );
 
                   return (
                     <div key={item.key} className="flex flex-col items-center gap-3">
@@ -888,9 +853,7 @@ export default function SuperAdmin() {
 
         <Card className="mb-6 border border-emerald-500/10 bg-black/55 shadow-[0_20px_60px_rgba(0,0,0,0.45)] backdrop-blur-xl">
           <CardHeader className="border-b border-white/5">
-            <CardTitle className="text-xl font-black text-white">
-              Criar novo admin
-            </CardTitle>
+            <CardTitle className="text-xl font-black text-white">Criar novo admin</CardTitle>
           </CardHeader>
 
           <CardContent className="space-y-6 pt-6">
@@ -1112,7 +1075,7 @@ export default function SuperAdmin() {
                     actionLoading === `delete-${store.id}` ||
                     actionLoading === `reset-${store.adminEmail}`;
 
-                  const publicUrl = `${window.location.origin.replace(/\/$/, '')}/${store.slug}`;
+                  const publicUrl = `${window.location.origin.replace(/\/$/, '')}/loja/${store.slug}`;
 
                   return (
                     <div
@@ -1126,7 +1089,7 @@ export default function SuperAdmin() {
 
                             <span
                               className={`rounded-full border px-3 py-1 text-xs font-semibold ${getStatusClasses(
-                                store.status
+                                store.status,
                               )}`}
                             >
                               {getStatusLabel(store.status)}
@@ -1194,7 +1157,7 @@ export default function SuperAdmin() {
                                 void handleUpdateStoreField(
                                   store.id,
                                   { plan: e.target.value },
-                                  `Plano da estrutura "${store.name}" atualizado.`
+                                  `Plano da estrutura "${store.name}" atualizado.`,
                                 )
                               }
                             >
@@ -1220,7 +1183,7 @@ export default function SuperAdmin() {
                                   },
                                   store.status === 'suspended'
                                     ? `Estrutura "${store.name}" ativada.`
-                                    : `Estrutura "${store.name}" suspensa.`
+                                    : `Estrutura "${store.name}" suspensa.`,
                                 )
                               }
                               disabled={isBusy}
