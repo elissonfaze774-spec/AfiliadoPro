@@ -12,6 +12,8 @@ import {
   ShieldCheck,
   TrendingUp,
   Sparkles,
+  AlertTriangle,
+  X,
 } from 'lucide-react';
 import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
@@ -51,6 +53,9 @@ export default function SuperAdmin() {
   });
 
   const [loading, setLoading] = useState(false);
+  const [logoutLoading, setLogoutLoading] = useState(false);
+  const [showLogoutModal, setShowLogoutModal] = useState(false);
+
   const [feedback, setFeedback] = useState<{
     type: 'success' | 'error' | null;
     message: string;
@@ -68,6 +73,10 @@ export default function SuperAdmin() {
       ...prev,
       [field]: value,
     }));
+
+    if (feedback.type) {
+      setFeedback({ type: null, message: '' });
+    }
   };
 
   const resetForm = () => {
@@ -119,7 +128,7 @@ export default function SuperAdmin() {
             storeName: loja,
             storeSlug: slug,
           },
-        },
+        }
       );
 
       if (error) {
@@ -153,6 +162,20 @@ export default function SuperAdmin() {
     }
   };
 
+  const handleLogoutRedirect = async (path: '/' | '/login') => {
+    if (logoutLoading) return;
+
+    setLogoutLoading(true);
+
+    try {
+      await supabase.auth.signOut();
+      navigate(path, { replace: true });
+    } finally {
+      setLogoutLoading(false);
+      setShowLogoutModal(false);
+    }
+  };
+
   return (
     <div className="min-h-screen bg-[radial-gradient(circle_at_top_left,_rgba(34,197,94,0.16),_transparent_28%),radial-gradient(circle_at_bottom_right,_rgba(16,185,129,0.12),_transparent_24%),linear-gradient(180deg,_#020202_0%,_#050505_45%,_#07110a_100%)] p-6 text-white">
       <div className="mx-auto max-w-6xl">
@@ -176,7 +199,7 @@ export default function SuperAdmin() {
           <Button
             variant="outline"
             className="border-emerald-500/20 bg-black/40 text-white hover:bg-emerald-500/10"
-            onClick={() => navigate('/')}
+            onClick={() => setShowLogoutModal(true)}
           >
             <LogOut className="mr-2 h-4 w-4" />
             Sair
@@ -331,6 +354,68 @@ export default function SuperAdmin() {
           </CardContent>
         </Card>
       </div>
+
+      {showLogoutModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 p-4 backdrop-blur-sm">
+          <div className="w-full max-w-md rounded-[28px] border border-emerald-500/20 bg-[#050505] p-6 shadow-[0_20px_80px_rgba(0,0,0,0.55)]">
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <div className="mb-4 flex h-12 w-12 items-center justify-center rounded-2xl border border-emerald-500/20 bg-emerald-500/10 text-emerald-400">
+                  <AlertTriangle className="h-5 w-5" />
+                </div>
+
+                <h2 className="text-xl font-black text-white">Deseja sair?</h2>
+                <p className="mt-2 text-sm leading-6 text-zinc-400">
+                  Escolha para onde deseja ir após encerrar sua sessão.
+                </p>
+              </div>
+
+              <button
+                type="button"
+                onClick={() => !logoutLoading && setShowLogoutModal(false)}
+                className="rounded-xl border border-white/10 bg-white/5 p-2 text-zinc-400 transition hover:bg-white/10 hover:text-white"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+
+            <div className="mt-6 grid gap-3">
+              <Button
+                className="h-12 rounded-2xl bg-emerald-500 font-bold text-black hover:bg-emerald-400"
+                onClick={() => handleLogoutRedirect('/login')}
+                disabled={logoutLoading}
+              >
+                {logoutLoading ? (
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    Saindo...
+                  </>
+                ) : (
+                  'Ir para Login'
+                )}
+              </Button>
+
+              <Button
+                variant="outline"
+                className="h-12 rounded-2xl border-white/10 bg-white/5 text-white hover:bg-white/10"
+                onClick={() => handleLogoutRedirect('/')}
+                disabled={logoutLoading}
+              >
+                Ir para Tela Inicial
+              </Button>
+
+              <Button
+                variant="ghost"
+                className="h-12 rounded-2xl text-zinc-400 hover:bg-white/5 hover:text-white"
+                onClick={() => setShowLogoutModal(false)}
+                disabled={logoutLoading}
+              >
+                Cancelar
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
