@@ -410,40 +410,71 @@ export default function SuperAdmin() {
     setFeedback({ type: null, message: '' });
 
     try {
-      const { data: sessionData, error: sessionError } = await supabase.auth.getSession();
+      const {
+        data: { session: currentSession },
+        error: sessionError,
+      } = await supabase.auth.getSession();
 
       if (sessionError) {
         throw new Error('Não foi possível validar sua sessão. Faça login novamente.');
       }
 
-      const token = sessionData.session?.access_token;
+      let session = currentSession;
 
-      if (!token) {
+      if (!session) {
         throw new Error('Sessão inválida. Faça login novamente.');
       }
 
-      const response = await fetch(
-        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/create-admin-store`,
-        {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            Authorization: `Bearer ${token}`,
-          },
-          body: JSON.stringify({
-            adminName: name,
-            adminEmail: email,
-            adminPassword: password,
-            storeName: loja,
-            storeSlug: slug,
-          }),
-        },
-      );
+      const nowInSeconds = Math.floor(Date.now() / 1000);
+      const expiresAt = session.expires_at ?? 0;
 
-      const data = (await response.json().catch(() => null)) as CreateAdminStoreResponse | null;
+      if (expiresAt && expiresAt <= nowInSeconds + 30) {
+        const { data: refreshed, error: refreshError } = await supabase.auth.refreshSession();
+
+        if (refreshError || !refreshed.session) {
+          throw new Error('Sua sessão expirou. Faça login novamente.');
+        }
+
+        session = refreshed.session;
+      }
+
+      const accessToken = session.access_token;
+
+      if (!accessToken) {
+        throw new Error('Token inválido. Faça login novamente.');
+      }
+
+      const functionUrl = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/create-admin-store`;
+
+      const response = await fetch(functionUrl, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          apikey: import.meta.env.VITE_SUPABASE_ANON_KEY as string,
+          Authorization: `Bearer ${accessToken}`,
+        },
+        body: JSON.stringify({
+          adminName: name,
+          adminEmail: email,
+          adminPassword: password,
+          storeName: loja,
+          storeSlug: slug,
+        }),
+      });
+
+      const rawText = await response.text();
+      let data: CreateAdminStoreResponse | null = null;
+
+      try {
+        data = rawText ? (JSON.parse(rawText) as CreateAdminStoreResponse) : null;
+      } catch {
+        data = null;
+      }
 
       if (!response.ok) {
-        throw new Error(data?.message || 'Não foi possível criar o admin e a estrutura.');
+        throw new Error(
+          data?.message || rawText || 'Não foi possível criar o admin e a estrutura.',
+        );
       }
 
       if (!data?.success) {
