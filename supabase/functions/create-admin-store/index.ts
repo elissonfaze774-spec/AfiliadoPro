@@ -34,18 +34,45 @@ serve(async (req) => {
   }
 
   try {
-    const supabaseUrl = Deno.env.get('SUPABASE_URL')!
-    const serviceRoleKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
+    const supabaseUrl = Deno.env.get('SUPABASE_URL') ?? ''
+    const anonKey = Deno.env.get('SUPABASE_ANON_KEY') ?? Deno.env.get('SUPABASE_PUBLISHABLE_KEY') ?? ''
+    const serviceRoleKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
 
-    if (!supabaseUrl || !serviceRoleKey) {
+    if (!supabaseUrl || !anonKey || !serviceRoleKey) {
       return json(
         {
           success: false,
-          message: 'Variáveis SUPABASE_URL e SUPABASE_SERVICE_ROLE_KEY não configuradas.',
+          message:
+            'Variáveis SUPABASE_URL, SUPABASE_ANON_KEY/PUBLISHABLE_KEY e SUPABASE_SERVICE_ROLE_KEY precisam estar configuradas.',
         },
         500,
       )
     }
+
+    const authHeader = req.headers.get('Authorization') ?? ''
+    const token = authHeader.replace('Bearer ', '').trim()
+
+    if (!token) {
+      return json(
+        {
+          success: false,
+          message: 'Sessão inválida ou ausente. Faça login novamente.',
+        },
+        401,
+      )
+    }
+
+    const userClient = createClient(supabaseUrl, anonKey, {
+      global: {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      },
+      auth: {
+        autoRefreshToken: false,
+        persistSession: false,
+      },
+    })
 
     const admin = createClient(supabaseUrl, serviceRoleKey, {
       auth: {
@@ -53,6 +80,49 @@ serve(async (req) => {
         persistSession: false,
       },
     })
+
+    const {
+      data: { user: requesterUser },
+      error: requesterAuthError,
+    } = await userClient.auth.getUser()
+
+    if (requesterAuthError || !requesterUser) {
+      return json(
+        {
+          success: false,
+          message: 'Não foi possível validar o usuário autenticado.',
+        },
+        401,
+      )
+    }
+
+    const { data: requesterProfile, error: requesterProfileError } = await admin
+      .from('profiles')
+      .select('id, role, email')
+      .eq('id', requesterUser.id)
+      .maybeSingle()
+
+    if (requesterProfileError) {
+      return json(
+        {
+          success: false,
+          message: 'Erro ao validar permissões do usuário.',
+        },
+        500,
+      )
+    }
+
+    const requesterRole = String(requesterProfile?.role ?? '').trim().toLowerCase()
+
+    if (requesterRole !== 'super-admin') {
+      return json(
+        {
+          success: false,
+          message: 'Apenas super admin pode criar admins e estruturas.',
+        },
+        403,
+      )
+    }
 
     const body = await req.json().catch(() => null)
 
@@ -85,14 +155,24 @@ serve(async (req) => {
     let baseSlug = slugify(rawStoreSlug || storeName)
 
     if (!baseSlug) {
-      baseSlug = `loja-${Date.now()}`
+      baseSlug = `estrutura-${Date.now()}`
     }
 
-    const { data: existingProfile } = await admin
+    const { data: existingProfile, error: existingProfileError } = await admin
       .from('profiles')
-      .select('id')
+      .select('id, email')
       .eq('email', adminEmail)
       .maybeSingle()
+
+    if (existingProfileError) {
+      return json(
+        {
+          success: false,
+          message: 'Erro ao verificar email existente.',
+        },
+        500,
+      )
+    }
 
     if (existingProfile?.id) {
       return json(
@@ -118,7 +198,7 @@ serve(async (req) => {
         return json(
           {
             success: false,
-            message: `Erro ao validar slug: ${slugError.message}`,
+            message: `Erro ao validar link da estrutura: ${slugError.message}`,
           },
           500,
         )
@@ -130,7 +210,7 @@ serve(async (req) => {
       finalSlug = `${baseSlug}-${counter}`
     }
 
-    const { data: createdUser, error: createUserError } = await admin.auth.admin.createUser({
+    const { data: createdUserData, error: createUserError } = await admin.auth.admin.createUser({
       email: adminEmail,
       password: adminPassword,
       email_confirm: true,
@@ -140,22 +220,49 @@ serve(async (req) => {
       },
     })
 
-    if (createUserError || !createdUser.user) {
+    if (createUserError || !createdUserData.user) {
       return json(
         {
           success: false,
-          message: createUserError?.message || 'Não foi possível criar o usuário.',
+          message: createUserError?.message || 'Não foi possível criar o usuário admin.',
         },
         500,
       )
     }
 
-    const userId = createdUser.user.id
+    const newUserId = createdUserData.user.id
 
-    const { error: storeError, data: createdStore } = await admin
+    const rollbackUser = async () => {
+      await admin.auth.admin.deleteUser(newUserId).catch(() => null)
+    }
+
+    const { error: profileInsertError } = await admin.from('profiles').upsert(
+      {
+        id: newUserId,
+        name: adminName,
+        email: adminEmail,
+        role: 'admin',
+      },
+      {
+        onConflict: 'id',
+      },
+    )
+
+    if (profileInsertError) {
+      await rollbackUser()
+      return json(
+        {
+          success: false,
+          message: `Erro ao criar perfil do admin: ${profileInsertError.message}`,
+        },
+        500,
+      )
+    }
+
+    const { data: createdStore, error: storeError } = await admin
       .from('stores')
       .insert({
-        owner_user_id: userId,
+        owner_user_id: newUserId,
         store_name: storeName,
         slug: finalSlug,
         whatsapp_number: '',
@@ -171,12 +278,13 @@ serve(async (req) => {
       .single()
 
     if (storeError || !createdStore) {
-      await admin.auth.admin.deleteUser(userId)
+      await admin.from('profiles').delete().eq('id', newUserId).catch(() => null)
+      await rollbackUser()
 
       return json(
         {
           success: false,
-          message: storeError?.message || 'Erro ao criar loja.',
+          message: storeError?.message || 'Erro ao criar a estrutura.',
         },
         500,
       )
@@ -185,20 +293,21 @@ serve(async (req) => {
     const storeId = createdStore.id
 
     const { error: adminLinkError } = await admin.from('admins').insert({
-      user_id: userId,
+      user_id: newUserId,
       email: adminEmail,
       store_id: storeId,
       role: 'admin',
     })
 
     if (adminLinkError) {
-      await admin.from('stores').delete().eq('id', storeId)
-      await admin.auth.admin.deleteUser(userId)
+      await admin.from('stores').delete().eq('id', storeId).catch(() => null)
+      await admin.from('profiles').delete().eq('id', newUserId).catch(() => null)
+      await rollbackUser()
 
       return json(
         {
           success: false,
-          message: adminLinkError.message,
+          message: `Erro ao vincular admin à estrutura: ${adminLinkError.message}`,
         },
         500,
       )
@@ -216,8 +325,8 @@ serve(async (req) => {
 
     return json({
       success: true,
-      message: 'Admin e loja criados com sucesso.',
-      adminUserId: userId,
+      message: 'Admin e estrutura criados com sucesso.',
+      adminUserId: newUserId,
       storeId,
       slug: createdStore.slug,
     })
