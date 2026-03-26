@@ -133,9 +133,9 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       .limit(1)
       .maybeSingle();
 
-    if (storeByOwnerError) {
-      throw new Error('Não foi possível carregar a loja do admin.');
-    }
+      if (storeByOwnerError) {
+        throw new Error('Não foi possível carregar a loja do admin.');
+      }
 
     return normalizeStore(storeByOwner);
   }, [user]);
@@ -167,7 +167,9 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       setProducts([]);
       setContents([]);
       setClicks(0);
+      setSelectedNiche('');
       setAppLoading(false);
+      currentStoreIdRef.current = null;
       return;
     }
 
@@ -177,9 +179,8 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       const resolvedStore = await loadStoreByUser();
       setStore(resolvedStore);
 
-      if (resolvedStore?.niche) {
-        setSelectedNiche(resolvedStore.niche);
-      }
+      const resolvedNiche = resolvedStore?.niche ?? '';
+      setSelectedNiche(resolvedNiche);
 
       const storeId = resolvedStore?.id ?? null;
       const loadedProducts = await loadProducts(storeId);
@@ -194,6 +195,8 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       setProducts([]);
       setContents([]);
       setClicks(0);
+      setSelectedNiche('');
+      currentStoreIdRef.current = null;
     } finally {
       setAppLoading(false);
     }
@@ -262,13 +265,11 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         productChannelRef.current = null;
       }
     };
-  }, [store?.id, refreshAppData, loadProducts]);
+  }, [refreshAppData, loadProducts]);
 
   const createStore = useCallback((newStore: Store) => {
     setStore(newStore);
-    if (newStore.niche) {
-      setSelectedNiche(newStore.niche);
-    }
+    setSelectedNiche(newStore.niche || '');
   }, []);
 
   const addProduct = useCallback((product: Product) => {

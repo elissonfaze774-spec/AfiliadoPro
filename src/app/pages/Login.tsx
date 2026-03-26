@@ -17,7 +17,6 @@ import { toast } from 'sonner';
 
 type AppUserLike = {
   role?: 'admin' | 'super-admin';
-  storeId?: string | null;
 };
 
 function normalizeEmailValue(email: string) {
@@ -26,7 +25,6 @@ function normalizeEmailValue(email: string) {
 
 function getRedirect(appUser?: AppUserLike) {
   if (appUser?.role === 'super-admin') return '/super-admin';
-  if (!appUser?.storeId) return '/onboarding';
   return '/painel';
 }
 

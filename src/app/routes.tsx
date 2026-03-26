@@ -12,15 +12,19 @@ import SuperAdmin from './pages/SuperAdmin';
 import App from './App';
 import { useAuth } from './context/AuthTemp';
 
+function FullScreenLoader() {
+  return (
+    <div className="min-h-screen bg-black flex items-center justify-center text-white">
+      Carregando...
+    </div>
+  );
+}
+
 function AdminRoute() {
   const { user, authLoading } = useAuth();
 
   if (authLoading) {
-    return (
-      <div className="min-h-screen bg-black flex items-center justify-center text-white">
-        Carregando...
-      </div>
-    );
+    return <FullScreenLoader />;
   }
 
   if (!user) {
@@ -38,11 +42,7 @@ function SuperAdminRoute() {
   const { user, authLoading } = useAuth();
 
   if (authLoading) {
-    return (
-      <div className="min-h-screen bg-black flex items-center justify-center text-white">
-        Carregando...
-      </div>
-    );
+    return <FullScreenLoader />;
   }
 
   if (!user) {
@@ -60,11 +60,7 @@ function GuestRoute() {
   const { user, authLoading } = useAuth();
 
   if (authLoading) {
-    return (
-      <div className="min-h-screen bg-black flex items-center justify-center text-white">
-        Carregando...
-      </div>
-    );
+    return <FullScreenLoader />;
   }
 
   if (user?.role === 'super-admin') {
@@ -72,7 +68,7 @@ function GuestRoute() {
   }
 
   if (user?.role === 'admin') {
-    return <Navigate to={user.storeId ? '/painel' : '/onboarding'} replace />;
+    return <Navigate to="/painel" replace />;
   }
 
   return <Outlet />;
