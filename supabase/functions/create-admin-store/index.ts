@@ -28,6 +28,19 @@ function slugify(value: string) {
     .replace(/-+/g, '-')
 }
 
+async function safeDeleteByEq(
+  admin: { from: (table: string) => any },
+  table: string,
+  column: string,
+  value: string,
+): Promise<void | null> {
+  try {
+    await admin.from(table).delete().eq(column, value)
+  } catch {
+    return null
+  }
+}
+
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response('ok', { headers: corsHeaders })
@@ -35,7 +48,8 @@ serve(async (req) => {
 
   try {
     const supabaseUrl = Deno.env.get('SUPABASE_URL') ?? ''
-    const anonKey = Deno.env.get('SUPABASE_ANON_KEY') ?? Deno.env.get('SUPABASE_PUBLISHABLE_KEY') ?? ''
+    const anonKey =
+      Deno.env.get('SUPABASE_ANON_KEY') ?? Deno.env.get('SUPABASE_PUBLISHABLE_KEY') ?? ''
     const serviceRoleKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
 
     if (!supabaseUrl || !anonKey || !serviceRoleKey) {
@@ -233,7 +247,11 @@ serve(async (req) => {
     const newUserId = createdUserData.user.id
 
     const rollbackUser = async () => {
-      await admin.auth.admin.deleteUser(newUserId).catch(() => null)
+      try {
+        await admin.auth.admin.deleteUser(newUserId)
+      } catch {
+        return null
+      }
     }
 
     const { error: profileInsertError } = await admin.from('profiles').upsert(
@@ -259,6 +277,12 @@ serve(async (req) => {
       )
     }
 
+    const DEFAULT_LOGO =
+      'https://images.unsplash.com/photo-1556742049-0cfed4f6a45d?w=300&q=80&auto=format&fit=crop'
+
+    const DEFAULT_BANNER =
+      'https://images.unsplash.com/photo-1517248135467-4c7edcad34c4?w=1400&q=80&auto=format&fit=crop'
+
     const { data: createdStore, error: storeError } = await admin
       .from('stores')
       .insert({
@@ -273,12 +297,15 @@ serve(async (req) => {
         active: true,
         suspended: false,
         plan: 'iniciante',
+        logo_url: DEFAULT_LOGO,
+        banner_url: DEFAULT_BANNER,
+        description: 'Loja pronta para personalização e vendas.',
       })
       .select('id, slug')
       .single()
 
     if (storeError || !createdStore) {
-      await admin.from('profiles').delete().eq('id', newUserId).catch(() => null)
+      await safeDeleteByEq(admin, 'profiles', 'id', newUserId)
       await rollbackUser()
 
       return json(
@@ -300,8 +327,8 @@ serve(async (req) => {
     })
 
     if (adminLinkError) {
-      await admin.from('stores').delete().eq('id', storeId).catch(() => null)
-      await admin.from('profiles').delete().eq('id', newUserId).catch(() => null)
+      await safeDeleteByEq(admin, 'stores', 'id', storeId)
+      await safeDeleteByEq(admin, 'profiles', 'id', newUserId)
       await rollbackUser()
 
       return json(
@@ -313,14 +340,121 @@ serve(async (req) => {
       )
     }
 
-    const { error: categoriesError } = await admin.from('categories').insert([
-      { store_id: storeId, name: 'Mais pedidos', sort_order: 0 },
-      { store_id: storeId, name: 'Lanches', sort_order: 1 },
-      { store_id: storeId, name: 'Bebidas', sort_order: 2 },
-    ])
+    const { data: createdCategories, error: categoriesError } = await admin
+      .from('categories')
+      .insert([
+        { store_id: storeId, name: 'Mais vendidos', sort_order: 0 },
+        { store_id: storeId, name: 'Destaques', sort_order: 1 },
+        { store_id: storeId, name: 'Ofertas', sort_order: 2 },
+      ])
+      .select('id, name')
 
     if (categoriesError) {
-      console.error('Erro ao criar categorias iniciais:', categoriesError.message)
+      await safeDeleteByEq(admin, 'admins', 'user_id', newUserId)
+      await safeDeleteByEq(admin, 'stores', 'id', storeId)
+      await safeDeleteByEq(admin, 'profiles', 'id', newUserId)
+      await rollbackUser()
+
+      return json(
+        {
+          success: false,
+          message: `Erro ao criar categorias iniciais: ${categoriesError.message}`,
+        },
+        500,
+      )
+    }
+
+    const categoryMaisVendidos =
+      createdCategories?.find((item: { name: string; id: string }) => item.name === 'Mais vendidos')
+        ?.id ?? null
+
+    const categoryDestaques =
+      createdCategories?.find((item: { name: string; id: string }) => item.name === 'Destaques')
+        ?.id ?? null
+
+    const categoryOfertas =
+      createdCategories?.find((item: { name: string; id: string }) => item.name === 'Ofertas')
+        ?.id ?? null
+
+    const sampleProducts = [
+      {
+        store_id: storeId,
+        category_id: categoryMaisVendidos,
+        name: 'Relógio Inteligente Premium',
+        description: 'Smartwatch moderno com monitoramento de saúde e notificações.',
+        price: 149.9,
+        image:
+          'https://images.unsplash.com/photo-1546868871-7041f2a55e12?w=800&q=80&auto=format&fit=crop',
+        affiliate_link: 'https://exemplo.com/produto/relogio-inteligente',
+      },
+      {
+        store_id: storeId,
+        category_id: categoryMaisVendidos,
+        name: 'Fone Bluetooth Pro',
+        description: 'Som limpo, conexão rápida e bateria de longa duração.',
+        price: 89.9,
+        image:
+          'https://images.unsplash.com/photo-1505740420928-5e560c06d30e?w=800&q=80&auto=format&fit=crop',
+        affiliate_link: 'https://exemplo.com/produto/fone-bluetooth',
+      },
+      {
+        store_id: storeId,
+        category_id: categoryDestaques,
+        name: 'Luminária LED Inteligente',
+        description: 'Ideal para quarto, escritório e decoração moderna.',
+        price: 59.9,
+        image:
+          'https://images.unsplash.com/photo-1507473885765-e6ed057f782c?w=800&q=80&auto=format&fit=crop',
+        affiliate_link: 'https://exemplo.com/produto/luminaria-led',
+      },
+      {
+        store_id: storeId,
+        category_id: categoryDestaques,
+        name: 'Câmera de Segurança Wi-Fi',
+        description: 'Monitoramento remoto com imagem nítida e instalação simples.',
+        price: 199.9,
+        image:
+          'https://images.unsplash.com/photo-1557324232-b8917d3c3dcb?w=800&q=80&auto=format&fit=crop',
+        affiliate_link: 'https://exemplo.com/produto/camera-wifi',
+      },
+      {
+        store_id: storeId,
+        category_id: categoryOfertas,
+        name: 'Suporte Veicular para Celular',
+        description: 'Praticidade e segurança para usar no carro.',
+        price: 29.9,
+        image:
+          'https://images.unsplash.com/photo-1511707171634-5f897ff02aa9?w=800&q=80&auto=format&fit=crop',
+        affiliate_link: 'https://exemplo.com/produto/suporte-celular',
+      },
+      {
+        store_id: storeId,
+        category_id: categoryOfertas,
+        name: 'Carregador Turbo USB',
+        description: 'Mais velocidade para carregar seus dispositivos.',
+        price: 39.9,
+        image:
+          'https://images.unsplash.com/photo-1583863788434-e58a36330cf0?w=800&q=80&auto=format&fit=crop',
+        affiliate_link: 'https://exemplo.com/produto/carregador-turbo',
+      },
+    ]
+
+    const { error: productsError } = await admin.from('products').insert(sampleProducts)
+
+    if (productsError) {
+      await safeDeleteByEq(admin, 'categories', 'store_id', storeId)
+      await safeDeleteByEq(admin, 'admins', 'user_id', newUserId)
+      await safeDeleteByEq(admin, 'stores', 'id', storeId)
+      await safeDeleteByEq(admin, 'profiles', 'id', newUserId)
+      await rollbackUser()
+
+      return json(
+        {
+          success: false,
+          message: `Erro ao criar produtos iniciais: ${productsError.message}`,
+        },
+        500,
+      )
     }
 
     return json({
