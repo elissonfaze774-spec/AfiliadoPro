@@ -5,7 +5,7 @@ import {
   MousePointerClick,
   FileText,
   DollarSign,
-  Plus,
+  FolderKanban,
   Sparkles,
   ExternalLink,
   CheckCircle,
@@ -23,7 +23,6 @@ import {
   Copy,
   GraduationCap,
   Rocket,
-  ArrowUpRight,
 } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import { useAuth } from '../context/AuthTemp';
@@ -446,6 +445,8 @@ export default function Painel() {
     },
   ];
 
+  const latestProducts = useMemo(() => products.slice(0, 3), [products]);
+
   const resolveStoreForAdmin = useCallback(async (authUser: AuthUserLike): Promise<StoreData | null> => {
     const authUserId = authUser?.id ?? null;
     const authEmail = authUser?.email?.trim().toLowerCase() ?? null;
@@ -794,7 +795,7 @@ export default function Painel() {
       }
 
       await refreshAppData();
-      toast.success('Produtos do nicho criados com sucesso. Agora adicione os links de afiliado.');
+      toast.success('Produtos do nicho criados com sucesso.');
     } catch (error: any) {
       console.error('Erro ao gerar produtos fake:', error);
       toast.error(error?.message || 'Não foi possível criar os produtos.');
@@ -941,7 +942,7 @@ export default function Painel() {
                       Sua estrutura para vender mais
                     </h2>
                     <p className="mt-2 max-w-2xl text-sm text-zinc-300 md:text-base">
-                      Configure sua loja, adicione produtos com link de afiliado e transforme o painel em uma operação simples de renda extra.
+                      Agora seus produtos ficam organizados em uma central própria, sem bagunçar o painel.
                     </p>
                   </div>
                 </div>
@@ -1214,7 +1215,7 @@ export default function Painel() {
               <CardHeader>
                 <CardTitle className="text-white">Ações rápidas</CardTitle>
                 <CardDescription className="text-zinc-400">
-                  Tudo o que você precisa para colocar a loja para vender de verdade.
+                  Agora o gerenciamento de produtos ficou centralizado em uma página própria.
                 </CardDescription>
               </CardHeader>
               <CardContent>
@@ -1222,10 +1223,10 @@ export default function Painel() {
                   <Button
                     size="lg"
                     className="h-auto justify-start rounded-2xl bg-gradient-to-r from-emerald-500 to-green-500 py-6 font-bold text-black hover:from-emerald-400 hover:to-green-400"
-                    onClick={() => navigate('/adicionar-produto')}
+                    onClick={() => navigate('/produtos')}
                   >
-                    <Plus className="mr-2 h-5 w-5" />
-                    Adicionar produto
+                    <FolderKanban className="mr-2 h-5 w-5" />
+                    Produtos
                   </Button>
 
                   <Button
@@ -1347,7 +1348,7 @@ export default function Painel() {
                     className="rounded-2xl border-white/10 bg-black/20 text-white hover:bg-white/5"
                     onClick={() => navigate(`/loja/${store.slug}`)}
                   >
-                    <ArrowUpRight className="mr-2 h-4 w-4" />
+                    <ExternalLink className="mr-2 h-4 w-4" />
                     Abrir loja
                   </Button>
                 </div>
@@ -1357,77 +1358,54 @@ export default function Painel() {
         </div>
 
         <div className="mt-8">
-          {products.length === 0 ? (
-            <Card className="border-white/10 bg-white/[0.04] shadow-[0_10px_30px_rgba(0,0,0,0.25)]">
-              <CardContent className="py-14 text-center">
-                <Package className="mx-auto mb-4 h-16 w-16 text-zinc-600" />
-                <h3 className="mb-2 text-2xl font-black text-white">
-                  Nenhum produto adicionado ainda
-                </h3>
-                <p className="mb-6 text-zinc-400">
-                  Gere produtos do nicho ou adicione manualmente com seu link de afiliado.
-                </p>
-                <div className="flex flex-wrap items-center justify-center gap-3">
-                  <Button
-                    className="rounded-2xl bg-gradient-to-r from-emerald-500 to-emerald-600 font-bold text-black hover:from-emerald-400 hover:to-emerald-500"
-                    onClick={handleGenerateFakeProducts}
-                    disabled={creatingFakeProducts}
-                  >
-                    <Wand2 className="mr-2 h-4 w-4" />
-                    {creatingFakeProducts ? 'Gerando...' : 'Gerar produtos do nicho'}
-                  </Button>
+          <Card className="border-white/10 bg-white/[0.04] shadow-[0_10px_30px_rgba(0,0,0,0.25)]">
+            <CardHeader>
+              <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+                <div>
+                  <CardTitle className="text-white">Resumo dos produtos</CardTitle>
+                  <CardDescription className="text-zinc-400">
+                    O gerenciamento completo agora fica dentro da central de produtos.
+                  </CardDescription>
+                </div>
 
+                <Button
+                  className="rounded-2xl bg-gradient-to-r from-emerald-500 to-emerald-600 font-bold text-black hover:from-emerald-400 hover:to-emerald-500"
+                  onClick={() => navigate('/produtos')}
+                >
+                  <FolderKanban className="mr-2 h-4 w-4" />
+                  Abrir central de produtos
+                </Button>
+              </div>
+            </CardHeader>
+
+            <CardContent>
+              {latestProducts.length === 0 ? (
+                <div className="rounded-3xl border border-white/10 bg-black/20 p-10 text-center">
+                  <Package className="mx-auto mb-4 h-14 w-14 text-zinc-600" />
+                  <h3 className="text-xl font-bold text-white">Nenhum produto ainda</h3>
+                  <p className="mt-2 text-zinc-400">
+                    Use a central de produtos para cadastrar, editar e excluir.
+                  </p>
                   <Button
-                    variant="outline"
-                    className="rounded-2xl border-white/10 bg-black/20 text-white hover:bg-white/5"
-                    onClick={() => navigate('/adicionar-produto')}
+                    className="mt-6 rounded-2xl bg-gradient-to-r from-emerald-500 to-emerald-600 font-bold text-black hover:from-emerald-400 hover:to-emerald-500"
+                    onClick={() => navigate('/produtos')}
                   >
-                    <Plus className="mr-2 h-4 w-4" />
-                    Adicionar produto
+                    <FolderKanban className="mr-2 h-4 w-4" />
+                    Ir para produtos
                   </Button>
                 </div>
-              </CardContent>
-            </Card>
-          ) : (
-            <Card className="border-white/10 bg-white/[0.04] shadow-[0_10px_30px_rgba(0,0,0,0.25)]">
-              <CardHeader>
-                <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-                  <div>
-                    <CardTitle className="text-white">Meus produtos</CardTitle>
-                    <CardDescription className="text-zinc-400">
-                      Clique em um produto para ver a página dele.
-                    </CardDescription>
-                  </div>
-
-                  <Button
-                    variant="outline"
-                    className="border-white/10 bg-black/20 text-white hover:bg-white/5"
-                    onClick={() => navigate('/adicionar-produto')}
-                  >
-                    <Plus className="mr-2 h-4 w-4" />
-                    Novo produto
-                  </Button>
-                </div>
-              </CardHeader>
-
-              <CardContent>
+              ) : (
                 <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
-                  {products.map((product) => (
+                  {latestProducts.map((product) => (
                     <div
                       key={product.id}
-                      className="group overflow-hidden rounded-3xl border border-white/10 bg-black/30 transition-all hover:border-emerald-500/40 hover:ring-2 hover:ring-emerald-500/20"
+                      className="overflow-hidden rounded-3xl border border-white/10 bg-black/30 transition-all hover:border-emerald-500/40 hover:ring-2 hover:ring-emerald-500/20"
                     >
-                      <button
-                        type="button"
-                        className="w-full text-left"
-                        onClick={() => navigate(`/produto/${product.id}`)}
-                      >
-                        <img
-                          src={product.image}
-                          alt={product.name}
-                          className="h-56 w-full object-cover transition duration-300 group-hover:scale-[1.02]"
-                        />
-                      </button>
+                      <img
+                        src={product.image}
+                        alt={product.name}
+                        className="h-52 w-full object-cover"
+                      />
 
                       <div className="p-5">
                         <div className="mb-3 flex items-center justify-between gap-3">
@@ -1445,29 +1423,20 @@ export default function Painel() {
                           {product.description}
                         </p>
 
-                        <div className="grid grid-cols-2 gap-3">
-                          <Button
-                            variant="outline"
-                            className="border-white/10 bg-black/20 text-white hover:bg-white/5"
-                            onClick={() => navigate(`/produto/${product.id}`)}
-                          >
-                            Ver
-                          </Button>
-
-                          <Button
-                            className="bg-gradient-to-r from-emerald-500 to-emerald-600 font-bold text-black hover:from-emerald-400 hover:to-emerald-500"
-                            onClick={() => navigate(`/produto/${product.id}`)}
-                          >
-                            Abrir
-                          </Button>
-                        </div>
+                        <Button
+                          variant="outline"
+                          className="w-full rounded-2xl border-white/10 bg-black/20 text-white hover:bg-white/5"
+                          onClick={() => navigate('/produtos')}
+                        >
+                          Gerenciar produto
+                        </Button>
                       </div>
                     </div>
                   ))}
                 </div>
-              </CardContent>
-            </Card>
-          )}
+              )}
+            </CardContent>
+          </Card>
         </div>
       </div>
     </div>

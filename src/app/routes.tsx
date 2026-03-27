@@ -2,8 +2,9 @@ import { Navigate, Outlet, createBrowserRouter } from 'react-router-dom';
 import LandingPage from './pages/LandingPage';
 import { Login } from './pages/Login';
 import RecuperarSenha from './pages/RecuperarSenha';
+import Onboarding from './pages/Onboarding';
 import Painel from './pages/Painel';
-import AdicionarProduto from './pages/AdicionarProduto';
+import Produtos from './pages/Produtos';
 import ProdutoView from './pages/ProdutoView';
 import GerarConteudo from './pages/GerarConteudo';
 import LojaPublica from './pages/LojaPublica';
@@ -11,11 +12,15 @@ import SuperAdmin from './pages/SuperAdmin';
 import App from './App';
 import { useAuth } from './context/AuthTemp';
 
+function FullScreenLoader() {
+  return null;
+}
+
 function AdminRoute() {
   const { user, authLoading } = useAuth();
 
   if (authLoading) {
-    return null;
+    return <FullScreenLoader />;
   }
 
   if (!user) {
@@ -33,7 +38,7 @@ function SuperAdminRoute() {
   const { user, authLoading } = useAuth();
 
   if (authLoading) {
-    return null;
+    return <FullScreenLoader />;
   }
 
   if (!user) {
@@ -51,7 +56,7 @@ function GuestRoute() {
   const { user, authLoading } = useAuth();
 
   if (authLoading) {
-    return null;
+    return <FullScreenLoader />;
   }
 
   if (user?.role === 'super-admin') {
@@ -92,15 +97,19 @@ export const router = createBrowserRouter([
         children: [
           {
             path: 'onboarding',
-            element: <Navigate to="/painel" replace />,
+            Component: Onboarding,
           },
           {
             path: 'painel',
             Component: Painel,
           },
           {
+            path: 'produtos',
+            Component: Produtos,
+          },
+          {
             path: 'adicionar-produto',
-            Component: AdicionarProduto,
+            element: <Navigate to="/produtos" replace />,
           },
           {
             path: 'produto/:id',
