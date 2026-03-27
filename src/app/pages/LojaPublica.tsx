@@ -69,9 +69,10 @@ export default function LojaPublica() {
     try {
       setLoading(true);
 
+      // ✅ QUERY CORRIGIDA
       const { data: storeData, error: storeError } = await supabase
         .from('stores')
-        .select('id, name, store_name, slug, username, whatsapp_number, whatsapp, niche')
+        .select('*')
         .eq('slug', username)
         .maybeSingle();
 
@@ -85,11 +86,12 @@ export default function LojaPublica() {
         return;
       }
 
+      // ✅ NORMALIZAÇÃO CORRETA
       const normalizedStore: PublicStore = {
         id: storeData.id,
-        name: storeData.name ?? storeData.store_name ?? 'Minha loja',
-        username: storeData.slug ?? storeData.username ?? username,
-        whatsapp: storeData.whatsapp_number ?? storeData.whatsapp ?? '',
+        name: storeData.store_name ?? 'Minha loja',
+        username: storeData.slug ?? username,
+        whatsapp: storeData.whatsapp_number ?? '',
         niche: storeData.niche ?? '',
       };
 
@@ -97,7 +99,7 @@ export default function LojaPublica() {
 
       const { data: productsData, error: productsError } = await supabase
         .from('products')
-        .select('id, name, image, price, description, affiliate_link')
+        .select('*')
         .eq('store_id', normalizedStore.id)
         .order('created_at', { ascending: false });
 
