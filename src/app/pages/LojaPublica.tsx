@@ -50,7 +50,6 @@ type Product = {
   priceValue: number;
 };
 
-type FilterType = 'todos' | 'com-link' | 'sem-link';
 type SortType = 'recentes' | 'mais-caros' | 'mais-baratos' | 'nome';
 
 function ensureUrl(value: string) {
@@ -163,7 +162,6 @@ export default function LojaPublica() {
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
-  const [filter, setFilter] = useState<FilterType>('todos');
   const [sort, setSort] = useState<SortType>('recentes');
 
   const storeChannelRef = useRef<ReturnType<typeof supabase.channel> | null>(null);
@@ -325,14 +323,6 @@ export default function LojaPublica() {
       });
     }
 
-    if (filter === 'com-link') {
-      list = list.filter((product) => Boolean(ensureUrl(product.affiliateLink)));
-    }
-
-    if (filter === 'sem-link') {
-      list = list.filter((product) => !ensureUrl(product.affiliateLink));
-    }
-
     if (sort === 'mais-caros') {
       list.sort((a, b) => b.priceValue - a.priceValue);
     } else if (sort === 'mais-baratos') {
@@ -342,7 +332,7 @@ export default function LojaPublica() {
     }
 
     return list;
-  }, [products, search, filter, sort]);
+  }, [products, search, sort]);
 
   const openProductAction = (product: Product) => {
     const affiliateUrl = ensureUrl(product.affiliateLink);
@@ -583,31 +573,6 @@ export default function LojaPublica() {
                       className="h-12 w-full rounded-2xl border border-white/10 bg-black/30 pl-11 pr-4 text-white outline-none transition focus:border-emerald-500"
                       placeholder="Buscar produtos..."
                     />
-                  </div>
-
-                  <div className="mt-5 flex flex-wrap gap-2">
-                    {[
-                      { id: 'todos', label: 'Todos' },
-                      { id: 'com-link', label: 'Com link' },
-                      { id: 'sem-link', label: 'Sem link' },
-                    ].map((item) => {
-                      const active = filter === item.id;
-
-                      return (
-                        <button
-                          key={item.id}
-                          type="button"
-                          onClick={() => setFilter(item.id as FilterType)}
-                          className={`rounded-full border px-4 py-2 text-sm font-semibold transition ${
-                            active
-                              ? 'border-emerald-500/30 bg-emerald-500/15 text-emerald-300'
-                              : 'border-white/10 bg-black/20 text-zinc-300 hover:bg-white/5 hover:text-white'
-                          }`}
-                        >
-                          {item.label}
-                        </button>
-                      );
-                    })}
                   </div>
                 </div>
 
