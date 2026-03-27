@@ -8,6 +8,7 @@ import Produtos from './pages/Produtos';
 import ProdutoView from './pages/ProdutoView';
 import GerarConteudo from './pages/GerarConteudo';
 import LojaPublica from './pages/LojaPublica';
+import ConfiguracoesLoja from './pages/ConfiguracoesLoja';
 import SuperAdmin from './pages/SuperAdmin';
 import App from './App';
 import { useAuth } from './context/AuthTemp';
@@ -118,6 +119,10 @@ export const router = createBrowserRouter([
           {
             path: 'gerar-conteudo',
             Component: GerarConteudo,
+          },
+          {
+            path: 'configuracoes',
+            Component: ConfiguracoesLoja,
           },
         ],
       },
