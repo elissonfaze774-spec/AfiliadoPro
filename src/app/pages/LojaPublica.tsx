@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import {
   ArrowLeft,
+  ArrowUpDown,
   ExternalLink,
   ImageOff,
   MessageCircle,
@@ -10,11 +11,6 @@ import {
   ShoppingBag,
   Store as StoreIcon,
   X,
-  Sparkles,
-  ShieldCheck,
-  Star,
-  ArrowUpDown,
-  BadgePercent,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { supabase } from '../../lib/supabase';
@@ -459,17 +455,6 @@ export default function LojaPublica() {
                   Voltar ao painel
                 </Button>
               ) : null}
-
-              <div
-                className="hidden rounded-full px-3 py-1 text-xs font-semibold md:inline-flex"
-                style={{
-                  backgroundColor: `${currentStore.accentColor}18`,
-                  color: currentStore.accentColor,
-                  border: `1px solid ${currentStore.accentColor}30`,
-                }}
-              >
-                Loja online oficial
-              </div>
             </div>
 
             <div className="flex flex-wrap gap-3">
@@ -583,234 +568,104 @@ export default function LojaPublica() {
                   </div>
 
                   <div
-                    className="grid min-w-[280px] grid-cols-2 gap-3 rounded-[28px] p-4 shadow-2xl"
-                    style={{
-                      backgroundColor: 'rgba(0,0,0,0.28)',
-                      border: `1px solid ${currentStore.accentColor}25`,
-                    }}
+                    className="rounded-[28px] px-6 py-5 text-black shadow-2xl"
+                    style={{ backgroundColor: currentStore.buttonBgColor }}
                   >
-                    <div
-                      className="rounded-2xl p-4"
-                      style={{
-                        backgroundColor: `${currentStore.accentColor}12`,
-                        border: `1px solid ${currentStore.accentColor}22`,
-                      }}
-                    >
-                      <p className="text-xs font-semibold uppercase tracking-[0.14em] text-zinc-300">
-                        Produtos
-                      </p>
-                      <p className="mt-2 text-3xl font-black text-white">{products.length}</p>
-                    </div>
-
-                    <div
-                      className="rounded-2xl p-4"
-                      style={{
-                        backgroundColor: `${currentStore.accentColor}12`,
-                        border: `1px solid ${currentStore.accentColor}22`,
-                      }}
-                    >
-                      <p className="text-xs font-semibold uppercase tracking-[0.14em] text-zinc-300">
-                        Com link
-                      </p>
-                      <p className="mt-2 text-3xl font-black text-white">{linkedProductsCount}</p>
-                    </div>
-
-                    <div
-                      className="rounded-2xl p-4"
-                      style={{
-                        backgroundColor: `${currentStore.accentColor}12`,
-                        border: `1px solid ${currentStore.accentColor}22`,
-                      }}
-                    >
-                      <p className="text-xs font-semibold uppercase tracking-[0.14em] text-zinc-300">
-                        Menor valor
-                      </p>
-                      <p className="mt-2 text-lg font-black text-white">
-                        {products.length > 0 ? formatMoney(lowestPrice) : '—'}
-                      </p>
-                    </div>
-
-                    <div
-                      className="rounded-2xl p-4"
-                      style={{
-                        backgroundColor: `${currentStore.accentColor}12`,
-                        border: `1px solid ${currentStore.accentColor}22`,
-                      }}
-                    >
-                      <p className="text-xs font-semibold uppercase tracking-[0.14em] text-zinc-300">
-                        Atualização
-                      </p>
-                      <p className="mt-2 text-sm font-bold text-white">Em tempo real</p>
-                    </div>
+                    <p className="text-xs font-semibold uppercase tracking-[0.18em] opacity-70">
+                      Produtos disponíveis
+                    </p>
+                    <div className="mt-2 text-4xl font-black">{products.length}</div>
+                    <p className="mt-1 text-sm opacity-80">Loja atualizada em tempo real</p>
                   </div>
                 </div>
               </div>
             </div>
           </section>
 
-          <section className="mb-8 grid gap-4 md:grid-cols-3">
-            <div className="rounded-[28px] border border-white/10 p-5" style={cardStyle}>
-              <div className="mb-4 inline-flex rounded-2xl bg-emerald-500/10 p-3 text-emerald-300">
-                <ShieldCheck className="h-5 w-5" />
-              </div>
-              <h3 className="text-lg font-black" style={{ color: currentStore.textColor }}>
-                Loja confiável
-              </h3>
-              <p className="mt-2 text-sm leading-6" style={{ color: currentStore.mutedTextColor }}>
-                Visual profissional, contato rápido e experiência mais segura para o cliente.
-              </p>
-            </div>
-
-            <div className="rounded-[28px] border border-white/10 p-5" style={cardStyle}>
-              <div className="mb-4 inline-flex rounded-2xl bg-emerald-500/10 p-3 text-emerald-300">
-                <Sparkles className="h-5 w-5" />
-              </div>
-              <h3 className="text-lg font-black" style={{ color: currentStore.textColor }}>
-                Mais persuasão
-              </h3>
-              <p className="mt-2 text-sm leading-6" style={{ color: currentStore.mutedTextColor }}>
-                Produtos destacados para aumentar atenção, desejo e chance de clique.
-              </p>
-            </div>
-
-            <div className="rounded-[28px] border border-white/10 p-5" style={cardStyle}>
-              <div className="mb-4 inline-flex rounded-2xl bg-emerald-500/10 p-3 text-emerald-300">
-                <Star className="h-5 w-5" />
-              </div>
-              <h3 className="text-lg font-black" style={{ color: currentStore.textColor }}>
-                Experiência premium
-              </h3>
-              <p className="mt-2 text-sm leading-6" style={{ color: currentStore.mutedTextColor }}>
-                Layout pensado para parecer mais valioso e prender melhor a atenção do visitante.
-              </p>
-            </div>
-          </section>
-
-          <section className="mb-8 grid gap-6 xl:grid-cols-[1.08fr_0.92fr]">
+          <section className="mb-8">
             <div className="rounded-[32px] border border-white/10 p-6 md:p-7" style={cardStyle}>
-              <h2 className="text-2xl font-black" style={{ color: currentStore.textColor }}>
-                Encontre o produto ideal
-              </h2>
+              <div className="grid gap-6 xl:grid-cols-[1fr_280px] xl:items-end">
+                <div>
+                  <h2 className="text-2xl font-black md:text-3xl" style={{ color: currentStore.textColor }}>
+                    Encontre o produto ideal
+                  </h2>
 
-              <p
-                className="mt-3 text-base leading-7"
-                style={{ color: currentStore.mutedTextColor }}
-              >
-                Navegue pela vitrine, filtre mais rápido e abra o produto que mais combina com você.
-              </p>
-
-              <div className="mt-5 relative">
-                <Search className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-zinc-500" />
-                <input
-                  value={search}
-                  onChange={(e) => setSearch(e.target.value)}
-                  className="h-12 w-full rounded-2xl border border-white/10 bg-black/30 pl-11 pr-4 text-white outline-none transition focus:border-emerald-500"
-                  placeholder="Buscar produtos..."
-                />
-              </div>
-
-              <div className="mt-5 flex flex-wrap gap-2">
-                {[
-                  { id: 'todos', label: 'Todos' },
-                  { id: 'com-link', label: 'Com link' },
-                  { id: 'sem-link', label: 'Sem link' },
-                ].map((item) => {
-                  const active = filter === item.id;
-
-                  return (
-                    <button
-                      key={item.id}
-                      type="button"
-                      onClick={() => setFilter(item.id as FilterType)}
-                      className={`rounded-full border px-4 py-2 text-sm font-semibold transition ${
-                        active
-                          ? 'border-emerald-500/30 bg-emerald-500/15 text-emerald-300'
-                          : 'border-white/10 bg-black/20 text-zinc-300 hover:bg-white/5 hover:text-white'
-                      }`}
-                    >
-                      {item.label}
-                    </button>
-                  );
-                })}
-              </div>
-
-              <div className="mt-5">
-                <label className="mb-2 flex items-center gap-2 text-sm font-medium text-white">
-                  <ArrowUpDown className="h-4 w-4 text-emerald-400" />
-                  Ordenar por
-                </label>
-
-                <select
-                  value={sort}
-                  onChange={(e) => setSort(e.target.value as SortType)}
-                  className="h-12 w-full rounded-2xl border border-white/10 bg-black/30 px-4 text-white outline-none transition focus:border-emerald-500"
-                >
-                  <option value="recentes">Mais recentes</option>
-                  <option value="mais-caros">Mais caros</option>
-                  <option value="mais-baratos">Mais baratos</option>
-                  <option value="nome">Nome</option>
-                </select>
-              </div>
-            </div>
-
-            <div className="rounded-[32px] border border-white/10 p-6 md:p-7" style={cardStyle}>
-              <h2 className="text-2xl font-black" style={{ color: currentStore.textColor }}>
-                Vitrine pronta para vender
-              </h2>
-
-              <div className="mt-5 grid grid-cols-2 gap-4">
-                <div className="rounded-2xl border border-white/10 bg-black/20 p-4">
-                  <p className="text-xs" style={{ color: currentStore.mutedTextColor }}>
-                    Produtos
+                  <p
+                    className="mt-3 max-w-3xl text-base leading-7"
+                    style={{ color: currentStore.mutedTextColor }}
+                  >
+                    Navegue pela vitrine, filtre mais rápido e abra o produto que mais combina com você.
                   </p>
-                  <p className="mt-1 text-2xl font-black" style={{ color: currentStore.textColor }}>
-                    {products.length}
-                  </p>
+
+                  <div className="relative mt-5">
+                    <Search className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-zinc-500" />
+                    <input
+                      value={search}
+                      onChange={(e) => setSearch(e.target.value)}
+                      className="h-12 w-full rounded-2xl border border-white/10 bg-black/30 pl-11 pr-4 text-white outline-none transition focus:border-emerald-500"
+                      placeholder="Buscar produtos..."
+                    />
+                  </div>
+
+                  <div className="mt-5 flex flex-wrap gap-2">
+                    {[
+                      { id: 'todos', label: 'Todos' },
+                      { id: 'com-link', label: 'Com link' },
+                      { id: 'sem-link', label: 'Sem link' },
+                    ].map((item) => {
+                      const active = filter === item.id;
+
+                      return (
+                        <button
+                          key={item.id}
+                          type="button"
+                          onClick={() => setFilter(item.id as FilterType)}
+                          className={`rounded-full border px-4 py-2 text-sm font-semibold transition ${
+                            active
+                              ? 'border-emerald-500/30 bg-emerald-500/15 text-emerald-300'
+                              : 'border-white/10 bg-black/20 text-zinc-300 hover:bg-white/5 hover:text-white'
+                          }`}
+                        >
+                          {item.label}
+                        </button>
+                      );
+                    })}
+                  </div>
+
+                  <div className="mt-5 flex flex-wrap items-center gap-3 text-sm" style={{ color: currentStore.mutedTextColor }}>
+                    <span>
+                      <strong style={{ color: currentStore.textColor }}>{products.length}</strong> produtos
+                    </span>
+                    <span className="h-1 w-1 rounded-full bg-zinc-600" />
+                    <span>
+                      <strong style={{ color: currentStore.textColor }}>{linkedProductsCount}</strong> com link
+                    </span>
+                    <span className="h-1 w-1 rounded-full bg-zinc-600" />
+                    <span>
+                      Menor preço:{' '}
+                      <strong style={{ color: currentStore.textColor }}>
+                        {products.length > 0 ? formatMoney(lowestPrice) : '—'}
+                      </strong>
+                    </span>
+                  </div>
                 </div>
 
-                <div className="rounded-2xl border border-white/10 bg-black/20 p-4">
-                  <p className="text-xs" style={{ color: currentStore.mutedTextColor }}>
-                    Resultados
-                  </p>
-                  <p className="mt-1 text-2xl font-black" style={{ color: currentStore.textColor }}>
-                    {filteredProducts.length}
-                  </p>
-                </div>
+                <div>
+                  <label className="mb-2 flex items-center gap-2 text-sm font-medium text-white">
+                    <ArrowUpDown className="h-4 w-4 text-emerald-400" />
+                    Ordenar por
+                  </label>
 
-                <div className="rounded-2xl border border-white/10 bg-black/20 p-4">
-                  <p className="text-xs" style={{ color: currentStore.mutedTextColor }}>
-                    Com link
-                  </p>
-                  <p className="mt-1 text-2xl font-black" style={{ color: currentStore.textColor }}>
-                    {linkedProductsCount}
-                  </p>
-                </div>
-
-                <div className="rounded-2xl border border-white/10 bg-black/20 p-4">
-                  <p className="text-xs" style={{ color: currentStore.mutedTextColor }}>
-                    Menor preço
-                  </p>
-                  <p className="mt-1 text-lg font-black" style={{ color: currentStore.textColor }}>
-                    {products.length > 0 ? formatMoney(lowestPrice) : '—'}
-                  </p>
-                </div>
-              </div>
-
-              <div
-                className="mt-5 rounded-2xl border p-4"
-                style={{
-                  borderColor: `${currentStore.accentColor}25`,
-                  backgroundColor: `${currentStore.accentColor}10`,
-                }}
-              >
-                <div className="flex items-start gap-3">
-                  <BadgePercent
-                    className="mt-0.5 h-5 w-5 flex-shrink-0"
-                    style={{ color: currentStore.accentColor }}
-                  />
-                  <p className="text-sm leading-6" style={{ color: currentStore.textColor }}>
-                    Quanto melhor o visual da loja, mais atenção ela prende e mais valor transmite ao visitante.
-                  </p>
+                  <select
+                    value={sort}
+                    onChange={(e) => setSort(e.target.value as SortType)}
+                    className="h-12 w-full rounded-2xl border border-white/10 bg-black/30 px-4 text-white outline-none transition focus:border-emerald-500"
+                  >
+                    <option value="recentes">Mais recentes</option>
+                    <option value="mais-caros">Mais caros</option>
+                    <option value="mais-baratos">Mais baratos</option>
+                    <option value="nome">Nome</option>
+                  </select>
                 </div>
               </div>
             </div>
@@ -988,22 +843,6 @@ export default function LojaPublica() {
                 <p className="leading-7 text-zinc-300">
                   {selectedProduct.description || 'Sem descrição disponível para este produto.'}
                 </p>
-
-                <div className="mt-6 space-y-3">
-                  <div className="flex items-start gap-3 rounded-2xl border border-white/10 bg-white/[0.03] p-4">
-                    <ShieldCheck className="mt-0.5 h-5 w-5 flex-shrink-0 text-emerald-400" />
-                    <p className="text-sm text-zinc-300">
-                      Produto apresentado em uma loja organizada, profissional e mais confiável.
-                    </p>
-                  </div>
-
-                  <div className="flex items-start gap-3 rounded-2xl border border-white/10 bg-white/[0.03] p-4">
-                    <Sparkles className="mt-0.5 h-5 w-5 flex-shrink-0 text-emerald-400" />
-                    <p className="text-sm text-zinc-300">
-                      Clique no botão principal para abrir a oferta ou fale direto no WhatsApp.
-                    </p>
-                  </div>
-                </div>
 
                 <div className="mt-6 flex flex-wrap gap-3">
                   <Button
