@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import {
   ArrowLeft,
   CheckSquare,
+  Copy,
   ExternalLink,
   FolderKanban,
   Image as ImageIcon,
@@ -29,6 +30,14 @@ type ProductForm = {
   description: string;
 };
 
+type FilterType =
+  | 'todos'
+  | 'com-link'
+  | 'sem-link'
+  | 'mais-recentes'
+  | 'mais-caros'
+  | 'mais-baratos';
+
 function ensureUrl(value: string) {
   const trimmed = String(value ?? '').trim();
   if (!trimmed) return '';
@@ -41,18 +50,12 @@ function parsePrice(value: string) {
     .replace(/[^\d.,]/g, '')
     .replace(/\./g, '')
     .replace(',', '.');
+
   const number = Number(cleaned);
   return Number.isFinite(number) ? number : 0;
 }
 
-function formatMoney(value: number) {
-  return value.toLocaleString('pt-BR', {
-    style: 'currency',
-    currency: 'BRL',
-  });
-}
-
-function extractPriceNumber(value: string) {
+function extractPriceNumber(value: string | number) {
   const cleaned = String(value ?? '')
     .replace(/[^\d.,]/g, '')
     .replace(/\./g, '')
@@ -62,15 +65,62 @@ function extractPriceNumber(value: string) {
   return Number.isFinite(number) ? number : 0;
 }
 
+function formatMoney(value: number) {
+  return Number(value || 0).toLocaleString('pt-BR', {
+    style: 'currency',
+    currency: 'BRL',
+  });
+}
+
+function getProductName(product: any) {
+  return String(product?.name ?? '').trim();
+}
+
+function getProductDescription(product: any) {
+  return String(product?.description ?? '').trim();
+}
+
+function getProductImage(product: any) {
+  return String(product?.image ?? '').trim();
+}
+
+function getProductAffiliateLink(product: any) {
+  return String(product?.affiliateLink ?? product?.affiliate_link ?? '').trim();
+}
+
+function getProductPrice(product: any) {
+  return extractPriceNumber(product?.price ?? 0);
+}
+
+function getProductCreatedAt(product: any) {
+  const raw = product?.createdAt ?? product?.created_at ?? null;
+  if (!raw) return 0;
+
+  const timestamp = new Date(raw).getTime();
+  return Number.isFinite(timestamp) ? timestamp : 0;
+}
+
+const FILTER_OPTIONS: Array<{ value: FilterType; label: string }> = [
+  { value: 'todos', label: 'Todos' },
+  { value: 'com-link', label: 'Com link' },
+  { value: 'sem-link', label: 'Sem link' },
+  { value: 'mais-recentes', label: 'Mais recentes' },
+  { value: 'mais-caros', label: 'Mais caros' },
+  { value: 'mais-baratos', label: 'Mais baratos' },
+];
+
 export default function Produtos() {
   const navigate = useNavigate();
   const { store, products, refreshAppData } = useApp();
 
   const [search, setSearch] = useState('');
+  const [filter, setFilter] = useState<FilterType>('todos');
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [deletingMany, setDeletingMany] = useState(false);
+  const [duplicatingId, setDuplicatingId] = useState<string | null>(null);
+  const [isFormOpen, setIsFormOpen] = useState(false);
   const [form, setForm] = useState<ProductForm>({
     name: '',
     price: '',
@@ -79,29 +129,78 @@ export default function Produtos() {
     description: '',
   });
 
+  const enrichedProducts = useMemo(() => {
+    return products.map((product, index) => ({
+      product,
+      index,
+      name: getProductName(product),
+      description: getProductDescription(product),
+      image: getProductImage(product),
+      affiliateLink: getProductAffiliateLink(product),
+      priceNumber: getProductPrice(product),
+      createdAt: getProductCreatedAt(product),
+    }));
+  }, [products]);
+
   const filteredProducts = useMemo(() => {
     const term = search.trim().toLowerCase();
+    let list = [...enrichedProducts];
 
-    if (!term) return products;
+    if (term) {
+      list = list.filter(({ name, description, affiliateLink }) => {
+        return (
+          name.toLowerCase().includes(term) ||
+          description.toLowerCase().includes(term) ||
+          affiliateLink.toLowerCase().includes(term)
+        );
+      });
+    }
 
-    return products.filter((product) => {
-      return (
-        product.name.toLowerCase().includes(term) ||
-        product.description.toLowerCase().includes(term)
-      );
-    });
-  }, [products, search]);
+    if (filter === 'com-link') {
+      list = list.filter(({ affiliateLink }) => Boolean(affiliateLink));
+    }
+
+    if (filter === 'sem-link') {
+      list = list.filter(({ affiliateLink }) => !affiliateLink);
+    }
+
+    if (filter === 'mais-recentes') {
+      list.sort((a, b) => {
+        if (b.createdAt !== a.createdAt) return b.createdAt - a.createdAt;
+        return b.index - a.index;
+      });
+    } else if (filter === 'mais-caros') {
+      list.sort((a, b) => {
+        if (b.priceNumber !== a.priceNumber) return b.priceNumber - a.priceNumber;
+        return b.index - a.index;
+      });
+    } else if (filter === 'mais-baratos') {
+      list.sort((a, b) => {
+        if (a.priceNumber !== b.priceNumber) return a.priceNumber - b.priceNumber;
+        return b.index - a.index;
+      });
+    } else {
+      list.sort((a, b) => b.index - a.index);
+    }
+
+    return list.map((item) => item.product);
+  }, [enrichedProducts, filter, search]);
 
   const selectedCount = selectedIds.length;
 
   const linkedProductsCount = useMemo(
-    () => products.filter((product) => Boolean(product.affiliateLink)).length,
+    () => products.filter((product) => Boolean(getProductAffiliateLink(product))).length,
+    [products],
+  );
+
+  const productsWithoutLinkCount = useMemo(
+    () => products.filter((product) => !getProductAffiliateLink(product)).length,
     [products],
   );
 
   const avgPrice = useMemo(() => {
     if (products.length === 0) return 0;
-    const total = products.reduce((acc, product) => acc + extractPriceNumber(product.price), 0);
+    const total = products.reduce((acc, product) => acc + getProductPrice(product), 0);
     return total / products.length;
   }, [products]);
 
@@ -118,19 +217,30 @@ export default function Produtos() {
     });
   };
 
+  const openCreateModal = () => {
+    resetForm();
+    setIsFormOpen(true);
+  };
+
+  const closeFormModal = () => {
+    if (saving) return;
+    setIsFormOpen(false);
+    resetForm();
+  };
+
   const startEdit = (id: string) => {
     const product = products.find((item) => item.id === id);
     if (!product) return;
 
     setEditingId(product.id);
     setForm({
-      name: product.name ?? '',
-      price: String(extractPriceNumber(product.price) || ''),
-      image: product.image ?? '',
-      affiliateLink: product.affiliateLink ?? '',
-      description: product.description ?? '',
+      name: getProductName(product),
+      price: String(getProductPrice(product) || ''),
+      image: getProductImage(product),
+      affiliateLink: getProductAffiliateLink(product),
+      description: getProductDescription(product),
     });
-    window.scrollTo({ top: 0, behavior: 'smooth' });
+    setIsFormOpen(true);
   };
 
   const toggleSelect = (id: string) => {
@@ -144,7 +254,7 @@ export default function Produtos() {
 
   const toggleSelectAllVisible = () => {
     const visibleIds = filteredProducts.map((product) => product.id);
-    const allSelected = visibleIds.every((id) => selectedIds.includes(id));
+    const allSelected = visibleIds.length > 0 && visibleIds.every((id) => selectedIds.includes(id));
 
     if (allSelected) {
       setSelectedIds((prev) => prev.filter((id) => !visibleIds.includes(id)));
@@ -222,6 +332,7 @@ export default function Produtos() {
       }
 
       await refreshAppData();
+      setIsFormOpen(false);
       resetForm();
     } catch (error: any) {
       console.error('Erro ao salvar produto:', error);
@@ -250,7 +361,11 @@ export default function Produtos() {
       if (error) throw error;
 
       setSelectedIds((prev) => prev.filter((item) => item !== id));
-      if (editingId === id) resetForm();
+
+      if (editingId === id) {
+        resetForm();
+        setIsFormOpen(false);
+      }
 
       await refreshAppData();
       toast.success('Produto excluído com sucesso.');
@@ -286,7 +401,11 @@ export default function Produtos() {
       if (error) throw error;
 
       setSelectedIds([]);
-      if (editingId && selectedIds.includes(editingId)) resetForm();
+
+      if (editingId && selectedIds.includes(editingId)) {
+        resetForm();
+        setIsFormOpen(false);
+      }
 
       await refreshAppData();
       toast.success('Produtos excluídos com sucesso.');
@@ -298,6 +417,83 @@ export default function Produtos() {
     }
   };
 
+  const handleDuplicate = async (id: string) => {
+    if (!store?.id) {
+      toast.error('Loja não encontrada.');
+      return;
+    }
+
+    const product = products.find((item) => item.id === id);
+    if (!product) {
+      toast.error('Produto não encontrado.');
+      return;
+    }
+
+    setDuplicatingId(id);
+
+    try {
+      const baseName = getProductName(product) || 'Produto';
+      const existingNames = new Set(
+        products.map((item) => getProductName(item).toLowerCase()).filter(Boolean),
+      );
+
+      let duplicatedName = `${baseName} (Cópia)`;
+      let counter = 2;
+
+      while (existingNames.has(duplicatedName.toLowerCase())) {
+        duplicatedName = `${baseName} (Cópia ${counter})`;
+        counter += 1;
+      }
+
+      const { error } = await supabase.from('products').insert({
+        store_id: store.id,
+        name: duplicatedName,
+        description: getProductDescription(product),
+        price: getProductPrice(product),
+        image: ensureUrl(getProductImage(product)),
+        affiliate_link: ensureUrl(getProductAffiliateLink(product)),
+      });
+
+      if (error) throw error;
+
+      await refreshAppData();
+      toast.success('Produto duplicado com sucesso.');
+    } catch (error: any) {
+      console.error('Erro ao duplicar produto:', error);
+      toast.error(error?.message || 'Não foi possível duplicar o produto.');
+    } finally {
+      setDuplicatingId(null);
+    }
+  };
+
+  const handleCopyAffiliateLink = async (product: any) => {
+    const url = ensureUrl(getProductAffiliateLink(product));
+
+    if (!url) {
+      toast.error('Este produto não possui link de afiliado.');
+      return;
+    }
+
+    try {
+      await navigator.clipboard.writeText(url);
+      toast.success('Link de afiliado copiado.');
+    } catch (error) {
+      console.error('Erro ao copiar link:', error);
+      toast.error('Não foi possível copiar o link.');
+    }
+  };
+
+  const handleOpenAffiliateLink = (product: any) => {
+    const url = ensureUrl(getProductAffiliateLink(product));
+
+    if (!url) {
+      toast.error('Este produto não possui link de afiliado.');
+      return;
+    }
+
+    window.open(url, '_blank', 'noopener,noreferrer');
+  };
+
   if (!store) return null;
 
   const visibleIds = filteredProducts.map((product) => product.id);
@@ -305,208 +501,111 @@ export default function Produtos() {
     visibleIds.length > 0 && visibleIds.every((id) => selectedIds.includes(id));
 
   return (
-    <div className="min-h-screen bg-[radial-gradient(circle_at_top_left,_rgba(16,185,129,0.14),_transparent_25%),radial-gradient(circle_at_bottom_right,_rgba(34,197,94,0.08),_transparent_20%),linear-gradient(180deg,_#020202_0%,_#050505_50%,_#08120d_100%)]">
-      <div className="mx-auto max-w-7xl px-4 py-8">
-        <div className="mb-8 flex flex-wrap items-center justify-between gap-4">
-          <div>
-            <Button
-              variant="ghost"
-              className="mb-3 -ml-3 text-zinc-400 hover:bg-white/5 hover:text-white"
-              onClick={() => navigate('/painel')}
-            >
-              <ArrowLeft className="mr-2 h-4 w-4" />
-              Voltar ao painel
-            </Button>
-            <h1 className="text-3xl font-black text-white">Central de produtos</h1>
-            <p className="mt-2 text-zinc-400">
-              Cadastre, edite, selecione e exclua seus produtos em um só lugar.
-            </p>
+    <>
+      <div className="min-h-screen bg-[radial-gradient(circle_at_top_left,_rgba(16,185,129,0.14),_transparent_25%),radial-gradient(circle_at_bottom_right,_rgba(34,197,94,0.08),_transparent_20%),linear-gradient(180deg,_#020202_0%,_#050505_50%,_#08120d_100%)]">
+        <div className="mx-auto max-w-7xl px-4 py-8">
+          <div className="mb-8 flex flex-wrap items-center justify-between gap-4">
+            <div>
+              <Button
+                variant="ghost"
+                className="mb-3 -ml-3 text-zinc-400 hover:bg-white/5 hover:text-white"
+                onClick={() => navigate('/painel')}
+              >
+                <ArrowLeft className="mr-2 h-4 w-4" />
+                Voltar ao painel
+              </Button>
+
+              <h1 className="text-3xl font-black text-white">Central de produtos</h1>
+              <p className="mt-2 text-zinc-400">
+                Gerencie seus produtos com mais controle, velocidade e organização.
+              </p>
+            </div>
+
+            <div className="flex flex-wrap gap-3">
+              <Button
+                variant="outline"
+                className="rounded-2xl border-white/10 bg-black/20 text-white hover:bg-white/5"
+                onClick={() => navigate(`/loja/${store.username}`)}
+              >
+                <ExternalLink className="mr-2 h-4 w-4" />
+                Ver loja
+              </Button>
+
+              <Button
+                className="rounded-2xl bg-gradient-to-r from-emerald-500 to-emerald-600 font-bold text-black hover:from-emerald-400 hover:to-emerald-500"
+                onClick={openCreateModal}
+              >
+                <Plus className="mr-2 h-4 w-4" />
+                Novo produto
+              </Button>
+            </div>
           </div>
 
-          <Button
-            className="rounded-2xl bg-gradient-to-r from-emerald-500 to-emerald-600 font-bold text-black hover:from-emerald-400 hover:to-emerald-500"
-            onClick={() => navigate(`/loja/${store.username}`)}
-          >
-            <ExternalLink className="mr-2 h-4 w-4" />
-            Ver loja
-          </Button>
-        </div>
-
-        <div className="mb-8 grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4">
-          <Card className="border-white/10 bg-white/[0.04]">
-            <CardContent className="py-6">
-              <div className="flex items-center gap-3">
-                <div className="rounded-2xl bg-emerald-500/10 p-3 text-emerald-300">
-                  <FolderKanban className="h-5 w-5" />
+          <div className="mb-8 grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4">
+            <Card className="border-white/10 bg-white/[0.04]">
+              <CardContent className="py-6">
+                <div className="flex items-center gap-3">
+                  <div className="rounded-2xl bg-emerald-500/10 p-3 text-emerald-300">
+                    <FolderKanban className="h-5 w-5" />
+                  </div>
+                  <div>
+                    <p className="text-sm text-zinc-400">Total de produtos</p>
+                    <p className="text-2xl font-black text-white">{products.length}</p>
+                  </div>
                 </div>
-                <div>
-                  <p className="text-sm text-zinc-400">Total de produtos</p>
-                  <p className="text-2xl font-black text-white">{products.length}</p>
+              </CardContent>
+            </Card>
+
+            <Card className="border-white/10 bg-white/[0.04]">
+              <CardContent className="py-6">
+                <div className="flex items-center gap-3">
+                  <div className="rounded-2xl bg-emerald-500/10 p-3 text-emerald-300">
+                    <LinkIcon className="h-5 w-5" />
+                  </div>
+                  <div>
+                    <p className="text-sm text-zinc-400">Com link afiliado</p>
+                    <p className="text-2xl font-black text-white">{linkedProductsCount}</p>
+                  </div>
                 </div>
-              </div>
-            </CardContent>
-          </Card>
+              </CardContent>
+            </Card>
 
-          <Card className="border-white/10 bg-white/[0.04]">
-            <CardContent className="py-6">
-              <div className="flex items-center gap-3">
-                <div className="rounded-2xl bg-emerald-500/10 p-3 text-emerald-300">
-                  <LinkIcon className="h-5 w-5" />
+            <Card className="border-white/10 bg-white/[0.04]">
+              <CardContent className="py-6">
+                <div className="flex items-center gap-3">
+                  <div className="rounded-2xl bg-red-500/10 p-3 text-red-300">
+                    <X className="h-5 w-5" />
+                  </div>
+                  <div>
+                    <p className="text-sm text-zinc-400">Sem link afiliado</p>
+                    <p className="text-2xl font-black text-white">{productsWithoutLinkCount}</p>
+                  </div>
                 </div>
-                <div>
-                  <p className="text-sm text-zinc-400">Com link afiliado</p>
-                  <p className="text-2xl font-black text-white">{linkedProductsCount}</p>
+              </CardContent>
+            </Card>
+
+            <Card className="border-white/10 bg-white/[0.04]">
+              <CardContent className="py-6">
+                <div className="flex items-center gap-3">
+                  <div className="rounded-2xl bg-emerald-500/10 p-3 text-emerald-300">
+                    <Package className="h-5 w-5" />
+                  </div>
+                  <div>
+                    <p className="text-sm text-zinc-400">Preço médio</p>
+                    <p className="text-2xl font-black text-white">{formatMoney(avgPrice)}</p>
+                  </div>
                 </div>
-              </div>
-            </CardContent>
-          </Card>
-
-          <Card className="border-white/10 bg-white/[0.04]">
-            <CardContent className="py-6">
-              <div className="flex items-center gap-3">
-                <div className="rounded-2xl bg-emerald-500/10 p-3 text-emerald-300">
-                  <CheckSquare className="h-5 w-5" />
-                </div>
-                <div>
-                  <p className="text-sm text-zinc-400">Selecionados</p>
-                  <p className="text-2xl font-black text-white">{selectedCount}</p>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-
-          <Card className="border-white/10 bg-white/[0.04]">
-            <CardContent className="py-6">
-              <div className="flex items-center gap-3">
-                <div className="rounded-2xl bg-emerald-500/10 p-3 text-emerald-300">
-                  <Package className="h-5 w-5" />
-                </div>
-                <div>
-                  <p className="text-sm text-zinc-400">Preço médio</p>
-                  <p className="text-2xl font-black text-white">{formatMoney(avgPrice)}</p>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-        </div>
-
-        <div className="grid gap-8 xl:grid-cols-[0.95fr_1.05fr]">
-          <Card className="border-white/10 bg-white/[0.04]">
-            <CardHeader>
-              <CardTitle className="text-white">
-                {isEditing ? 'Editar produto' : 'Novo produto'}
-              </CardTitle>
-              <CardDescription className="text-zinc-400">
-                Preencha os campos e salve. Cada produto já fica pronto com link de afiliado.
-              </CardDescription>
-            </CardHeader>
-
-            <CardContent className="space-y-5">
-              <div>
-                <label className="mb-2 flex items-center gap-2 text-sm font-medium text-white">
-                  <Package className="h-4 w-4 text-emerald-400" />
-                  Nome do produto
-                </label>
-                <input
-                  value={form.name}
-                  onChange={(e) => setForm((prev) => ({ ...prev, name: e.target.value }))}
-                  className="h-12 w-full rounded-2xl border border-white/10 bg-black/30 px-4 text-white outline-none transition focus:border-emerald-500"
-                  placeholder="Ex: Smartwatch Ultra Fit"
-                />
-              </div>
-
-              <div>
-                <label className="mb-2 flex items-center gap-2 text-sm font-medium text-white">
-                  <ImageIcon className="h-4 w-4 text-emerald-400" />
-                  Imagem do produto
-                </label>
-                <input
-                  value={form.image}
-                  onChange={(e) => setForm((prev) => ({ ...prev, image: e.target.value }))}
-                  className="h-12 w-full rounded-2xl border border-white/10 bg-black/30 px-4 text-white outline-none transition focus:border-emerald-500"
-                  placeholder="https://..."
-                />
-              </div>
-
-              <div className="grid grid-cols-1 gap-5 md:grid-cols-2">
-                <div>
-                  <label className="mb-2 flex items-center gap-2 text-sm font-medium text-white">
-                    <Package className="h-4 w-4 text-emerald-400" />
-                    Preço
-                  </label>
-                  <input
-                    value={form.price}
-                    onChange={(e) => setForm((prev) => ({ ...prev, price: e.target.value }))}
-                    className="h-12 w-full rounded-2xl border border-white/10 bg-black/30 px-4 text-white outline-none transition focus:border-emerald-500"
-                    placeholder="Ex: 199,90"
-                  />
-                </div>
-
-                <div>
-                  <label className="mb-2 flex items-center gap-2 text-sm font-medium text-white">
-                    <LinkIcon className="h-4 w-4 text-emerald-400" />
-                    Link de afiliado
-                  </label>
-                  <input
-                    value={form.affiliateLink}
-                    onChange={(e) => setForm((prev) => ({ ...prev, affiliateLink: e.target.value }))}
-                    className="h-12 w-full rounded-2xl border border-white/10 bg-black/30 px-4 text-white outline-none transition focus:border-emerald-500"
-                    placeholder="https://..."
-                  />
-                </div>
-              </div>
-
-              <div>
-                <label className="mb-2 flex items-center gap-2 text-sm font-medium text-white">
-                  <Pencil className="h-4 w-4 text-emerald-400" />
-                  Descrição
-                </label>
-                <textarea
-                  value={form.description}
-                  onChange={(e) => setForm((prev) => ({ ...prev, description: e.target.value }))}
-                  className="min-h-[160px] w-full rounded-2xl border border-white/10 bg-black/30 px-4 py-3 text-white outline-none transition focus:border-emerald-500"
-                  placeholder="Descreva benefícios, diferenciais e argumentos de venda..."
-                />
-              </div>
-
-              <div className="flex flex-wrap gap-3">
-                <Button
-                  onClick={handleSave}
-                  disabled={saving}
-                  className="rounded-2xl bg-gradient-to-r from-emerald-500 to-emerald-600 font-bold text-black hover:from-emerald-400 hover:to-emerald-500"
-                >
-                  <Save className="mr-2 h-4 w-4" />
-                  {saving ? 'Salvando...' : isEditing ? 'Salvar alterações' : 'Criar produto'}
-                </Button>
-
-                <Button
-                  variant="outline"
-                  className="rounded-2xl border-white/10 bg-black/20 text-white hover:bg-white/5"
-                  onClick={resetForm}
-                >
-                  {isEditing ? (
-                    <>
-                      <X className="mr-2 h-4 w-4" />
-                      Cancelar edição
-                    </>
-                  ) : (
-                    <>
-                      <Plus className="mr-2 h-4 w-4" />
-                      Limpar formulário
-                    </>
-                  )}
-                </Button>
-              </div>
-            </CardContent>
-          </Card>
+              </CardContent>
+            </Card>
+          </div>
 
           <Card className="border-white/10 bg-white/[0.04]">
             <CardHeader>
-              <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+              <div className="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
                 <div>
-                  <CardTitle className="text-white">Todos os produtos</CardTitle>
+                  <CardTitle className="text-white">Lista de produtos</CardTitle>
                   <CardDescription className="text-zinc-400">
-                    Selecione, edite ou exclua seus produtos.
+                    Busque, filtre, selecione e execute ações rápidas por produto.
                   </CardDescription>
                 </div>
 
@@ -533,15 +632,47 @@ export default function Produtos() {
             </CardHeader>
 
             <CardContent>
-              <div className="mb-5">
+              <div className="mb-5 space-y-4">
                 <div className="relative">
                   <Search className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-zinc-500" />
                   <input
                     value={search}
                     onChange={(e) => setSearch(e.target.value)}
                     className="h-12 w-full rounded-2xl border border-white/10 bg-black/30 pl-11 pr-4 text-white outline-none transition focus:border-emerald-500"
-                    placeholder="Buscar produto..."
+                    placeholder="Buscar por nome, descrição ou link..."
                   />
+                </div>
+
+                <div className="flex flex-wrap gap-2">
+                  {FILTER_OPTIONS.map((option) => {
+                    const active = filter === option.value;
+
+                    return (
+                      <button
+                        key={option.value}
+                        type="button"
+                        onClick={() => setFilter(option.value)}
+                        className={`rounded-full border px-4 py-2 text-sm font-semibold transition ${
+                          active
+                            ? 'border-emerald-500/30 bg-emerald-500/15 text-emerald-300'
+                            : 'border-white/10 bg-black/20 text-zinc-300 hover:bg-white/5 hover:text-white'
+                        }`}
+                      >
+                        {option.label}
+                      </button>
+                    );
+                  })}
+                </div>
+
+                <div className="flex flex-wrap items-center gap-3 text-sm text-zinc-400">
+                  <span>
+                    Mostrando <strong className="text-white">{filteredProducts.length}</strong> de{' '}
+                    <strong className="text-white">{products.length}</strong> produtos
+                  </span>
+                  <span className="h-1 w-1 rounded-full bg-zinc-600" />
+                  <span>
+                    Selecionados: <strong className="text-white">{selectedCount}</strong>
+                  </span>
                 </div>
               </div>
 
@@ -550,21 +681,41 @@ export default function Produtos() {
                   <FolderKanban className="mx-auto mb-4 h-14 w-14 text-zinc-600" />
                   <h3 className="text-xl font-bold text-white">Nenhum produto encontrado</h3>
                   <p className="mt-2 text-zinc-400">
-                    Ajuste a busca ou cadastre um novo produto.
+                    Ajuste os filtros, refine a busca ou cadastre um novo produto.
                   </p>
+                  <div className="mt-6">
+                    <Button
+                      className="rounded-2xl bg-gradient-to-r from-emerald-500 to-emerald-600 font-bold text-black hover:from-emerald-400 hover:to-emerald-500"
+                      onClick={openCreateModal}
+                    >
+                      <Plus className="mr-2 h-4 w-4" />
+                      Criar produto
+                    </Button>
+                  </div>
                 </div>
               ) : (
                 <div className="space-y-4">
                   {filteredProducts.map((product) => {
                     const checked = selectedIds.includes(product.id);
+                    const affiliateLink = getProductAffiliateLink(product);
+                    const hasLink = Boolean(affiliateLink);
+                    const price = getProductPrice(product);
+                    const image = getProductImage(product);
+                    const name = getProductName(product);
+                    const description = getProductDescription(product);
+                    const isDuplicating = duplicatingId === product.id;
 
                     return (
                       <div
                         key={product.id}
-                        className="overflow-hidden rounded-3xl border border-white/10 bg-black/20 transition hover:border-emerald-500/30"
+                        className={`overflow-hidden rounded-3xl border bg-black/20 transition ${
+                          checked
+                            ? 'border-emerald-500/40 shadow-[0_0_0_1px_rgba(16,185,129,0.1)]'
+                            : 'border-white/10 hover:border-emerald-500/30'
+                        }`}
                       >
-                        <div className="grid grid-cols-1 gap-0 md:grid-cols-[56px_130px_1fr]">
-                          <div className="flex items-center justify-center border-b border-white/10 md:border-b-0 md:border-r">
+                        <div className="grid grid-cols-1 gap-0 xl:grid-cols-[56px_160px_1fr_320px]">
+                          <div className="flex items-center justify-center border-b border-white/10 xl:border-b-0 xl:border-r">
                             <input
                               type="checkbox"
                               checked={checked}
@@ -573,59 +724,133 @@ export default function Produtos() {
                             />
                           </div>
 
-                          <div className="border-b border-white/10 md:border-b-0 md:border-r">
-                            <img
-                              src={product.image}
-                              alt={product.name}
-                              className="h-full min-h-[130px] w-full object-cover"
-                            />
+                          <div className="border-b border-white/10 xl:border-b-0 xl:border-r">
+                            <div className="relative h-full min-h-[180px] bg-zinc-950">
+                              {image ? (
+                                <img
+                                  src={image}
+                                  alt={name}
+                                  className="h-full w-full object-cover"
+                                  onError={(e) => {
+                                    e.currentTarget.style.display = 'none';
+                                    const fallback = e.currentTarget.nextElementSibling as HTMLElement | null;
+                                    if (fallback) fallback.style.display = 'flex';
+                                  }}
+                                />
+                              ) : null}
+
+                              <div
+                                className={`absolute inset-0 items-center justify-center bg-gradient-to-br from-zinc-900 to-black ${
+                                  image ? 'hidden' : 'flex'
+                                }`}
+                              >
+                                <div className="text-center">
+                                  <Package className="mx-auto mb-2 h-8 w-8 text-zinc-600" />
+                                  <p className="text-sm text-zinc-500">Sem imagem</p>
+                                </div>
+                              </div>
+                            </div>
                           </div>
 
                           <div className="p-5">
-                            <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
-                              <div className="min-w-0">
-                                <div className="mb-3 flex flex-wrap items-center gap-2">
-                                  <span className="rounded-full border border-white/10 bg-white/5 px-3 py-1 text-xs font-medium text-zinc-300">
-                                    {product.affiliateLink ? 'Link configurado' : 'Sem link'}
-                                  </span>
-                                  <span className="rounded-full border border-emerald-500/15 bg-emerald-500/10 px-3 py-1 text-xs font-medium text-emerald-300">
-                                    {product.price}
-                                  </span>
-                                </div>
+                            <div className="mb-3 flex flex-wrap items-center gap-2">
+                              <span
+                                className={`rounded-full border px-3 py-1 text-xs font-semibold ${
+                                  hasLink
+                                    ? 'border-emerald-500/20 bg-emerald-500/10 text-emerald-300'
+                                    : 'border-red-500/20 bg-red-500/10 text-red-300'
+                                }`}
+                              >
+                                {hasLink ? 'Com link afiliado' : 'Sem link afiliado'}
+                              </span>
 
-                                <h3 className="text-lg font-bold text-white">{product.name}</h3>
-                                <p className="mt-2 line-clamp-2 text-sm text-zinc-400">
-                                  {product.description}
-                                </p>
-                              </div>
+                              <span className="rounded-full border border-white/10 bg-white/5 px-3 py-1 text-xs font-semibold text-white">
+                                {formatMoney(price)}
+                              </span>
 
-                              <div className="grid grid-cols-2 gap-3 lg:min-w-[240px]">
-                                <Button
-                                  variant="outline"
-                                  className="rounded-2xl border-white/10 bg-black/20 text-white hover:bg-white/5"
-                                  onClick={() => startEdit(product.id)}
-                                >
-                                  <Pencil className="mr-2 h-4 w-4" />
-                                  Editar
-                                </Button>
+                              {checked ? (
+                                <span className="rounded-full border border-emerald-500/20 bg-emerald-500/10 px-3 py-1 text-xs font-semibold text-emerald-300">
+                                  Selecionado
+                                </span>
+                              ) : null}
+                            </div>
 
-                                <Button
-                                  variant="outline"
-                                  className="rounded-2xl border-white/10 bg-black/20 text-white hover:bg-white/5"
-                                  onClick={() => navigate(`/produto/${product.id}`)}
-                                >
-                                  <ExternalLink className="mr-2 h-4 w-4" />
-                                  Ver
-                                </Button>
+                            <h3 className="text-xl font-black text-white">{name}</h3>
 
-                                <Button
-                                  className="col-span-2 rounded-2xl bg-red-500 text-white hover:bg-red-600"
-                                  onClick={() => handleDeleteOne(product.id)}
-                                >
-                                  <Trash2 className="mr-2 h-4 w-4" />
-                                  Excluir produto
-                                </Button>
-                              </div>
+                            <p className="mt-3 line-clamp-3 text-sm leading-6 text-zinc-400">
+                              {description || 'Sem descrição cadastrada.'}
+                            </p>
+
+                            {affiliateLink ? (
+                              <p className="mt-4 truncate text-xs text-zinc-500">
+                                Link: {affiliateLink}
+                              </p>
+                            ) : (
+                              <p className="mt-4 text-xs text-zinc-600">
+                                Este produto ainda não possui link de afiliado.
+                              </p>
+                            )}
+                          </div>
+
+                          <div className="border-t border-white/10 p-5 xl:border-l xl:border-t-0">
+                            <p className="mb-3 text-sm font-semibold text-white">Ações rápidas</p>
+
+                            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-2">
+                              <Button
+                                variant="outline"
+                                className="rounded-2xl border-white/10 bg-black/20 text-white hover:bg-white/5"
+                                onClick={() => startEdit(product.id)}
+                              >
+                                <Pencil className="mr-2 h-4 w-4" />
+                                Editar
+                              </Button>
+
+                              <Button
+                                variant="outline"
+                                className="rounded-2xl border-white/10 bg-black/20 text-white hover:bg-white/5"
+                                onClick={() => handleDuplicate(product.id)}
+                                disabled={isDuplicating}
+                              >
+                                <Copy className="mr-2 h-4 w-4" />
+                                {isDuplicating ? 'Duplicando...' : 'Duplicar'}
+                              </Button>
+
+                              <Button
+                                variant="outline"
+                                className="rounded-2xl border-white/10 bg-black/20 text-white hover:bg-white/5"
+                                onClick={() => handleCopyAffiliateLink(product)}
+                                disabled={!hasLink}
+                              >
+                                <LinkIcon className="mr-2 h-4 w-4" />
+                                Copiar link
+                              </Button>
+
+                              <Button
+                                variant="outline"
+                                className="rounded-2xl border-white/10 bg-black/20 text-white hover:bg-white/5"
+                                onClick={() => handleOpenAffiliateLink(product)}
+                                disabled={!hasLink}
+                              >
+                                <ExternalLink className="mr-2 h-4 w-4" />
+                                Abrir link
+                              </Button>
+
+                              <Button
+                                variant="outline"
+                                className="rounded-2xl border-white/10 bg-black/20 text-white hover:bg-white/5"
+                                onClick={() => navigate(`/produto/${product.id}`)}
+                              >
+                                <Package className="mr-2 h-4 w-4" />
+                                Ver produto
+                              </Button>
+
+                              <Button
+                                className="rounded-2xl bg-red-500 text-white hover:bg-red-600"
+                                onClick={() => handleDeleteOne(product.id)}
+                              >
+                                <Trash2 className="mr-2 h-4 w-4" />
+                                Excluir
+                              </Button>
                             </div>
                           </div>
                         </div>
@@ -638,6 +863,128 @@ export default function Produtos() {
           </Card>
         </div>
       </div>
-    </div>
+
+      {isFormOpen ? (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 p-4 backdrop-blur-sm"
+          onClick={closeFormModal}
+        >
+          <div
+            className="w-full max-w-3xl rounded-[28px] border border-white/10 bg-[#050505] shadow-2xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-start justify-between gap-4 border-b border-white/10 px-6 py-5">
+              <div>
+                <h2 className="text-2xl font-black text-white">
+                  {isEditing ? 'Editar produto' : 'Novo produto'}
+                </h2>
+                <p className="mt-1 text-sm text-zinc-400">
+                  Formulário mais leve, organizado e focado no que importa.
+                </p>
+              </div>
+
+              <button
+                type="button"
+                onClick={closeFormModal}
+                className="rounded-xl border border-white/10 bg-white/5 p-2 text-zinc-400 transition hover:text-white"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+
+            <div className="max-h-[80vh] overflow-y-auto px-6 py-6">
+              <div className="grid grid-cols-1 gap-5 md:grid-cols-2">
+                <div className="md:col-span-2">
+                  <label className="mb-2 flex items-center gap-2 text-sm font-medium text-white">
+                    <Package className="h-4 w-4 text-emerald-400" />
+                    Nome do produto
+                  </label>
+                  <input
+                    value={form.name}
+                    onChange={(e) => setForm((prev) => ({ ...prev, name: e.target.value }))}
+                    className="h-12 w-full rounded-2xl border border-white/10 bg-black/30 px-4 text-white outline-none transition focus:border-emerald-500"
+                    placeholder="Ex: Smartwatch Ultra Fit"
+                  />
+                </div>
+
+                <div>
+                  <label className="mb-2 flex items-center gap-2 text-sm font-medium text-white">
+                    <Package className="h-4 w-4 text-emerald-400" />
+                    Preço
+                  </label>
+                  <input
+                    value={form.price}
+                    onChange={(e) => setForm((prev) => ({ ...prev, price: e.target.value }))}
+                    className="h-12 w-full rounded-2xl border border-white/10 bg-black/30 px-4 text-white outline-none transition focus:border-emerald-500"
+                    placeholder="Ex: 199,90"
+                  />
+                </div>
+
+                <div>
+                  <label className="mb-2 flex items-center gap-2 text-sm font-medium text-white">
+                    <LinkIcon className="h-4 w-4 text-emerald-400" />
+                    Link de afiliado
+                  </label>
+                  <input
+                    value={form.affiliateLink}
+                    onChange={(e) =>
+                      setForm((prev) => ({ ...prev, affiliateLink: e.target.value }))
+                    }
+                    className="h-12 w-full rounded-2xl border border-white/10 bg-black/30 px-4 text-white outline-none transition focus:border-emerald-500"
+                    placeholder="https://..."
+                  />
+                </div>
+
+                <div className="md:col-span-2">
+                  <label className="mb-2 flex items-center gap-2 text-sm font-medium text-white">
+                    <ImageIcon className="h-4 w-4 text-emerald-400" />
+                    Imagem do produto
+                  </label>
+                  <input
+                    value={form.image}
+                    onChange={(e) => setForm((prev) => ({ ...prev, image: e.target.value }))}
+                    className="h-12 w-full rounded-2xl border border-white/10 bg-black/30 px-4 text-white outline-none transition focus:border-emerald-500"
+                    placeholder="https://..."
+                  />
+                </div>
+
+                <div className="md:col-span-2">
+                  <label className="mb-2 flex items-center gap-2 text-sm font-medium text-white">
+                    <Pencil className="h-4 w-4 text-emerald-400" />
+                    Descrição
+                  </label>
+                  <textarea
+                    value={form.description}
+                    onChange={(e) => setForm((prev) => ({ ...prev, description: e.target.value }))}
+                    className="min-h-[160px] w-full rounded-2xl border border-white/10 bg-black/30 px-4 py-3 text-white outline-none transition focus:border-emerald-500"
+                    placeholder="Descreva benefícios, diferenciais e argumentos de venda..."
+                  />
+                </div>
+              </div>
+            </div>
+
+            <div className="flex flex-wrap gap-3 border-t border-white/10 px-6 py-5">
+              <Button
+                onClick={handleSave}
+                disabled={saving}
+                className="rounded-2xl bg-gradient-to-r from-emerald-500 to-emerald-600 font-bold text-black hover:from-emerald-400 hover:to-emerald-500"
+              >
+                <Save className="mr-2 h-4 w-4" />
+                {saving ? 'Salvando...' : isEditing ? 'Salvar alterações' : 'Criar produto'}
+              </Button>
+
+              <Button
+                variant="outline"
+                className="rounded-2xl border-white/10 bg-black/20 text-white hover:bg-white/5"
+                onClick={closeFormModal}
+              >
+                <X className="mr-2 h-4 w-4" />
+                Cancelar
+              </Button>
+            </div>
+          </div>
+        </div>
+      ) : null}
+    </>
   );
 }
