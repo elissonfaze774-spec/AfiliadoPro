@@ -355,7 +355,7 @@ export default function Painel() {
     if (directStoreId) {
       const { data, error } = await supabase
         .from('stores')
-        .select('id, name, store_name, slug, niche, whatsapp_number, whatsapp')
+        .select('*')
         .eq('id', directStoreId)
         .maybeSingle();
 
@@ -375,7 +375,7 @@ export default function Painel() {
       if (!adminEmailError && adminByEmail?.store_id) {
         const { data: storeByAdminEmail, error: storeByAdminEmailError } = await supabase
           .from('stores')
-          .select('id, name, store_name, slug, niche, whatsapp_number, whatsapp')
+          .select('*')
           .eq('id', adminByEmail.store_id)
           .maybeSingle();
 
@@ -389,7 +389,7 @@ export default function Painel() {
     if (authUserId) {
       const { data: storeByOwner, error: storeByOwnerError } = await supabase
         .from('stores')
-        .select('id, name, store_name, slug, niche, whatsapp_number, whatsapp')
+        .select('*')
         .eq('owner_user_id', authUserId)
         .order('created_at', { ascending: false })
         .limit(1)
@@ -420,7 +420,7 @@ export default function Painel() {
         if (!adminByProfileEmailError && adminByProfileEmail?.store_id) {
           const { data: storeByProfileEmail, error: storeByProfileEmailError } = await supabase
             .from('stores')
-            .select('id, name, store_name, slug, niche, whatsapp_number, whatsapp')
+            .select('*')
             .eq('id', adminByProfileEmail.store_id)
             .maybeSingle();
 
@@ -664,7 +664,10 @@ export default function Painel() {
     setCreatingFakeProducts(true);
 
     try {
-      const fakeProducts = getFakeProductsByNiche(settingsForm.niche || store.niche || 'eletronicos', store.id);
+      const fakeProducts = getFakeProductsByNiche(
+        settingsForm.niche || store.niche || 'eletronicos',
+        store.id,
+      );
 
       const { error } = await supabase.from('products').insert(fakeProducts);
 
@@ -882,7 +885,10 @@ export default function Painel() {
                     placeholder="minha-loja"
                   />
                   <p className="mt-2 text-xs text-zinc-500">
-                    Sua loja ficará em: <span className="text-emerald-400">/loja/{slugify(settingsForm.slug || settingsForm.name)}</span>
+                    Sua loja ficará em:{' '}
+                    <span className="text-emerald-400">
+                      /loja/{slugify(settingsForm.slug || settingsForm.name)}
+                    </span>
                   </p>
                 </div>
 
