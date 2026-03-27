@@ -11,9 +11,6 @@ import {
   ShoppingBag,
   Store as StoreIcon,
   X,
-  Sparkles,
-  ShieldCheck,
-  Zap,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { supabase } from '../../lib/supabase';
@@ -55,10 +52,6 @@ type Product = {
 
 type FilterType = 'todos' | 'com-link' | 'sem-link';
 type SortType = 'recentes' | 'mais-caros' | 'mais-baratos' | 'nome';
-
-function onlyDigits(value: string) {
-  return String(value ?? '').replace(/\D/g, '');
-}
 
 function ensureUrl(value: string) {
   const trimmed = String(value ?? '').trim();
@@ -359,18 +352,7 @@ export default function LojaPublica() {
       return;
     }
 
-    if (store?.whatsapp) {
-      const phone = onlyDigits(store.whatsapp);
-      const message = `Olá! Tenho interesse no produto: ${product.name}`;
-      window.open(
-        `https://wa.me/${phone}?text=${encodeURIComponent(message)}`,
-        '_blank',
-        'noopener,noreferrer',
-      );
-      return;
-    }
-
-    toast.error('Este produto ainda não possui link ou WhatsApp configurado.');
+    toast.error('Este produto ainda não possui link de afiliado configurado.');
   };
 
   const handleWhatsApp = () => {
@@ -379,7 +361,7 @@ export default function LojaPublica() {
       return;
     }
 
-    const phone = onlyDigits(store.whatsapp);
+    const phone = String(store.whatsapp ?? '').replace(/\D/g, '');
     const message = `Olá! Vim pela loja ${store.name} e quero mais informações.`;
 
     window.open(
@@ -627,38 +609,6 @@ export default function LojaPublica() {
                       );
                     })}
                   </div>
-
-                  <div className="mt-5 grid gap-3 md:grid-cols-3">
-                    <div className="rounded-2xl border border-white/10 bg-black/20 p-4">
-                      <div className="mb-2 flex items-center gap-2">
-                        <Sparkles className="h-4 w-4 text-emerald-400" />
-                        <p className="text-sm font-semibold text-white">Vitrine organizada</p>
-                      </div>
-                      <p className="text-sm leading-6" style={{ color: currentStore.mutedTextColor }}>
-                        Produtos exibidos de forma clara, bonita e fácil de navegar.
-                      </p>
-                    </div>
-
-                    <div className="rounded-2xl border border-white/10 bg-black/20 p-4">
-                      <div className="mb-2 flex items-center gap-2">
-                        <ShieldCheck className="h-4 w-4 text-emerald-400" />
-                        <p className="text-sm font-semibold text-white">Visual profissional</p>
-                      </div>
-                      <p className="text-sm leading-6" style={{ color: currentStore.mutedTextColor }}>
-                        Uma apresentação mais forte para transmitir valor e confiança.
-                      </p>
-                    </div>
-
-                    <div className="rounded-2xl border border-white/10 bg-black/20 p-4">
-                      <div className="mb-2 flex items-center gap-2">
-                        <Zap className="h-4 w-4 text-emerald-400" />
-                        <p className="text-sm font-semibold text-white">Acesso rápido</p>
-                      </div>
-                      <p className="text-sm leading-6" style={{ color: currentStore.mutedTextColor }}>
-                        Busque, filtre e abra ofertas com muito mais facilidade.
-                      </p>
-                    </div>
-                  </div>
                 </div>
 
                 <div>
@@ -712,76 +662,61 @@ export default function LojaPublica() {
               </div>
             ) : (
               <div className="grid grid-cols-1 gap-6 md:grid-cols-2 xl:grid-cols-3">
-                {filteredProducts.map((product) => {
-                  const hasAffiliateLink = Boolean(ensureUrl(product.affiliateLink));
+                {filteredProducts.map((product) => (
+                  <div
+                    key={product.id}
+                    className="group overflow-hidden rounded-[32px] border border-white/10 shadow-[0_10px_30px_rgba(0,0,0,0.25)] transition hover:-translate-y-1 hover:border-emerald-500/30"
+                    style={cardStyle}
+                  >
+                    <div className="relative h-64 overflow-hidden bg-black/20">
+                      <ProductImage src={ensureUrl(product.image)} alt={product.name} />
 
-                  return (
-                    <div
-                      key={product.id}
-                      className="group overflow-hidden rounded-[32px] border border-white/10 shadow-[0_10px_30px_rgba(0,0,0,0.25)] transition hover:-translate-y-1 hover:border-emerald-500/30"
-                      style={cardStyle}
-                    >
-                      <div className="relative h-64 overflow-hidden bg-black/20">
-                        <ProductImage src={ensureUrl(product.image)} alt={product.name} />
-
-                        <div className="absolute inset-x-0 top-0 flex items-center justify-between p-4">
-                          <span
-                            className="rounded-full border px-3 py-1 text-xs font-semibold backdrop-blur-md"
-                            style={{
-                              borderColor: `${currentStore.accentColor}33`,
-                              color: currentStore.accentColor,
-                              backgroundColor: 'rgba(0,0,0,0.35)',
-                            }}
-                          >
-                            {hasAffiliateLink ? 'Link disponível' : 'Via WhatsApp'}
-                          </span>
-
-                          <span
-                            className="rounded-full bg-black/40 px-3 py-1 text-sm font-black backdrop-blur-md"
-                            style={{ color: currentStore.textColor }}
-                          >
-                            {formatMoney(product.priceValue)}
-                          </span>
-                        </div>
-                      </div>
-
-                      <div className="p-5">
-                        <h3 className="text-xl font-black" style={{ color: currentStore.textColor }}>
-                          {product.name}
-                        </h3>
-
-                        <p
-                          className="mt-3 line-clamp-3 text-sm leading-6"
-                          style={{ color: currentStore.mutedTextColor }}
+                      <div className="absolute inset-x-0 top-0 flex items-center justify-end p-4">
+                        <span
+                          className="rounded-full bg-black/40 px-3 py-1 text-sm font-black backdrop-blur-md"
+                          style={{ color: currentStore.textColor }}
                         >
-                          {product.description || 'Sem descrição disponível para este produto.'}
-                        </p>
-
-                        <div className="mt-5 flex flex-wrap gap-3">
-                          <Button
-                            className="flex-1 rounded-2xl font-bold"
-                            style={{
-                              backgroundColor: currentStore.buttonBgColor,
-                              color: currentStore.buttonTextColor,
-                            }}
-                            onClick={() => openProductAction(product)}
-                          >
-                            <ExternalLink className="mr-2 h-4 w-4" />
-                            Comprar agora
-                          </Button>
-
-                          <Button
-                            variant="outline"
-                            className="rounded-2xl border-white/10 bg-black/20 text-white hover:bg-white/5"
-                            onClick={() => setSelectedProduct(product)}
-                          >
-                            Ver detalhes
-                          </Button>
-                        </div>
+                          {formatMoney(product.priceValue)}
+                        </span>
                       </div>
                     </div>
-                  );
-                })}
+
+                    <div className="p-5">
+                      <h3 className="text-xl font-black" style={{ color: currentStore.textColor }}>
+                        {product.name}
+                      </h3>
+
+                      <p
+                        className="mt-3 line-clamp-3 text-sm leading-6"
+                        style={{ color: currentStore.mutedTextColor }}
+                      >
+                        {product.description || 'Sem descrição disponível para este produto.'}
+                      </p>
+
+                      <div className="mt-5 flex flex-wrap gap-3">
+                        <Button
+                          className="flex-1 rounded-2xl font-bold"
+                          style={{
+                            backgroundColor: currentStore.buttonBgColor,
+                            color: currentStore.buttonTextColor,
+                          }}
+                          onClick={() => openProductAction(product)}
+                        >
+                          <ExternalLink className="mr-2 h-4 w-4" />
+                          Comprar agora
+                        </Button>
+
+                        <Button
+                          variant="outline"
+                          className="rounded-2xl border-white/10 bg-black/20 text-white hover:bg-white/5"
+                          onClick={() => setSelectedProduct(product)}
+                        >
+                          Ver detalhes
+                        </Button>
+                      </div>
+                    </div>
+                  </div>
+                ))}
               </div>
             )}
           </section>
