@@ -11,6 +11,9 @@ import {
   ShoppingBag,
   Store as StoreIcon,
   X,
+  Sparkles,
+  ShieldCheck,
+  Zap,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { supabase } from '../../lib/supabase';
@@ -348,16 +351,6 @@ export default function LojaPublica() {
     return list;
   }, [products, search, filter, sort]);
 
-  const linkedProductsCount = useMemo(
-    () => products.filter((product) => Boolean(ensureUrl(product.affiliateLink))).length,
-    [products],
-  );
-
-  const lowestPrice = useMemo(() => {
-    if (products.length === 0) return 0;
-    return Math.min(...products.map((product) => product.priceValue || 0));
-  }, [products]);
-
   const openProductAction = (product: Product) => {
     const affiliateUrl = ensureUrl(product.affiliateLink);
 
@@ -572,10 +565,10 @@ export default function LojaPublica() {
                     style={{ backgroundColor: currentStore.buttonBgColor }}
                   >
                     <p className="text-xs font-semibold uppercase tracking-[0.18em] opacity-70">
-                      Produtos disponíveis
+                      Vitrine ativa
                     </p>
-                    <div className="mt-2 text-4xl font-black">{products.length}</div>
-                    <p className="mt-1 text-sm opacity-80">Loja atualizada em tempo real</p>
+                    <div className="mt-2 text-4xl font-black">Online</div>
+                    <p className="mt-1 text-sm opacity-80">Loja pronta para receber cliques</p>
                   </div>
                 </div>
               </div>
@@ -586,7 +579,10 @@ export default function LojaPublica() {
             <div className="rounded-[32px] border border-white/10 p-6 md:p-7" style={cardStyle}>
               <div className="grid gap-6 xl:grid-cols-[1fr_280px] xl:items-end">
                 <div>
-                  <h2 className="text-2xl font-black md:text-3xl" style={{ color: currentStore.textColor }}>
+                  <h2
+                    className="text-2xl font-black md:text-3xl"
+                    style={{ color: currentStore.textColor }}
+                  >
                     Encontre o produto ideal
                   </h2>
 
@@ -632,21 +628,36 @@ export default function LojaPublica() {
                     })}
                   </div>
 
-                  <div className="mt-5 flex flex-wrap items-center gap-3 text-sm" style={{ color: currentStore.mutedTextColor }}>
-                    <span>
-                      <strong style={{ color: currentStore.textColor }}>{products.length}</strong> produtos
-                    </span>
-                    <span className="h-1 w-1 rounded-full bg-zinc-600" />
-                    <span>
-                      <strong style={{ color: currentStore.textColor }}>{linkedProductsCount}</strong> com link
-                    </span>
-                    <span className="h-1 w-1 rounded-full bg-zinc-600" />
-                    <span>
-                      Menor preço:{' '}
-                      <strong style={{ color: currentStore.textColor }}>
-                        {products.length > 0 ? formatMoney(lowestPrice) : '—'}
-                      </strong>
-                    </span>
+                  <div className="mt-5 grid gap-3 md:grid-cols-3">
+                    <div className="rounded-2xl border border-white/10 bg-black/20 p-4">
+                      <div className="mb-2 flex items-center gap-2">
+                        <Sparkles className="h-4 w-4 text-emerald-400" />
+                        <p className="text-sm font-semibold text-white">Vitrine organizada</p>
+                      </div>
+                      <p className="text-sm leading-6" style={{ color: currentStore.mutedTextColor }}>
+                        Produtos exibidos de forma clara, bonita e fácil de navegar.
+                      </p>
+                    </div>
+
+                    <div className="rounded-2xl border border-white/10 bg-black/20 p-4">
+                      <div className="mb-2 flex items-center gap-2">
+                        <ShieldCheck className="h-4 w-4 text-emerald-400" />
+                        <p className="text-sm font-semibold text-white">Visual profissional</p>
+                      </div>
+                      <p className="text-sm leading-6" style={{ color: currentStore.mutedTextColor }}>
+                        Uma apresentação mais forte para transmitir valor e confiança.
+                      </p>
+                    </div>
+
+                    <div className="rounded-2xl border border-white/10 bg-black/20 p-4">
+                      <div className="mb-2 flex items-center gap-2">
+                        <Zap className="h-4 w-4 text-emerald-400" />
+                        <p className="text-sm font-semibold text-white">Acesso rápido</p>
+                      </div>
+                      <p className="text-sm leading-6" style={{ color: currentStore.mutedTextColor }}>
+                        Busque, filtre e abra ofertas com muito mais facilidade.
+                      </p>
+                    </div>
                   </div>
                 </div>
 
