@@ -2,7 +2,6 @@ import { Navigate, Outlet, createBrowserRouter } from 'react-router-dom';
 import LandingPage from './pages/LandingPage';
 import { Login } from './pages/Login';
 import RecuperarSenha from './pages/RecuperarSenha';
-import Onboarding from './pages/Onboarding';
 import Painel from './pages/Painel';
 import AdicionarProduto from './pages/AdicionarProduto';
 import ProdutoView from './pages/ProdutoView';
@@ -12,19 +11,11 @@ import SuperAdmin from './pages/SuperAdmin';
 import App from './App';
 import { useAuth } from './context/AuthTemp';
 
-function FullScreenLoader() {
-  return (
-    <div className="min-h-screen bg-black flex items-center justify-center text-white">
-      Carregando...
-    </div>
-  );
-}
-
 function AdminRoute() {
   const { user, authLoading } = useAuth();
 
   if (authLoading) {
-    return <FullScreenLoader />;
+    return null;
   }
 
   if (!user) {
@@ -42,7 +33,7 @@ function SuperAdminRoute() {
   const { user, authLoading } = useAuth();
 
   if (authLoading) {
-    return <FullScreenLoader />;
+    return null;
   }
 
   if (!user) {
@@ -60,7 +51,7 @@ function GuestRoute() {
   const { user, authLoading } = useAuth();
 
   if (authLoading) {
-    return <FullScreenLoader />;
+    return null;
   }
 
   if (user?.role === 'super-admin') {
@@ -101,7 +92,7 @@ export const router = createBrowserRouter([
         children: [
           {
             path: 'onboarding',
-            Component: Onboarding,
+            element: <Navigate to="/painel" replace />,
           },
           {
             path: 'painel',

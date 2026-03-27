@@ -17,6 +17,7 @@ export interface Product {
   name: string;
   image: string;
   price: string;
+  priceValue?: number;
   description: string;
 }
 
@@ -26,6 +27,8 @@ export interface Store {
   username: string;
   whatsapp: string;
   niche: string;
+  logoUrl?: string;
+  bannerUrl?: string;
 }
 
 export interface ContentGenerated {
@@ -58,7 +61,7 @@ interface AppContextType {
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
 
-function toMoneyString(value: unknown) {
+function formatMoney(value: unknown) {
   const num =
     typeof value === 'number'
       ? value
@@ -66,7 +69,12 @@ function toMoneyString(value: unknown) {
         ? Number(value)
         : 0;
 
-  return Number.isFinite(num) ? `R$ ${num.toFixed(2)}` : 'R$ 0.00';
+  const safe = Number.isFinite(num) ? num : 0;
+
+  return safe.toLocaleString('pt-BR', {
+    style: 'currency',
+    currency: 'BRL',
+  });
 }
 
 function normalizeStore(row: any): Store | null {
@@ -78,16 +86,26 @@ function normalizeStore(row: any): Store | null {
     username: row.slug ?? row.username ?? '',
     whatsapp: row.whatsapp_number ?? row.whatsapp ?? '',
     niche: row.niche ?? '',
+    logoUrl: row.logo_url ?? '',
+    bannerUrl: row.banner_url ?? '',
   };
 }
 
 function normalizeProduct(row: any): Product {
+  const priceValue =
+    typeof row?.price === 'number'
+      ? row.price
+      : typeof row?.price === 'string'
+        ? Number(row.price)
+        : 0;
+
   return {
     id: String(row?.id ?? ''),
     affiliateLink: row?.affiliate_link ?? row?.affiliateLink ?? '',
     name: row?.name ?? '',
     image: row?.image ?? '',
-    price: toMoneyString(row?.price),
+    price: formatMoney(priceValue),
+    priceValue: Number.isFinite(priceValue) ? priceValue : 0,
     description: row?.description ?? '',
   };
 }
@@ -140,7 +158,33 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       throw new Error('Não foi possível carregar a loja do admin.');
     }
 
-    return normalizeStore(storeByOwner);
+    if (storeByOwner) {
+      return normalizeStore(storeByOwner);
+    }
+
+    const adminEmail = user.email?.trim().toLowerCase() ?? '';
+
+    if (adminEmail) {
+      const { data: adminData, error: adminError } = await supabase
+        .from('admins')
+        .select('store_id')
+        .eq('email', adminEmail)
+        .maybeSingle();
+
+      if (!adminError && adminData?.store_id) {
+        const { data: storeByAdmin, error: storeByAdminError } = await supabase
+          .from('stores')
+          .select('*')
+          .eq('id', adminData.store_id)
+          .maybeSingle();
+
+        if (!storeByAdminError && storeByAdmin) {
+          return normalizeStore(storeByAdmin);
+        }
+      }
+    }
+
+    return null;
   }, [user]);
 
   const loadProducts = useCallback(async (storeId?: string | null) => {
@@ -190,7 +234,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
 
       setProducts(loadedProducts);
       setContents([]);
-      setClicks(0);
+      setClicks((prev) => prev);
       currentStoreIdRef.current = storeId;
     } catch (error) {
       console.error('Erro ao atualizar AppContext:', error);
