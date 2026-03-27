@@ -59,15 +59,14 @@ interface AppContextType {
 const AppContext = createContext<AppContextType | undefined>(undefined);
 
 function toMoneyString(value: unknown) {
-  if (typeof value === 'number' && Number.isFinite(value)) {
-    return value.toFixed(2);
-  }
+  const num =
+    typeof value === 'number'
+      ? value
+      : typeof value === 'string'
+        ? Number(value)
+        : 0;
 
-  if (typeof value === 'string' && value.trim()) {
-    return value;
-  }
-
-  return '0.00';
+  return Number.isFinite(num) ? `R$ ${num.toFixed(2)}` : 'R$ 0.00';
 }
 
 function normalizeStore(row: any): Store | null {
@@ -116,26 +115,30 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     if (user.storeId) {
       const { data, error } = await supabase
         .from('stores')
-        .select('id, store_name, name, slug, username, whatsapp_number, whatsapp, niche')
+        .select('*')
         .eq('id', user.storeId)
         .maybeSingle();
 
-      if (!error && data) {
+      if (error) {
+        throw new Error('Não foi possível carregar a loja vinculada ao admin.');
+      }
+
+      if (data) {
         return normalizeStore(data);
       }
     }
 
     const { data: storeByOwner, error: storeByOwnerError } = await supabase
       .from('stores')
-      .select('id, store_name, name, slug, username, whatsapp_number, whatsapp, niche')
+      .select('*')
       .eq('owner_user_id', user.id)
       .order('created_at', { ascending: false })
       .limit(1)
       .maybeSingle();
 
-      if (storeByOwnerError) {
-        throw new Error('Não foi possível carregar a loja do admin.');
-      }
+    if (storeByOwnerError) {
+      throw new Error('Não foi possível carregar a loja do admin.');
+    }
 
     return normalizeStore(storeByOwner);
   }, [user]);
@@ -147,7 +150,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
 
     const { data, error } = await supabase
       .from('products')
-      .select('id, affiliate_link, affiliateLink, name, image, price, description, store_id')
+      .select('*')
       .eq('store_id', storeId)
       .order('created_at', { ascending: false });
 
