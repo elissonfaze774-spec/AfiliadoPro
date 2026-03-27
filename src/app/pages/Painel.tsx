@@ -445,8 +445,6 @@ export default function Painel() {
     },
   ];
 
-  const latestProducts = useMemo(() => products.slice(0, 3), [products]);
-
   const resolveStoreForAdmin = useCallback(async (authUser: AuthUserLike): Promise<StoreData | null> => {
     const authUserId = authUser?.id ?? null;
     const authEmail = authUser?.email?.trim().toLowerCase() ?? null;
@@ -1355,88 +1353,6 @@ export default function Painel() {
               </CardContent>
             </Card>
           </div>
-        </div>
-
-        <div className="mt-8">
-          <Card className="border-white/10 bg-white/[0.04] shadow-[0_10px_30px_rgba(0,0,0,0.25)]">
-            <CardHeader>
-              <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-                <div>
-                  <CardTitle className="text-white">Resumo dos produtos</CardTitle>
-                  <CardDescription className="text-zinc-400">
-                    O gerenciamento completo agora fica dentro da central de produtos.
-                  </CardDescription>
-                </div>
-
-                <Button
-                  className="rounded-2xl bg-gradient-to-r from-emerald-500 to-emerald-600 font-bold text-black hover:from-emerald-400 hover:to-emerald-500"
-                  onClick={() => navigate('/produtos')}
-                >
-                  <FolderKanban className="mr-2 h-4 w-4" />
-                  Abrir central de produtos
-                </Button>
-              </div>
-            </CardHeader>
-
-            <CardContent>
-              {latestProducts.length === 0 ? (
-                <div className="rounded-3xl border border-white/10 bg-black/20 p-10 text-center">
-                  <Package className="mx-auto mb-4 h-14 w-14 text-zinc-600" />
-                  <h3 className="text-xl font-bold text-white">Nenhum produto ainda</h3>
-                  <p className="mt-2 text-zinc-400">
-                    Use a central de produtos para cadastrar, editar e excluir.
-                  </p>
-                  <Button
-                    className="mt-6 rounded-2xl bg-gradient-to-r from-emerald-500 to-emerald-600 font-bold text-black hover:from-emerald-400 hover:to-emerald-500"
-                    onClick={() => navigate('/produtos')}
-                  >
-                    <FolderKanban className="mr-2 h-4 w-4" />
-                    Ir para produtos
-                  </Button>
-                </div>
-              ) : (
-                <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
-                  {latestProducts.map((product) => (
-                    <div
-                      key={product.id}
-                      className="overflow-hidden rounded-3xl border border-white/10 bg-black/30 transition-all hover:border-emerald-500/40 hover:ring-2 hover:ring-emerald-500/20"
-                    >
-                      <img
-                        src={product.image}
-                        alt={product.name}
-                        className="h-52 w-full object-cover"
-                      />
-
-                      <div className="p-5">
-                        <div className="mb-3 flex items-center justify-between gap-3">
-                          <span className="rounded-full border border-white/10 bg-white/5 px-3 py-1 text-xs font-medium text-zinc-300">
-                            {product.affiliateLink ? 'Link configurado' : 'Sem link'}
-                          </span>
-                          <span className="font-bold text-emerald-400">{product.price}</span>
-                        </div>
-
-                        <h4 className="mb-2 line-clamp-2 text-lg font-bold text-white">
-                          {product.name}
-                        </h4>
-
-                        <p className="mb-4 line-clamp-3 text-sm text-zinc-400">
-                          {product.description}
-                        </p>
-
-                        <Button
-                          variant="outline"
-                          className="w-full rounded-2xl border-white/10 bg-black/20 text-white hover:bg-white/5"
-                          onClick={() => navigate('/produtos')}
-                        >
-                          Gerenciar produto
-                        </Button>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </CardContent>
-          </Card>
         </div>
       </div>
     </div>
