@@ -29,6 +29,20 @@ export interface Store {
   niche: string;
   logoUrl?: string;
   bannerUrl?: string;
+  description?: string;
+  slogan?: string;
+  primaryColor?: string;
+  secondaryColor?: string;
+  accentColor?: string;
+  buttonBgColor?: string;
+  buttonTextColor?: string;
+  cardBgColor?: string;
+  textColor?: string;
+  mutedTextColor?: string;
+  headerBgColor?: string;
+  primaryButtonText?: string;
+  whatsappButtonText?: string;
+  themeMode?: string;
 }
 
 export interface ContentGenerated {
@@ -59,6 +73,13 @@ interface AppContextType {
   refreshAppData: () => Promise<void>;
 }
 
+type AuthUserLike = {
+  id?: string | null;
+  email?: string | null;
+  role?: string | null;
+  storeId?: string | null;
+};
+
 const AppContext = createContext<AppContextType | undefined>(undefined);
 
 function formatMoney(value: unknown) {
@@ -88,6 +109,20 @@ function normalizeStore(row: any): Store | null {
     niche: row.niche ?? '',
     logoUrl: row.logo_url ?? '',
     bannerUrl: row.banner_url ?? '',
+    description: row.description ?? '',
+    slogan: row.slogan ?? '',
+    primaryColor: row.primary_color ?? '#052e16',
+    secondaryColor: row.secondary_color ?? '#071b11',
+    accentColor: row.accent_color ?? '#10b981',
+    buttonBgColor: row.button_bg_color ?? row.accent_color ?? '#10b981',
+    buttonTextColor: row.button_text_color ?? '#03120c',
+    cardBgColor: row.card_bg_color ?? 'rgba(255,255,255,0.04)',
+    textColor: row.text_color ?? '#ffffff',
+    mutedTextColor: row.muted_text_color ?? '#a1a1aa',
+    headerBgColor: row.header_bg_color ?? 'rgba(0,0,0,0.35)',
+    primaryButtonText: row.primary_button_text ?? 'Ver produtos',
+    whatsappButtonText: row.whatsapp_button_text ?? 'Falar no WhatsApp',
+    themeMode: row.theme_mode ?? 'dark',
   };
 }
 
@@ -123,69 +158,107 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
 
   const storeChannelRef = useRef<ReturnType<typeof supabase.channel> | null>(null);
   const productChannelRef = useRef<ReturnType<typeof supabase.channel> | null>(null);
-  const currentStoreIdRef = useRef<string | null>(null);
+
+  const resolveStoreByUser = useCallback(async (authUser: AuthUserLike): Promise<Store | null> => {
+    if (!authUser || authUser.role !== 'admin') {
+      return null;
+    }
+
+    if (authUser.storeId) {
+      const { data, error } = await supabase
+        .from('stores')
+        .select('*')
+        .eq('id', authUser.storeId)
+        .maybeSingle();
+
+      if (!error && data) {
+        return normalizeStore(data);
+      }
+    }
+
+    const authEmail = authUser.email?.trim().toLowerCase() ?? '';
+
+    if (authEmail) {
+      const { data: adminByEmail, error: adminByEmailError } = await supabase
+        .from('admins')
+        .select('store_id')
+        .eq('email', authEmail)
+        .maybeSingle();
+
+      if (!adminByEmailError && adminByEmail?.store_id) {
+        const { data: storeByAdminEmail, error: storeByAdminEmailError } = await supabase
+          .from('stores')
+          .select('*')
+          .eq('id', adminByEmail.store_id)
+          .maybeSingle();
+
+        if (!storeByAdminEmailError && storeByAdminEmail) {
+          return normalizeStore(storeByAdminEmail);
+        }
+      }
+    }
+
+    if (authUser.id) {
+      const { data: storeByOwner, error: storeByOwnerError } = await supabase
+        .from('stores')
+        .select('*')
+        .eq('owner_user_id', authUser.id)
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
+      if (!storeByOwnerError && storeByOwner) {
+        return normalizeStore(storeByOwner);
+      }
+    }
+
+    if (authUser.id) {
+      const { data: profile, error: profileError } = await supabase
+        .from('profiles')
+        .select('email')
+        .eq('id', authUser.id)
+        .maybeSingle();
+
+      if (!profileError && profile?.email) {
+        const profileEmail = String(profile.email).trim().toLowerCase();
+
+        const { data: adminByProfileEmail, error: adminByProfileEmailError } = await supabase
+          .from('admins')
+          .select('store_id')
+          .eq('email', profileEmail)
+          .maybeSingle();
+
+        if (!adminByProfileEmailError && adminByProfileEmail?.store_id) {
+          const { data: storeByProfileEmail, error: storeByProfileEmailError } = await supabase
+            .from('stores')
+            .select('*')
+            .eq('id', adminByProfileEmail.store_id)
+            .maybeSingle();
+
+          if (!storeByProfileEmailError && storeByProfileEmail) {
+            return normalizeStore(storeByProfileEmail);
+          }
+        }
+      }
+    }
+
+    return null;
+  }, []);
 
   const loadStoreByUser = useCallback(async () => {
     if (!user || user.role !== 'admin') {
       return null;
     }
 
-    if (user.storeId) {
-      const { data, error } = await supabase
-        .from('stores')
-        .select('*')
-        .eq('id', user.storeId)
-        .maybeSingle();
+    const mergedUser: AuthUserLike = {
+      id: user.id ?? null,
+      email: user.email ?? null,
+      role: user.role ?? null,
+      storeId: user.storeId ?? null,
+    };
 
-      if (error) {
-        throw new Error('Não foi possível carregar a loja vinculada ao admin.');
-      }
-
-      if (data) {
-        return normalizeStore(data);
-      }
-    }
-
-    const { data: storeByOwner, error: storeByOwnerError } = await supabase
-      .from('stores')
-      .select('*')
-      .eq('owner_user_id', user.id)
-      .order('created_at', { ascending: false })
-      .limit(1)
-      .maybeSingle();
-
-    if (storeByOwnerError) {
-      throw new Error('Não foi possível carregar a loja do admin.');
-    }
-
-    if (storeByOwner) {
-      return normalizeStore(storeByOwner);
-    }
-
-    const adminEmail = user.email?.trim().toLowerCase() ?? '';
-
-    if (adminEmail) {
-      const { data: adminData, error: adminError } = await supabase
-        .from('admins')
-        .select('store_id')
-        .eq('email', adminEmail)
-        .maybeSingle();
-
-      if (!adminError && adminData?.store_id) {
-        const { data: storeByAdmin, error: storeByAdminError } = await supabase
-          .from('stores')
-          .select('*')
-          .eq('id', adminData.store_id)
-          .maybeSingle();
-
-        if (!storeByAdminError && storeByAdmin) {
-          return normalizeStore(storeByAdmin);
-        }
-      }
-    }
-
-    return null;
-  }, [user]);
+    return resolveStoreByUser(mergedUser);
+  }, [resolveStoreByUser, user]);
 
   const loadProducts = useCallback(async (storeId?: string | null) => {
     if (!storeId) {
@@ -216,7 +289,6 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       setClicks(0);
       setSelectedNiche('');
       setAppLoading(false);
-      currentStoreIdRef.current = null;
       return;
     }
 
@@ -225,9 +297,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     try {
       const resolvedStore = await loadStoreByUser();
       setStore(resolvedStore);
-
-      const resolvedNiche = resolvedStore?.niche ?? '';
-      setSelectedNiche(resolvedNiche);
+      setSelectedNiche(resolvedStore?.niche ?? '');
 
       const storeId = resolvedStore?.id ?? null;
       const loadedProducts = await loadProducts(storeId);
@@ -235,7 +305,6 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       setProducts(loadedProducts);
       setContents([]);
       setClicks((prev) => prev);
-      currentStoreIdRef.current = storeId;
     } catch (error) {
       console.error('Erro ao atualizar AppContext:', error);
       setStore(null);
@@ -243,7 +312,6 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       setContents([]);
       setClicks(0);
       setSelectedNiche('');
-      currentStoreIdRef.current = null;
     } finally {
       setAppLoading(false);
     }
@@ -254,7 +322,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   }, [refreshAppData]);
 
   useEffect(() => {
-    const storeId = currentStoreIdRef.current;
+    const activeStoreId = store?.id ?? null;
 
     if (storeChannelRef.current) {
       void supabase.removeChannel(storeChannelRef.current);
@@ -266,17 +334,17 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       productChannelRef.current = null;
     }
 
-    if (!storeId) return;
+    if (!activeStoreId) return;
 
     storeChannelRef.current = supabase
-      .channel(`app-store-${storeId}`)
+      .channel(`app-store-${activeStoreId}`)
       .on(
         'postgres_changes',
         {
           event: '*',
           schema: 'public',
           table: 'stores',
-          filter: `id=eq.${storeId}`,
+          filter: `id=eq.${activeStoreId}`,
         },
         async () => {
           await refreshAppData();
@@ -285,17 +353,17 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       .subscribe();
 
     productChannelRef.current = supabase
-      .channel(`app-products-${storeId}`)
+      .channel(`app-products-${activeStoreId}`)
       .on(
         'postgres_changes',
         {
           event: '*',
           schema: 'public',
           table: 'products',
-          filter: `store_id=eq.${storeId}`,
+          filter: `store_id=eq.${activeStoreId}`,
         },
         async () => {
-          const loadedProducts = await loadProducts(storeId);
+          const loadedProducts = await loadProducts(activeStoreId);
           setProducts(loadedProducts);
         },
       )
@@ -312,7 +380,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         productChannelRef.current = null;
       }
     };
-  }, [refreshAppData, loadProducts]);
+  }, [store?.id, refreshAppData, loadProducts]);
 
   const createStore = useCallback((newStore: Store) => {
     setStore(newStore);
@@ -320,7 +388,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   }, []);
 
   const addProduct = useCallback((product: Product) => {
-    setProducts((prev) => [product, ...prev]);
+    setProducts((prev) => [product, ...prev.filter((item) => item.id !== product.id)]);
   }, []);
 
   const generateContent = useCallback((content: ContentGenerated) => {
