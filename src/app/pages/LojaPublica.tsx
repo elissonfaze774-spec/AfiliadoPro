@@ -539,7 +539,7 @@ export default function LojaPublica() {
                     <p className="text-xs font-semibold uppercase tracking-[0.18em] opacity-70">
                       Loja Aberta
                     </p>
-                    <div className="mt-2 text-4xl font-black">Online</div>
+                    <div className="mt-2 text-4xl font-black">Bem vindos!</div>
                     <p className="mt-1 text-sm opacity-80">Melhores preço vocês só encontram aqui! </p>
                   </div>
                 </div>
