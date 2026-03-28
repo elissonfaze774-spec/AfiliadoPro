@@ -537,10 +537,10 @@ export default function LojaPublica() {
                     style={{ backgroundColor: currentStore.buttonBgColor }}
                   >
                     <p className="text-xs font-semibold uppercase tracking-[0.18em] opacity-70">
-                      Vitrine ativa
+                      Loja Aberta
                     </p>
                     <div className="mt-2 text-4xl font-black">Online</div>
-                    <p className="mt-1 text-sm opacity-80">Loja pronta para receber cliques</p>
+                    <p className="mt-1 text-sm opacity-80">Melhores preço vocês só encontram aqui! </p>
                   </div>
                 </div>
               </div>
