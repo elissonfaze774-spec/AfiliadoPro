@@ -53,6 +53,7 @@ type Product = {
 type SortType = 'recentes' | 'mais-caros' | 'mais-baratos' | 'nome';
 
 const MONEY_GREEN = '#22c55e';
+const MONEY_GREEN_DARK = '#052e16';
 
 function ensureUrl(value: string) {
   const trimmed = String(value ?? '').trim();
@@ -126,9 +127,13 @@ function normalizeProduct(row: any): Product {
 function ProductImage({
   src,
   alt,
+  className = 'h-full w-full object-cover',
+  eager = false,
 }: {
   src: string;
   alt: string;
+  className?: string;
+  eager?: boolean;
 }) {
   const [error, setError] = useState(false);
 
@@ -147,9 +152,12 @@ function ProductImage({
     <img
       src={src}
       alt={alt}
-      loading="lazy"
-      className="h-full w-full object-cover"
+      loading={eager ? 'eager' : 'lazy'}
+      fetchPriority={eager ? 'high' : 'auto'}
+      decoding="async"
+      className={className}
       onError={() => setError(true)}
+      draggable={false}
     />
   );
 }
@@ -437,9 +445,10 @@ export default function LojaPublica() {
           <section className="overflow-hidden rounded-[36px] border border-white/10 shadow-[0_20px_60px_rgba(0,0,0,0.35)]">
             <div className="relative h-[120px] sm:h-[150px] md:h-[190px] lg:h-[220px]">
               {currentStore.bannerUrl ? (
-                <img
+                <ProductImage
                   src={ensureUrl(currentStore.bannerUrl)}
                   alt={currentStore.name}
+                  eager
                   className="h-full w-full object-cover"
                 />
               ) : (
@@ -481,9 +490,10 @@ export default function LojaPublica() {
                 <div className="flex items-start gap-4">
                   <div className="flex h-20 w-20 shrink-0 items-center justify-center overflow-hidden rounded-[24px] border border-white/15 bg-black/30 text-xl font-black text-white shadow-2xl md:h-24 md:w-24 md:rounded-[28px]">
                     {currentStore.logoUrl ? (
-                      <img
+                      <ProductImage
                         src={ensureUrl(currentStore.logoUrl)}
                         alt={currentStore.name}
+                        eager
                         className="h-full w-full object-cover"
                       />
                     ) : (
@@ -622,19 +632,27 @@ export default function LojaPublica() {
                 {filteredProducts.map((product) => (
                   <div
                     key={product.id}
-                    className="group overflow-hidden rounded-[32px] border border-white/10 shadow-[0_10px_30px_rgba(0,0,0,0.25)] transition duration-300 hover:-translate-y-1 hover:border-emerald-500/30"
+                    className="group overflow-hidden rounded-[32px] border border-white/10 shadow-[0_14px_40px_rgba(0,0,0,0.28)] transition duration-300 hover:-translate-y-1 hover:border-emerald-500/30"
                     style={cardStyle}
                   >
                     <div className="relative h-64 overflow-hidden bg-black/20">
-                      <ProductImage src={ensureUrl(product.image)} alt={product.name} />
+                      <ProductImage
+                        src={ensureUrl(product.image)}
+                        alt={product.name}
+                        className="h-full w-full object-cover transition duration-500 group-hover:scale-[1.04]"
+                      />
 
-                      <div className="absolute inset-x-0 top-0 flex items-center justify-between p-4">
+                      <div className="absolute inset-0 bg-gradient-to-t from-black/25 via-transparent to-transparent" />
+
+                      <div className="absolute right-4 top-4">
                         <span
-                          className="rounded-full border px-3 py-1 text-sm font-black backdrop-blur-md"
+                          className="inline-flex items-center rounded-full border px-4 py-2 text-base font-black shadow-[0_10px_30px_rgba(34,197,94,0.28)]"
                           style={{
-                            color: MONEY_GREEN,
-                            borderColor: 'rgba(34,197,94,0.35)',
-                            backgroundColor: 'rgba(0,0,0,0.55)',
+                            color: MONEY_GREEN_DARK,
+                            borderColor: 'rgba(255,255,255,0.18)',
+                            background:
+                              'linear-gradient(135deg, rgba(34,197,94,0.96) 0%, rgba(74,222,128,0.96) 100%)',
+                            backdropFilter: 'blur(16px)',
                           }}
                         >
                           {formatMoney(product.priceValue)}
@@ -716,6 +734,7 @@ export default function LojaPublica() {
                   <ProductImage
                     src={ensureUrl(selectedProduct.image)}
                     alt={selectedProduct.name}
+                    className="h-full w-full object-cover"
                   />
                 </div>
 
