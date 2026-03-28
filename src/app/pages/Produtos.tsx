@@ -38,6 +38,22 @@ type FilterType =
   | 'mais-caros'
   | 'mais-baratos';
 
+type ImportedProductPreview = {
+  sourceUrl: string;
+  finalUrl: string;
+  siteName: string;
+  rawName: string;
+  generatedName: string;
+  priceValue: number;
+  priceFormatted: string;
+  image: string;
+  images: string[];
+  rawDescription: string;
+  generatedDescription: string;
+  shortCopy: string;
+  cta: string;
+};
+
 function ensureUrl(value: string) {
   const trimmed = String(value ?? '').trim();
   if (!trimmed) return '';
@@ -72,6 +88,11 @@ function formatMoney(value: number) {
   });
 }
 
+function toFormPrice(value: number) {
+  if (!value || value <= 0) return '';
+  return String(value).replace('.', ',');
+}
+
 function getProductName(product: any) {
   return String(product?.name ?? '').trim();
 }
@@ -89,7 +110,7 @@ function getProductAffiliateLink(product: any) {
 }
 
 function getProductPrice(product: any) {
-  return extractPriceNumber(product?.price ?? 0);
+  return extractPriceNumber(product?.price ?? product?.priceValue ?? 0);
 }
 
 function getProductCreatedAt(product: any) {
@@ -121,6 +142,10 @@ export default function Produtos() {
   const [deletingMany, setDeletingMany] = useState(false);
   const [duplicatingId, setDuplicatingId] = useState<string | null>(null);
   const [isFormOpen, setIsFormOpen] = useState(false);
+  const [importUrl, setImportUrl] = useState('');
+  const [importing, setImporting] = useState(false);
+  const [importPreview, setImportPreview] = useState<ImportedProductPreview | null>(null);
+
   const [form, setForm] = useState<ProductForm>({
     name: '',
     price: '',
@@ -206,6 +231,12 @@ export default function Produtos() {
 
   const isEditing = Boolean(editingId);
 
+  const resetImport = () => {
+    setImportUrl('');
+    setImportPreview(null);
+    setImporting(false);
+  };
+
   const resetForm = () => {
     setEditingId(null);
     setForm({
@@ -215,6 +246,18 @@ export default function Produtos() {
       affiliateLink: '',
       description: '',
     });
+    resetImport();
+  };
+
+  const applyImportedPreview = (preview: ImportedProductPreview) => {
+    setForm((prev) => ({
+      ...prev,
+      name: preview.generatedName || preview.rawName || prev.name,
+      price: preview.priceValue > 0 ? toFormPrice(preview.priceValue) : prev.price,
+      image: preview.image || preview.images[0] || prev.image,
+      affiliateLink: preview.finalUrl || preview.sourceUrl || prev.affiliateLink,
+      description: preview.generatedDescription || preview.rawDescription || prev.description,
+    }));
   };
 
   const openCreateModal = () => {
@@ -223,7 +266,7 @@ export default function Produtos() {
   };
 
   const closeFormModal = () => {
-    if (saving) return;
+    if (saving || importing) return;
     setIsFormOpen(false);
     resetForm();
   };
@@ -235,11 +278,12 @@ export default function Produtos() {
     setEditingId(product.id);
     setForm({
       name: getProductName(product),
-      price: String(getProductPrice(product) || ''),
+      price: String(getProductPrice(product) || '').replace('.', ','),
       image: getProductImage(product),
       affiliateLink: getProductAffiliateLink(product),
       description: getProductDescription(product),
     });
+    resetImport();
     setIsFormOpen(true);
   };
 
@@ -262,6 +306,56 @@ export default function Produtos() {
     }
 
     setSelectedIds((prev) => Array.from(new Set([...prev, ...visibleIds])));
+  };
+
+  const handleImportByLink = async () => {
+    const url = ensureUrl(importUrl);
+
+    if (!url) {
+      toast.error('Cole um link válido para importar o produto.');
+      return;
+    }
+
+    setImporting(true);
+
+    try {
+      const { data, error } = await supabase.functions.invoke('import-affiliate-product', {
+        body: { url },
+      });
+
+      if (error) {
+        throw new Error(error.message || 'Não foi possível importar este link.');
+      }
+
+      if (!data?.success || !data?.data) {
+        throw new Error(data?.message || 'Não foi possível importar este link.');
+      }
+
+      const preview = data.data as ImportedProductPreview;
+
+      setImportPreview(preview);
+      applyImportedPreview(preview);
+      toast.success('Produto importado com sucesso. Revise e salve.');
+    } catch (error: any) {
+      console.error('Erro ao importar produto:', error);
+      toast.error(error?.message || 'Não foi possível importar este produto.');
+    } finally {
+      setImporting(false);
+    }
+  };
+
+  const handleUseImportedImage = (imageUrl: string) => {
+    if (!imageUrl) return;
+
+    setImportPreview((prev) => {
+      if (!prev) return prev;
+      return { ...prev, image: imageUrl };
+    });
+
+    setForm((prev) => ({
+      ...prev,
+      image: imageUrl,
+    }));
   };
 
   const handleSave = async () => {
@@ -870,7 +964,7 @@ export default function Produtos() {
           onClick={closeFormModal}
         >
           <div
-            className="w-full max-w-3xl rounded-[28px] border border-white/10 bg-[#050505] shadow-2xl"
+            className="w-full max-w-5xl rounded-[28px] border border-white/10 bg-[#050505] shadow-2xl"
             onClick={(e) => e.stopPropagation()}
           >
             <div className="flex items-start justify-between gap-4 border-b border-white/10 px-6 py-5">
@@ -879,7 +973,7 @@ export default function Produtos() {
                   {isEditing ? 'Editar produto' : 'Novo produto'}
                 </h2>
                 <p className="mt-1 text-sm text-zinc-400">
-                  Formulário mais leve, organizado e focado no que importa.
+                  Agora com importação inteligente por link de afiliado.
                 </p>
               </div>
 
@@ -892,95 +986,274 @@ export default function Produtos() {
               </button>
             </div>
 
-            <div className="max-h-[80vh] overflow-y-auto px-6 py-6">
-              <div className="grid grid-cols-1 gap-5 md:grid-cols-2">
-                <div className="md:col-span-2">
-                  <label className="mb-2 flex items-center gap-2 text-sm font-medium text-white">
-                    <Package className="h-4 w-4 text-emerald-400" />
-                    Nome do produto
-                  </label>
-                  <input
-                    value={form.name}
-                    onChange={(e) => setForm((prev) => ({ ...prev, name: e.target.value }))}
-                    className="h-12 w-full rounded-2xl border border-white/10 bg-black/30 px-4 text-white outline-none transition focus:border-emerald-500"
-                    placeholder="Ex: Smartwatch Ultra Fit"
-                  />
+            <div className="max-h-[84vh] overflow-y-auto px-6 py-6">
+              <div className="grid grid-cols-1 gap-6 xl:grid-cols-[1.15fr_0.85fr]">
+                <div className="space-y-6">
+                  <div className="rounded-[24px] border border-emerald-500/20 bg-emerald-500/5 p-5">
+                    <div className="mb-3 flex items-center gap-2">
+                      <LinkIcon className="h-5 w-5 text-emerald-400" />
+                      <h3 className="text-lg font-black text-white">Importação inteligente por link</h3>
+                    </div>
+
+                    <p className="mb-4 text-sm leading-6 text-zinc-300">
+                      Cole o link do produto afiliado e o sistema tenta puxar nome, preço, imagens e descrição automaticamente.
+                    </p>
+
+                    <div className="flex flex-col gap-3 sm:flex-row">
+                      <input
+                        value={importUrl}
+                        onChange={(e) => setImportUrl(e.target.value)}
+                        className="h-12 flex-1 rounded-2xl border border-white/10 bg-black/30 px-4 text-white outline-none transition focus:border-emerald-500"
+                        placeholder="Cole aqui o link do produto afiliado..."
+                      />
+
+                      <Button
+                        className="rounded-2xl bg-gradient-to-r from-emerald-500 to-emerald-600 font-bold text-black hover:from-emerald-400 hover:to-emerald-500"
+                        onClick={handleImportByLink}
+                        disabled={importing}
+                      >
+                        {importing ? 'Importando...' : 'Importar produto'}
+                      </Button>
+                    </div>
+
+                    {importPreview ? (
+                      <div className="mt-5 rounded-[20px] border border-white/10 bg-black/25 p-4">
+                        <div className="mb-3 flex flex-wrap items-center gap-2">
+                          <span className="rounded-full border border-emerald-500/20 bg-emerald-500/10 px-3 py-1 text-xs font-semibold text-emerald-300">
+                            Produto lido com sucesso
+                          </span>
+                          <span className="rounded-full border border-white/10 bg-white/5 px-3 py-1 text-xs font-semibold text-white">
+                            {importPreview.priceFormatted}
+                          </span>
+                        </div>
+
+                        <h4 className="text-lg font-black text-white">
+                          {importPreview.generatedName || importPreview.rawName}
+                        </h4>
+
+                        <p className="mt-2 text-sm leading-6 text-zinc-400">
+                          {importPreview.generatedDescription}
+                        </p>
+
+                        {importPreview.shortCopy ? (
+                          <div className="mt-4 rounded-2xl border border-white/10 bg-white/5 p-4">
+                            <p className="text-xs font-semibold uppercase tracking-[0.14em] text-zinc-400">
+                              Copy automática
+                            </p>
+                            <p className="mt-2 text-sm leading-6 text-zinc-200">
+                              {importPreview.shortCopy}
+                            </p>
+                            <p className="mt-3 text-sm font-semibold text-emerald-300">
+                              CTA: {importPreview.cta}
+                            </p>
+                          </div>
+                        ) : null}
+
+                        {importPreview.images.length > 0 ? (
+                          <div className="mt-4">
+                            <p className="mb-3 text-xs font-semibold uppercase tracking-[0.14em] text-zinc-400">
+                              Escolha a imagem principal
+                            </p>
+
+                            <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
+                              {importPreview.images.map((imageUrl) => {
+                                const active = form.image === imageUrl;
+
+                                return (
+                                  <button
+                                    key={imageUrl}
+                                    type="button"
+                                    onClick={() => handleUseImportedImage(imageUrl)}
+                                    className={`overflow-hidden rounded-2xl border transition ${
+                                      active
+                                        ? 'border-emerald-500 shadow-[0_0_0_1px_rgba(16,185,129,0.2)]'
+                                        : 'border-white/10 hover:border-emerald-500/40'
+                                    }`}
+                                  >
+                                    <div className="aspect-square bg-black/30">
+                                      <img
+                                        src={imageUrl}
+                                        alt="Imagem importada"
+                                        className="h-full w-full object-cover"
+                                      />
+                                    </div>
+                                  </button>
+                                );
+                              })}
+                            </div>
+                          </div>
+                        ) : null}
+                      </div>
+                    ) : null}
+                  </div>
+
+                  <div className="grid grid-cols-1 gap-5 md:grid-cols-2">
+                    <div className="md:col-span-2">
+                      <label className="mb-2 flex items-center gap-2 text-sm font-medium text-white">
+                        <Package className="h-4 w-4 text-emerald-400" />
+                        Nome do produto
+                      </label>
+                      <input
+                        value={form.name}
+                        onChange={(e) => setForm((prev) => ({ ...prev, name: e.target.value }))}
+                        className="h-12 w-full rounded-2xl border border-white/10 bg-black/30 px-4 text-white outline-none transition focus:border-emerald-500"
+                        placeholder="Ex: Smartwatch Ultra Fit"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="mb-2 flex items-center gap-2 text-sm font-medium text-white">
+                        <Package className="h-4 w-4 text-emerald-400" />
+                        Preço
+                      </label>
+                      <input
+                        value={form.price}
+                        onChange={(e) => setForm((prev) => ({ ...prev, price: e.target.value }))}
+                        className="h-12 w-full rounded-2xl border border-white/10 bg-black/30 px-4 text-white outline-none transition focus:border-emerald-500"
+                        placeholder="Ex: 149,90"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="mb-2 flex items-center gap-2 text-sm font-medium text-white">
+                        <LinkIcon className="h-4 w-4 text-emerald-400" />
+                        Link de afiliado
+                      </label>
+                      <input
+                        value={form.affiliateLink}
+                        onChange={(e) =>
+                          setForm((prev) => ({ ...prev, affiliateLink: e.target.value }))
+                        }
+                        className="h-12 w-full rounded-2xl border border-white/10 bg-black/30 px-4 text-white outline-none transition focus:border-emerald-500"
+                        placeholder="https://..."
+                      />
+                    </div>
+
+                    <div className="md:col-span-2">
+                      <label className="mb-2 flex items-center gap-2 text-sm font-medium text-white">
+                        <ImageIcon className="h-4 w-4 text-emerald-400" />
+                        Imagem principal
+                      </label>
+                      <input
+                        value={form.image}
+                        onChange={(e) => setForm((prev) => ({ ...prev, image: e.target.value }))}
+                        className="h-12 w-full rounded-2xl border border-white/10 bg-black/30 px-4 text-white outline-none transition focus:border-emerald-500"
+                        placeholder="https://..."
+                      />
+                    </div>
+
+                    <div className="md:col-span-2">
+                      <label className="mb-2 flex items-center gap-2 text-sm font-medium text-white">
+                        <Pencil className="h-4 w-4 text-emerald-400" />
+                        Descrição
+                      </label>
+                      <textarea
+                        value={form.description}
+                        onChange={(e) =>
+                          setForm((prev) => ({ ...prev, description: e.target.value }))
+                        }
+                        className="min-h-[150px] w-full rounded-2xl border border-white/10 bg-black/30 px-4 py-3 text-white outline-none transition focus:border-emerald-500"
+                        placeholder="Descrição profissional do produto..."
+                      />
+                    </div>
+                  </div>
                 </div>
 
-                <div>
-                  <label className="mb-2 flex items-center gap-2 text-sm font-medium text-white">
-                    <Package className="h-4 w-4 text-emerald-400" />
-                    Preço
-                  </label>
-                  <input
-                    value={form.price}
-                    onChange={(e) => setForm((prev) => ({ ...prev, price: e.target.value }))}
-                    className="h-12 w-full rounded-2xl border border-white/10 bg-black/30 px-4 text-white outline-none transition focus:border-emerald-500"
-                    placeholder="Ex: 199,90"
-                  />
-                </div>
+                <div className="space-y-5">
+                  <div className="rounded-[24px] border border-white/10 bg-white/[0.04] p-5">
+                    <h3 className="text-lg font-black text-white">Preview rápido</h3>
+                    <p className="mt-1 text-sm text-zinc-400">
+                      Revise antes de salvar no painel.
+                    </p>
 
-                <div>
-                  <label className="mb-2 flex items-center gap-2 text-sm font-medium text-white">
-                    <LinkIcon className="h-4 w-4 text-emerald-400" />
-                    Link de afiliado
-                  </label>
-                  <input
-                    value={form.affiliateLink}
-                    onChange={(e) =>
-                      setForm((prev) => ({ ...prev, affiliateLink: e.target.value }))
-                    }
-                    className="h-12 w-full rounded-2xl border border-white/10 bg-black/30 px-4 text-white outline-none transition focus:border-emerald-500"
-                    placeholder="https://..."
-                  />
-                </div>
+                    <div className="mt-5 overflow-hidden rounded-[24px] border border-white/10 bg-black/30">
+                      <div className="aspect-square bg-black/20">
+                        {form.image ? (
+                          <img
+                            src={ensureUrl(form.image)}
+                            alt={form.name || 'Preview'}
+                            className="h-full w-full object-cover"
+                            onError={(e) => {
+                              e.currentTarget.style.display = 'none';
+                              const fallback = e.currentTarget.nextElementSibling as HTMLElement | null;
+                              if (fallback) fallback.style.display = 'flex';
+                            }}
+                          />
+                        ) : null}
 
-                <div className="md:col-span-2">
-                  <label className="mb-2 flex items-center gap-2 text-sm font-medium text-white">
-                    <ImageIcon className="h-4 w-4 text-emerald-400" />
-                    Imagem do produto
-                  </label>
-                  <input
-                    value={form.image}
-                    onChange={(e) => setForm((prev) => ({ ...prev, image: e.target.value }))}
-                    className="h-12 w-full rounded-2xl border border-white/10 bg-black/30 px-4 text-white outline-none transition focus:border-emerald-500"
-                    placeholder="https://..."
-                  />
-                </div>
+                        <div
+                          className={`h-full w-full items-center justify-center ${
+                            form.image ? 'hidden' : 'flex'
+                          }`}
+                        >
+                          <div className="text-center">
+                            <ImageIcon className="mx-auto mb-2 h-10 w-10 text-zinc-600" />
+                            <p className="text-sm text-zinc-500">Sem imagem selecionada</p>
+                          </div>
+                        </div>
+                      </div>
 
-                <div className="md:col-span-2">
-                  <label className="mb-2 flex items-center gap-2 text-sm font-medium text-white">
-                    <Pencil className="h-4 w-4 text-emerald-400" />
-                    Descrição
-                  </label>
-                  <textarea
-                    value={form.description}
-                    onChange={(e) => setForm((prev) => ({ ...prev, description: e.target.value }))}
-                    className="min-h-[160px] w-full rounded-2xl border border-white/10 bg-black/30 px-4 py-3 text-white outline-none transition focus:border-emerald-500"
-                    placeholder="Descreva benefícios, diferenciais e argumentos de venda..."
-                  />
+                      <div className="p-5">
+                        <div className="mb-3 flex flex-wrap gap-2">
+                          <span className="rounded-full border border-emerald-500/20 bg-emerald-500/10 px-3 py-1 text-xs font-semibold text-emerald-300">
+                            Produto pronto
+                          </span>
+
+                          {form.price ? (
+                            <span className="rounded-full border border-white/10 bg-white/5 px-3 py-1 text-xs font-semibold text-white">
+                              {formatMoney(parsePrice(form.price))}
+                            </span>
+                          ) : null}
+                        </div>
+
+                        <h4 className="text-xl font-black text-white">
+                          {form.name || 'Nome do produto'}
+                        </h4>
+
+                        <p className="mt-3 line-clamp-6 text-sm leading-6 text-zinc-400">
+                          {form.description || 'A descrição aparecerá aqui assim que você preencher ou importar.'}
+                        </p>
+
+                        {form.affiliateLink ? (
+                          <p className="mt-4 truncate text-xs text-zinc-500">
+                            {form.affiliateLink}
+                          </p>
+                        ) : null}
+                      </div>
+                    </div>
+
+                    <div className="mt-5 flex flex-col gap-3">
+                      <Button
+                        className="rounded-2xl bg-gradient-to-r from-emerald-500 to-emerald-600 font-bold text-black hover:from-emerald-400 hover:to-emerald-500"
+                        onClick={handleSave}
+                        disabled={saving || importing}
+                      >
+                        <Save className="mr-2 h-4 w-4" />
+                        {saving ? 'Salvando...' : isEditing ? 'Salvar alterações' : 'Salvar produto'}
+                      </Button>
+
+                      <Button
+                        variant="outline"
+                        className="rounded-2xl border-white/10 bg-black/20 text-white hover:bg-white/5"
+                        onClick={closeFormModal}
+                        disabled={saving || importing}
+                      >
+                        Cancelar
+                      </Button>
+                    </div>
+                  </div>
+
+                  {importPreview?.rawDescription &&
+                  importPreview.generatedDescription !== importPreview.rawDescription ? (
+                    <div className="rounded-[24px] border border-white/10 bg-white/[0.04] p-5">
+                      <h3 className="text-lg font-black text-white">Descrição original</h3>
+                      <p className="mt-3 text-sm leading-6 text-zinc-400">
+                        {importPreview.rawDescription}
+                      </p>
+                    </div>
+                  ) : null}
                 </div>
               </div>
-            </div>
-
-            <div className="flex flex-wrap gap-3 border-t border-white/10 px-6 py-5">
-              <Button
-                onClick={handleSave}
-                disabled={saving}
-                className="rounded-2xl bg-gradient-to-r from-emerald-500 to-emerald-600 font-bold text-black hover:from-emerald-400 hover:to-emerald-500"
-              >
-                <Save className="mr-2 h-4 w-4" />
-                {saving ? 'Salvando...' : isEditing ? 'Salvar alterações' : 'Criar produto'}
-              </Button>
-
-              <Button
-                variant="outline"
-                className="rounded-2xl border-white/10 bg-black/20 text-white hover:bg-white/5"
-                onClick={closeFormModal}
-              >
-                <X className="mr-2 h-4 w-4" />
-                Cancelar
-              </Button>
             </div>
           </div>
         </div>
