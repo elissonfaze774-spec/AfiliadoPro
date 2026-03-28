@@ -52,6 +52,8 @@ type Product = {
 
 type SortType = 'recentes' | 'mais-caros' | 'mais-baratos' | 'nome';
 
+const MONEY_GREEN = '#22c55e';
+
 function ensureUrl(value: string) {
   const trimmed = String(value ?? '').trim();
   if (!trimmed) return '';
@@ -428,15 +430,6 @@ export default function LojaPublica() {
                 </div>
               )}
             </div>
-
-            <Button
-              variant="outline"
-              className="hidden rounded-2xl border-white/10 bg-black/20 text-white hover:bg-white/5 md:inline-flex"
-              onClick={handleWhatsApp}
-            >
-              <MessageCircle className="mr-2 h-4 w-4" />
-              {currentStore.whatsappButtonText || 'Falar no WhatsApp'}
-            </Button>
           </div>
         </header>
 
@@ -637,8 +630,12 @@ export default function LojaPublica() {
 
                       <div className="absolute inset-x-0 top-0 flex items-center justify-between p-4">
                         <span
-                          className="rounded-full bg-black/40 px-3 py-1 text-sm font-black backdrop-blur-md"
-                          style={{ color: currentStore.textColor }}
+                          className="rounded-full border px-3 py-1 text-sm font-black backdrop-blur-md"
+                          style={{
+                            color: MONEY_GREEN,
+                            borderColor: 'rgba(34,197,94,0.35)',
+                            backgroundColor: 'rgba(0,0,0,0.55)',
+                          }}
                         >
                           {formatMoney(product.priceValue)}
                         </span>
@@ -736,7 +733,7 @@ export default function LojaPublica() {
 
                   <div
                     className="mb-5 text-3xl font-black md:text-4xl"
-                    style={{ color: currentStore.accentColor }}
+                    style={{ color: MONEY_GREEN }}
                   >
                     {formatMoney(selectedProduct.priceValue)}
                   </div>
