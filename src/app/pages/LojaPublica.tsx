@@ -382,10 +382,12 @@ export default function LojaPublica() {
             <div className="mx-auto mb-5 flex h-20 w-20 items-center justify-center rounded-3xl border border-white/10 bg-black/20">
               <StoreIcon className="h-10 w-10 text-zinc-500" />
             </div>
+
             <h1 className="text-3xl font-black text-white">Loja não encontrada</h1>
             <p className="mt-3 text-zinc-400">
               Esse link não existe ou a loja ainda não foi configurada.
             </p>
+
             <div className="mt-6">
               <Button
                 variant="outline"
@@ -438,9 +440,9 @@ export default function LojaPublica() {
           </div>
         </header>
 
-        <div className="mx-auto max-w-7xl space-y-8 px-4 py-6 md:py-10">
+        <div className="mx-auto max-w-7xl space-y-6 px-4 py-6 md:space-y-8 md:py-10">
           <section className="overflow-hidden rounded-[36px] border border-white/10 shadow-[0_20px_60px_rgba(0,0,0,0.35)]">
-            <div className="relative h-[180px] sm:h-[220px] md:h-[280px] lg:h-[320px]">
+            <div className="relative h-[120px] sm:h-[150px] md:h-[210px] lg:h-[250px]">
               {currentStore.bannerUrl ? (
                 <img
                   src={ensureUrl(currentStore.bannerUrl)}
@@ -451,17 +453,41 @@ export default function LojaPublica() {
                 <div className="h-full w-full bg-gradient-to-r from-black via-zinc-900 to-black" />
               )}
 
-              <div className="absolute inset-0 bg-gradient-to-t from-black/85 via-black/35 to-transparent" />
+              <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/30 to-transparent" />
             </div>
 
-            <div
-              className="border-t border-white/10 px-4 py-5 md:px-8 md:py-7"
-              style={{ background: 'linear-gradient(180deg, rgba(0,0,0,0.18) 0%, rgba(0,0,0,0.28) 100%)' }}
-            >
-              <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_280px] xl:items-center">
-                <div className="space-y-5">
-                  <div className="flex flex-col gap-4 sm:flex-row sm:items-start">
-                    <div className="flex h-20 w-20 shrink-0 items-center justify-center overflow-hidden rounded-[26px] border border-white/15 bg-black/30 text-2xl font-black text-white shadow-2xl md:h-24 md:w-24">
+            <div className="border-t border-white/10 bg-[linear-gradient(180deg,rgba(3,10,24,0.92)_0%,rgba(4,18,38,0.96)_100%)] px-4 py-4 md:px-6 md:py-5">
+              <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_320px] lg:items-center">
+                <div>
+                  <div className="mb-3 flex flex-wrap gap-2">
+                    {currentStore.slogan ? (
+                      <span
+                        className="inline-flex rounded-full px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.16em]"
+                        style={{
+                          backgroundColor: `${currentStore.accentColor}22`,
+                          color: currentStore.accentColor,
+                          border: `1px solid ${currentStore.accentColor}33`,
+                        }}
+                      >
+                        {currentStore.slogan}
+                      </span>
+                    ) : null}
+
+                    {!!currentStore.username && (
+                      <span className="inline-flex rounded-full border border-white/10 bg-white/5 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.14em] text-zinc-300">
+                        @{currentStore.username}
+                      </span>
+                    )}
+
+                    {!!currentStore.niche && (
+                      <span className="inline-flex rounded-full border border-white/10 bg-white/5 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.14em] text-zinc-300">
+                        {currentStore.niche}
+                      </span>
+                    )}
+                  </div>
+
+                  <div className="flex items-start gap-4">
+                    <div className="flex h-20 w-20 shrink-0 items-center justify-center overflow-hidden rounded-[24px] border border-white/15 bg-black/30 text-xl font-black text-white shadow-2xl md:h-24 md:w-24 md:rounded-[28px]">
                       {currentStore.logoUrl ? (
                         <img
                           src={ensureUrl(currentStore.logoUrl)}
@@ -473,41 +499,16 @@ export default function LojaPublica() {
                       )}
                     </div>
 
-                    <div className="min-w-0 flex-1">
-                      <div className="mb-3 flex flex-wrap gap-2">
-                        {currentStore.slogan ? (
-                          <span
-                            className="inline-flex rounded-full px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.16em]"
-                            style={{
-                              backgroundColor: `${currentStore.accentColor}22`,
-                              color: currentStore.accentColor,
-                              border: `1px solid ${currentStore.accentColor}33`,
-                            }}
-                          >
-                            {currentStore.slogan}
-                          </span>
-                        ) : null}
-
-                        <span className="inline-flex rounded-full border border-white/10 bg-white/5 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.14em] text-zinc-300">
-                          @{currentStore.username}
-                        </span>
-
-                        {currentStore.niche ? (
-                          <span className="inline-flex rounded-full border border-white/10 bg-white/5 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.14em] text-zinc-300">
-                            {currentStore.niche}
-                          </span>
-                        ) : null}
-                      </div>
-
+                    <div className="min-w-0 flex-1 pt-1">
                       <h1
-                        className="break-words text-3xl font-black leading-tight md:text-5xl"
+                        className="break-words text-3xl font-black leading-none md:text-5xl"
                         style={{ color: currentStore.textColor }}
                       >
                         {currentStore.name}
                       </h1>
 
                       <p
-                        className="mt-3 max-w-3xl text-sm leading-7 md:text-base"
+                        className="mt-3 max-w-2xl text-sm leading-7 md:text-base"
                         style={{ color: currentStore.mutedTextColor }}
                       >
                         {currentStore.description ||
@@ -516,7 +517,7 @@ export default function LojaPublica() {
                     </div>
                   </div>
 
-                  <div className="flex flex-col gap-3 sm:flex-row">
+                  <div className="mt-5 flex flex-col gap-3 sm:flex-row">
                     <Button
                       className="w-full rounded-2xl px-6 font-bold sm:w-auto"
                       style={{
@@ -543,37 +544,47 @@ export default function LojaPublica() {
                   </div>
                 </div>
 
-                <div
-                  className="rounded-[28px] border border-white/10 px-5 py-5 text-black shadow-2xl"
-                  style={{ backgroundColor: currentStore.buttonBgColor }}
-                >
-                  <p className="text-xs font-semibold uppercase tracking-[0.18em] opacity-70">
-                    Loja Aberta
-                  </p>
-                  <div className="mt-2 text-4xl font-black leading-none">Bem Vindos</div>
-                  <p className="mt-2 text-sm opacity-80">Melhores preços vocês só encontram aqui!</p>
+                <div className="hidden lg:grid lg:grid-cols-2 lg:gap-3">
+                  <div
+                    className="rounded-[24px] p-4 text-black shadow-xl"
+                    style={{ backgroundColor: currentStore.buttonBgColor }}
+                  >
+                    <p className="text-[11px] font-semibold uppercase tracking-[0.16em] opacity-70">
+                      Loja online
+                    </p>
+                    <div className="mt-2 text-3xl font-black leading-none">Ativa</div>
+                    <p className="mt-2 text-sm opacity-80">Pronta para receber cliques</p>
+                  </div>
 
-                  <div className="mt-5 grid grid-cols-2 gap-3">
-                    <div className="rounded-2xl bg-black/10 p-3">
-                      <p className="text-[11px] font-semibold uppercase tracking-[0.14em] opacity-70">
-                        Produtos
-                      </p>
-                      <p className="mt-1 text-xl font-black">{products.length}</p>
-                    </div>
+                  <div className="rounded-[24px] border border-white/10 bg-white/[0.04] p-4">
+                    <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-zinc-400">
+                      Produtos
+                    </p>
+                    <div className="mt-2 text-3xl font-black text-white">{products.length}</div>
+                    <p className="mt-2 text-sm text-zinc-400">Itens disponíveis na vitrine</p>
+                  </div>
 
-                    <div className="rounded-2xl bg-black/10 p-3">
-                      <p className="text-[11px] font-semibold uppercase tracking-[0.14em] opacity-70">
-                        Contato
-                      </p>
-                      <p className="mt-1 text-xl font-black">Ativo</p>
-                    </div>
+                  <div className="rounded-[24px] border border-white/10 bg-white/[0.04] p-4">
+                    <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-zinc-400">
+                      Atendimento
+                    </p>
+                    <div className="mt-2 text-2xl font-black text-white">WhatsApp</div>
+                    <p className="mt-2 text-sm text-zinc-400">Contato rápido com a loja</p>
+                  </div>
+
+                  <div className="rounded-[24px] border border-white/10 bg-white/[0.04] p-4">
+                    <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-zinc-400">
+                      Destaque
+                    </p>
+                    <div className="mt-2 text-2xl font-black text-white">Catálogo</div>
+                    <p className="mt-2 text-sm text-zinc-400">Visual limpo e pronto para conversão</p>
                   </div>
                 </div>
               </div>
             </div>
           </section>
 
-          <section className="mb-8">
+          <section className="mb-6">
             <div className="rounded-[32px] border border-white/10 p-6 md:p-7" style={cardStyle}>
               <div className="grid gap-6 xl:grid-cols-[1fr_280px] xl:items-end">
                 <div>
@@ -588,7 +599,8 @@ export default function LojaPublica() {
                     className="mt-3 max-w-3xl text-base leading-7"
                     style={{ color: currentStore.mutedTextColor }}
                   >
-                    Navegue pela vitrine, filtre mais rápido e abra o produto que mais combina com você.
+                    Navegue pela vitrine, filtre mais rápido e abra o produto que mais combina com
+                    você.
                   </p>
 
                   <div className="relative mt-5">
@@ -729,7 +741,9 @@ export default function LojaPublica() {
           >
             <div className="flex items-start justify-between gap-4 border-b border-white/10 px-5 py-5 md:px-6">
               <div className="min-w-0">
-                <h3 className="truncate text-2xl font-black text-white">{selectedProduct.name}</h3>
+                <h3 className="truncate text-2xl font-black text-white">
+                  {selectedProduct.name}
+                </h3>
                 <p className="mt-1 truncate text-zinc-400">{currentStore.name}</p>
               </div>
 
@@ -745,7 +759,10 @@ export default function LojaPublica() {
             <div className="max-h-[calc(90vh-88px)] overflow-y-auto">
               <div className="grid gap-0 lg:grid-cols-[1.05fr_0.95fr]">
                 <div className="h-[280px] bg-black/20 sm:h-[320px] lg:h-full">
-                  <ProductImage src={ensureUrl(selectedProduct.image)} alt={selectedProduct.name} />
+                  <ProductImage
+                    src={ensureUrl(selectedProduct.image)}
+                    alt={selectedProduct.name}
+                  />
                 </div>
 
                 <div className="p-6 md:p-8">
