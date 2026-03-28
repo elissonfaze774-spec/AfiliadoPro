@@ -406,10 +406,10 @@ export default function LojaPublica() {
 
   return (
     <>
-      <div className="min-h-screen pb-24" style={pageStyle}>
+      <div className="min-h-screen pb-16" style={pageStyle}>
         <header className="sticky top-0 z-30 border-b border-white/10" style={headerStyle}>
-          <div className="mx-auto flex max-w-7xl flex-wrap items-center justify-between gap-3 px-4 py-4">
-            <div className="flex flex-wrap items-center gap-3">
+          <div className="mx-auto flex max-w-7xl items-center justify-between gap-3 px-4 py-4">
+            <div className="flex min-w-0 items-center gap-3">
               {isAdminViewing ? (
                 <Button
                   variant="ghost"
@@ -419,25 +419,28 @@ export default function LojaPublica() {
                   <ArrowLeft className="mr-2 h-4 w-4" />
                   Voltar ao painel
                 </Button>
-              ) : null}
+              ) : (
+                <div className="min-w-0">
+                  <p className="truncate text-sm font-semibold text-white">{currentStore.name}</p>
+                  <p className="truncate text-xs text-zinc-400">@{currentStore.username}</p>
+                </div>
+              )}
             </div>
 
-            <div className="flex flex-wrap gap-3">
-              <Button
-                variant="outline"
-                className="rounded-2xl border-white/10 bg-black/20 text-white hover:bg-white/5"
-                onClick={handleWhatsApp}
-              >
-                <MessageCircle className="mr-2 h-4 w-4" />
-                {currentStore.whatsappButtonText || 'Falar no WhatsApp'}
-              </Button>
-            </div>
+            <Button
+              variant="outline"
+              className="hidden rounded-2xl border-white/10 bg-black/20 text-white hover:bg-white/5 md:inline-flex"
+              onClick={handleWhatsApp}
+            >
+              <MessageCircle className="mr-2 h-4 w-4" />
+              {currentStore.whatsappButtonText || 'Falar no WhatsApp'}
+            </Button>
           </div>
         </header>
 
-        <div className="mx-auto max-w-7xl px-4 py-8 md:py-10">
-          <section className="mb-8 overflow-hidden rounded-[36px] border border-white/10 shadow-[0_20px_60px_rgba(0,0,0,0.35)]">
-            <div className="relative h-[320px] md:h-[380px]">
+        <div className="mx-auto max-w-7xl space-y-8 px-4 py-6 md:py-10">
+          <section className="overflow-hidden rounded-[36px] border border-white/10 shadow-[0_20px_60px_rgba(0,0,0,0.35)]">
+            <div className="relative h-[180px] sm:h-[220px] md:h-[280px] lg:h-[320px]">
               {currentStore.bannerUrl ? (
                 <img
                   src={ensureUrl(currentStore.bannerUrl)}
@@ -448,28 +451,33 @@ export default function LojaPublica() {
                 <div className="h-full w-full bg-gradient-to-r from-black via-zinc-900 to-black" />
               )}
 
-              <div className="absolute inset-0 bg-gradient-to-t from-black via-black/40 to-transparent" />
+              <div className="absolute inset-0 bg-gradient-to-t from-black/85 via-black/35 to-transparent" />
+            </div>
 
-              <div className="absolute bottom-0 left-0 right-0 p-5 md:p-8">
-                <div className="flex flex-col gap-6 lg:flex-row lg:items-end lg:justify-between">
-                  <div className="max-w-3xl">
-                    <div className="mb-4 flex items-end gap-4">
-                      <div className="flex h-24 w-24 items-center justify-center overflow-hidden rounded-[28px] border border-white/15 bg-black/30 text-2xl font-black text-white shadow-2xl">
-                        {currentStore.logoUrl ? (
-                          <img
-                            src={ensureUrl(currentStore.logoUrl)}
-                            alt={currentStore.name}
-                            className="h-full w-full object-cover"
-                          />
-                        ) : (
-                          <span>{getInitials(currentStore.name || 'L')}</span>
-                        )}
-                      </div>
+            <div
+              className="border-t border-white/10 px-4 py-5 md:px-8 md:py-7"
+              style={{ background: 'linear-gradient(180deg, rgba(0,0,0,0.18) 0%, rgba(0,0,0,0.28) 100%)' }}
+            >
+              <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_280px] xl:items-center">
+                <div className="space-y-5">
+                  <div className="flex flex-col gap-4 sm:flex-row sm:items-start">
+                    <div className="flex h-20 w-20 shrink-0 items-center justify-center overflow-hidden rounded-[26px] border border-white/15 bg-black/30 text-2xl font-black text-white shadow-2xl md:h-24 md:w-24">
+                      {currentStore.logoUrl ? (
+                        <img
+                          src={ensureUrl(currentStore.logoUrl)}
+                          alt={currentStore.name}
+                          className="h-full w-full object-cover"
+                        />
+                      ) : (
+                        <span>{getInitials(currentStore.name || 'L')}</span>
+                      )}
+                    </div>
 
-                      <div>
+                    <div className="min-w-0 flex-1">
+                      <div className="mb-3 flex flex-wrap gap-2">
                         {currentStore.slogan ? (
                           <span
-                            className="mb-3 inline-flex rounded-full px-3 py-1 text-xs font-semibold uppercase tracking-[0.16em]"
+                            className="inline-flex rounded-full px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.16em]"
                             style={{
                               backgroundColor: `${currentStore.accentColor}22`,
                               color: currentStore.accentColor,
@@ -480,67 +488,85 @@ export default function LojaPublica() {
                           </span>
                         ) : null}
 
-                        <h1
-                          className="text-3xl font-black md:text-5xl"
-                          style={{ color: currentStore.textColor }}
-                        >
-                          {currentStore.name}
-                        </h1>
-
-                        <p
-                          className="mt-2 text-sm md:text-base"
-                          style={{ color: currentStore.mutedTextColor }}
-                        >
+                        <span className="inline-flex rounded-full border border-white/10 bg-white/5 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.14em] text-zinc-300">
                           @{currentStore.username}
-                          {currentStore.niche ? ` • ${currentStore.niche}` : ''}
-                        </p>
+                        </span>
+
+                        {currentStore.niche ? (
+                          <span className="inline-flex rounded-full border border-white/10 bg-white/5 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.14em] text-zinc-300">
+                            {currentStore.niche}
+                          </span>
+                        ) : null}
                       </div>
-                    </div>
 
-                    <p
-                      className="max-w-2xl text-sm leading-7 md:text-base"
-                      style={{ color: currentStore.mutedTextColor }}
-                    >
-                      {currentStore.description ||
-                        'Explore os produtos disponíveis desta loja e encontre a melhor oferta para você.'}
-                    </p>
-
-                    <div className="mt-6 flex flex-wrap gap-3">
-                      <Button
-                        className="rounded-2xl px-6 font-bold"
-                        style={{
-                          backgroundColor: currentStore.buttonBgColor,
-                          color: currentStore.buttonTextColor,
-                        }}
-                        onClick={() => {
-                          const section = document.getElementById('produtos');
-                          section?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-                        }}
+                      <h1
+                        className="break-words text-3xl font-black leading-tight md:text-5xl"
+                        style={{ color: currentStore.textColor }}
                       >
-                        <ShoppingBag className="mr-2 h-4 w-4" />
-                        {currentStore.primaryButtonText || 'Ver produtos'}
-                      </Button>
+                        {currentStore.name}
+                      </h1>
 
-                      <Button
-                        variant="outline"
-                        className="rounded-2xl border-white/10 bg-black/20 text-white hover:bg-white/5"
-                        onClick={handleWhatsApp}
+                      <p
+                        className="mt-3 max-w-3xl text-sm leading-7 md:text-base"
+                        style={{ color: currentStore.mutedTextColor }}
                       >
-                        <MessageCircle className="mr-2 h-4 w-4" />
-                        {currentStore.whatsappButtonText || 'Falar no WhatsApp'}
-                      </Button>
+                        {currentStore.description ||
+                          'Explore os produtos disponíveis desta loja e encontre a melhor oferta para você.'}
+                      </p>
                     </div>
                   </div>
 
-                  <div
-                    className="rounded-[28px] px-6 py-5 text-black shadow-2xl"
-                    style={{ backgroundColor: currentStore.buttonBgColor }}
-                  >
-                    <p className="text-xs font-semibold uppercase tracking-[0.18em] opacity-70">
-                      Loja Aberta
-                    </p>
-                    <div className="mt-2 text-4xl font-black">Bem vindos!</div>
-                    <p className="mt-1 text-sm opacity-80">Melhores preço vocês só encontram aqui! </p>
+                  <div className="flex flex-col gap-3 sm:flex-row">
+                    <Button
+                      className="w-full rounded-2xl px-6 font-bold sm:w-auto"
+                      style={{
+                        backgroundColor: currentStore.buttonBgColor,
+                        color: currentStore.buttonTextColor,
+                      }}
+                      onClick={() => {
+                        const section = document.getElementById('produtos');
+                        section?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                      }}
+                    >
+                      <ShoppingBag className="mr-2 h-4 w-4" />
+                      {currentStore.primaryButtonText || 'Ver produtos'}
+                    </Button>
+
+                    <Button
+                      variant="outline"
+                      className="w-full rounded-2xl border-white/10 bg-black/20 text-white hover:bg-white/5 sm:w-auto"
+                      onClick={handleWhatsApp}
+                    >
+                      <MessageCircle className="mr-2 h-4 w-4" />
+                      {currentStore.whatsappButtonText || 'Falar no WhatsApp'}
+                    </Button>
+                  </div>
+                </div>
+
+                <div
+                  className="rounded-[28px] border border-white/10 px-5 py-5 text-black shadow-2xl"
+                  style={{ backgroundColor: currentStore.buttonBgColor }}
+                >
+                  <p className="text-xs font-semibold uppercase tracking-[0.18em] opacity-70">
+                    Loja Aberta
+                  </p>
+                  <div className="mt-2 text-4xl font-black leading-none">Bem Vindos</div>
+                  <p className="mt-2 text-sm opacity-80">Melhores preços vocês só encontram aqui!</p>
+
+                  <div className="mt-5 grid grid-cols-2 gap-3">
+                    <div className="rounded-2xl bg-black/10 p-3">
+                      <p className="text-[11px] font-semibold uppercase tracking-[0.14em] opacity-70">
+                        Produtos
+                      </p>
+                      <p className="mt-1 text-xl font-black">{products.length}</p>
+                    </div>
+
+                    <div className="rounded-2xl bg-black/10 p-3">
+                      <p className="text-[11px] font-semibold uppercase tracking-[0.14em] opacity-70">
+                        Contato
+                      </p>
+                      <p className="mt-1 text-xl font-black">Ativo</p>
+                    </div>
                   </div>
                 </div>
               </div>
@@ -597,7 +623,7 @@ export default function LojaPublica() {
             </div>
           </section>
 
-          <section id="produtos">
+          <section id="produtos" className="scroll-mt-28">
             <div className="mb-6 flex items-center justify-between gap-4">
               <div>
                 <h2
@@ -630,13 +656,17 @@ export default function LojaPublica() {
                 {filteredProducts.map((product) => (
                   <div
                     key={product.id}
-                    className="group overflow-hidden rounded-[32px] border border-white/10 shadow-[0_10px_30px_rgba(0,0,0,0.25)] transition hover:-translate-y-1 hover:border-emerald-500/30"
+                    className="group overflow-hidden rounded-[32px] border border-white/10 shadow-[0_10px_30px_rgba(0,0,0,0.25)] transition duration-300 hover:-translate-y-1 hover:border-emerald-500/30"
                     style={cardStyle}
                   >
                     <div className="relative h-64 overflow-hidden bg-black/20">
                       <ProductImage src={ensureUrl(product.image)} alt={product.name} />
 
-                      <div className="absolute inset-x-0 top-0 flex items-center justify-end p-4">
+                      <div className="absolute inset-x-0 top-0 flex items-center justify-between p-4">
+                        <span className="rounded-full border border-white/10 bg-black/40 px-3 py-1 text-xs font-bold uppercase tracking-[0.14em] text-white/85 backdrop-blur-md">
+                          Oferta
+                        </span>
+
                         <span
                           className="rounded-full bg-black/40 px-3 py-1 text-sm font-black backdrop-blur-md"
                           style={{ color: currentStore.textColor }}
@@ -652,13 +682,13 @@ export default function LojaPublica() {
                       </h3>
 
                       <p
-                        className="mt-3 line-clamp-3 text-sm leading-6"
+                        className="mt-3 line-clamp-3 min-h-[72px] text-sm leading-6"
                         style={{ color: currentStore.mutedTextColor }}
                       >
                         {product.description || 'Sem descrição disponível para este produto.'}
                       </p>
 
-                      <div className="mt-5 flex flex-wrap gap-3">
+                      <div className="mt-5 flex flex-col gap-3 sm:flex-row">
                         <Button
                           className="flex-1 rounded-2xl font-bold"
                           style={{
@@ -686,21 +716,6 @@ export default function LojaPublica() {
             )}
           </section>
         </div>
-
-        <div className="fixed bottom-4 left-4 right-4 z-40 md:hidden">
-          <button
-            type="button"
-            onClick={handleWhatsApp}
-            className="flex w-full items-center justify-center rounded-2xl px-5 py-4 text-base font-black shadow-2xl"
-            style={{
-              backgroundColor: currentStore.buttonBgColor,
-              color: currentStore.buttonTextColor,
-            }}
-          >
-            <MessageCircle className="mr-2 h-5 w-5" />
-            {currentStore.whatsappButtonText || 'Falar no WhatsApp'}
-          </button>
-        </div>
       </div>
 
       {selectedProduct ? (
@@ -709,13 +724,13 @@ export default function LojaPublica() {
           onClick={() => setSelectedProduct(null)}
         >
           <div
-            className="w-full max-w-5xl overflow-hidden rounded-[32px] border border-white/10 bg-[#050505] shadow-2xl"
+            className="max-h-[90vh] w-full max-w-5xl overflow-hidden rounded-[32px] border border-white/10 bg-[#050505] shadow-2xl"
             onClick={(e) => e.stopPropagation()}
           >
-            <div className="flex items-start justify-between gap-4 border-b border-white/10 px-6 py-5">
-              <div>
-                <h3 className="text-2xl font-black text-white">{selectedProduct.name}</h3>
-                <p className="mt-1 text-zinc-400">{currentStore.name}</p>
+            <div className="flex items-start justify-between gap-4 border-b border-white/10 px-5 py-5 md:px-6">
+              <div className="min-w-0">
+                <h3 className="truncate text-2xl font-black text-white">{selectedProduct.name}</h3>
+                <p className="mt-1 truncate text-zinc-400">{currentStore.name}</p>
               </div>
 
               <button
@@ -727,55 +742,57 @@ export default function LojaPublica() {
               </button>
             </div>
 
-            <div className="grid gap-0 lg:grid-cols-[1.05fr_0.95fr]">
-              <div className="h-[320px] bg-black/20 lg:h-full">
-                <ProductImage src={ensureUrl(selectedProduct.image)} alt={selectedProduct.name} />
-              </div>
-
-              <div className="p-6 md:p-8">
-                <div
-                  className="mb-4 inline-flex rounded-full px-3 py-1 text-xs font-semibold uppercase tracking-[0.14em]"
-                  style={{
-                    backgroundColor: `${currentStore.accentColor}22`,
-                    color: currentStore.accentColor,
-                    border: `1px solid ${currentStore.accentColor}33`,
-                  }}
-                >
-                  Produto em destaque
+            <div className="max-h-[calc(90vh-88px)] overflow-y-auto">
+              <div className="grid gap-0 lg:grid-cols-[1.05fr_0.95fr]">
+                <div className="h-[280px] bg-black/20 sm:h-[320px] lg:h-full">
+                  <ProductImage src={ensureUrl(selectedProduct.image)} alt={selectedProduct.name} />
                 </div>
 
-                <div
-                  className="mb-5 text-3xl font-black"
-                  style={{ color: currentStore.accentColor }}
-                >
-                  {formatMoney(selectedProduct.priceValue)}
-                </div>
-
-                <p className="leading-7 text-zinc-300">
-                  {selectedProduct.description || 'Sem descrição disponível para este produto.'}
-                </p>
-
-                <div className="mt-6 flex flex-wrap gap-3">
-                  <Button
-                    className="rounded-2xl font-bold"
+                <div className="p-6 md:p-8">
+                  <div
+                    className="mb-4 inline-flex rounded-full px-3 py-1 text-xs font-semibold uppercase tracking-[0.14em]"
                     style={{
-                      backgroundColor: currentStore.buttonBgColor,
-                      color: currentStore.buttonTextColor,
+                      backgroundColor: `${currentStore.accentColor}22`,
+                      color: currentStore.accentColor,
+                      border: `1px solid ${currentStore.accentColor}33`,
                     }}
-                    onClick={() => openProductAction(selectedProduct)}
                   >
-                    <ExternalLink className="mr-2 h-4 w-4" />
-                    Comprar agora
-                  </Button>
+                    Produto em destaque
+                  </div>
 
-                  <Button
-                    variant="outline"
-                    className="rounded-2xl border-white/10 bg-black/20 text-white hover:bg-white/5"
-                    onClick={handleWhatsApp}
+                  <div
+                    className="mb-5 text-3xl font-black md:text-4xl"
+                    style={{ color: currentStore.accentColor }}
                   >
-                    <MessageCircle className="mr-2 h-4 w-4" />
-                    {currentStore.whatsappButtonText || 'Falar no WhatsApp'}
-                  </Button>
+                    {formatMoney(selectedProduct.priceValue)}
+                  </div>
+
+                  <p className="leading-7 text-zinc-300">
+                    {selectedProduct.description || 'Sem descrição disponível para este produto.'}
+                  </p>
+
+                  <div className="mt-6 flex flex-col gap-3 sm:flex-row">
+                    <Button
+                      className="rounded-2xl font-bold"
+                      style={{
+                        backgroundColor: currentStore.buttonBgColor,
+                        color: currentStore.buttonTextColor,
+                      }}
+                      onClick={() => openProductAction(selectedProduct)}
+                    >
+                      <ExternalLink className="mr-2 h-4 w-4" />
+                      Comprar agora
+                    </Button>
+
+                    <Button
+                      variant="outline"
+                      className="rounded-2xl border-white/10 bg-black/20 text-white hover:bg-white/5"
+                      onClick={handleWhatsApp}
+                    >
+                      <MessageCircle className="mr-2 h-4 w-4" />
+                      {currentStore.whatsappButtonText || 'Falar no WhatsApp'}
+                    </Button>
+                  </div>
                 </div>
               </div>
             </div>
