@@ -442,7 +442,7 @@ export default function LojaPublica() {
 
         <div className="mx-auto max-w-7xl space-y-6 px-4 py-6 md:space-y-8 md:py-10">
           <section className="overflow-hidden rounded-[36px] border border-white/10 shadow-[0_20px_60px_rgba(0,0,0,0.35)]">
-            <div className="relative h-[120px] sm:h-[150px] md:h-[210px] lg:h-[250px]">
+            <div className="relative h-[120px] sm:h-[150px] md:h-[190px] lg:h-[220px]">
               {currentStore.bannerUrl ? (
                 <img
                   src={ensureUrl(currentStore.bannerUrl)}
@@ -457,128 +457,89 @@ export default function LojaPublica() {
             </div>
 
             <div className="border-t border-white/10 bg-[linear-gradient(180deg,rgba(3,10,24,0.92)_0%,rgba(4,18,38,0.96)_100%)] px-4 py-4 md:px-6 md:py-5">
-              <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_320px] lg:items-center">
-                <div>
-                  <div className="mb-3 flex flex-wrap gap-2">
-                    {currentStore.slogan ? (
-                      <span
-                        className="inline-flex rounded-full px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.16em]"
-                        style={{
-                          backgroundColor: `${currentStore.accentColor}22`,
-                          color: currentStore.accentColor,
-                          border: `1px solid ${currentStore.accentColor}33`,
-                        }}
-                      >
-                        {currentStore.slogan}
-                      </span>
-                    ) : null}
-
-                    {!!currentStore.username && (
-                      <span className="inline-flex rounded-full border border-white/10 bg-white/5 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.14em] text-zinc-300">
-                        @{currentStore.username}
-                      </span>
-                    )}
-
-                    {!!currentStore.niche && (
-                      <span className="inline-flex rounded-full border border-white/10 bg-white/5 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.14em] text-zinc-300">
-                        {currentStore.niche}
-                      </span>
-                    )}
-                  </div>
-
-                  <div className="flex items-start gap-4">
-                    <div className="flex h-20 w-20 shrink-0 items-center justify-center overflow-hidden rounded-[24px] border border-white/15 bg-black/30 text-xl font-black text-white shadow-2xl md:h-24 md:w-24 md:rounded-[28px]">
-                      {currentStore.logoUrl ? (
-                        <img
-                          src={ensureUrl(currentStore.logoUrl)}
-                          alt={currentStore.name}
-                          className="h-full w-full object-cover"
-                        />
-                      ) : (
-                        <span>{getInitials(currentStore.name || 'L')}</span>
-                      )}
-                    </div>
-
-                    <div className="min-w-0 flex-1 pt-1">
-                      <h1
-                        className="break-words text-3xl font-black leading-none md:text-5xl"
-                        style={{ color: currentStore.textColor }}
-                      >
-                        {currentStore.name}
-                      </h1>
-
-                      <p
-                        className="mt-3 max-w-2xl text-sm leading-7 md:text-base"
-                        style={{ color: currentStore.mutedTextColor }}
-                      >
-                        {currentStore.description ||
-                          'Explore os produtos disponíveis desta loja e encontre a melhor oferta para você.'}
-                      </p>
-                    </div>
-                  </div>
-
-                  <div className="mt-5 flex flex-col gap-3 sm:flex-row">
-                    <Button
-                      className="w-full rounded-2xl px-6 font-bold sm:w-auto"
+              <div className="max-w-4xl">
+                <div className="mb-3 flex flex-wrap gap-2">
+                  {currentStore.slogan ? (
+                    <span
+                      className="inline-flex rounded-full px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.16em]"
                       style={{
-                        backgroundColor: currentStore.buttonBgColor,
-                        color: currentStore.buttonTextColor,
-                      }}
-                      onClick={() => {
-                        const section = document.getElementById('produtos');
-                        section?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                        backgroundColor: `${currentStore.accentColor}22`,
+                        color: currentStore.accentColor,
+                        border: `1px solid ${currentStore.accentColor}33`,
                       }}
                     >
-                      <ShoppingBag className="mr-2 h-4 w-4" />
-                      {currentStore.primaryButtonText || 'Ver produtos'}
-                    </Button>
+                      {currentStore.slogan}
+                    </span>
+                  ) : null}
 
-                    <Button
-                      variant="outline"
-                      className="w-full rounded-2xl border-white/10 bg-black/20 text-white hover:bg-white/5 sm:w-auto"
-                      onClick={handleWhatsApp}
+                  {!!currentStore.username && (
+                    <span className="inline-flex rounded-full border border-white/10 bg-white/5 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.14em] text-zinc-300">
+                      @{currentStore.username}
+                    </span>
+                  )}
+
+                  {!!currentStore.niche && (
+                    <span className="inline-flex rounded-full border border-white/10 bg-white/5 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.14em] text-zinc-300">
+                      {currentStore.niche}
+                    </span>
+                  )}
+                </div>
+
+                <div className="flex items-start gap-4">
+                  <div className="flex h-20 w-20 shrink-0 items-center justify-center overflow-hidden rounded-[24px] border border-white/15 bg-black/30 text-xl font-black text-white shadow-2xl md:h-24 md:w-24 md:rounded-[28px]">
+                    {currentStore.logoUrl ? (
+                      <img
+                        src={ensureUrl(currentStore.logoUrl)}
+                        alt={currentStore.name}
+                        className="h-full w-full object-cover"
+                      />
+                    ) : (
+                      <span>{getInitials(currentStore.name || 'L')}</span>
+                    )}
+                  </div>
+
+                  <div className="min-w-0 flex-1 pt-1">
+                    <h1
+                      className="break-words text-3xl font-black leading-none md:text-5xl"
+                      style={{ color: currentStore.textColor }}
                     >
-                      <MessageCircle className="mr-2 h-4 w-4" />
-                      {currentStore.whatsappButtonText || 'Falar no WhatsApp'}
-                    </Button>
+                      {currentStore.name}
+                    </h1>
+
+                    <p
+                      className="mt-3 max-w-2xl text-sm leading-7 md:text-base"
+                      style={{ color: currentStore.mutedTextColor }}
+                    >
+                      {currentStore.description ||
+                        'Explore os produtos disponíveis desta loja e encontre a melhor oferta para você.'}
+                    </p>
                   </div>
                 </div>
 
-                <div className="hidden lg:grid lg:grid-cols-2 lg:gap-3">
-                  <div
-                    className="rounded-[24px] p-4 text-black shadow-xl"
-                    style={{ backgroundColor: currentStore.buttonBgColor }}
+                <div className="mt-5 flex flex-col gap-3 sm:flex-row">
+                  <Button
+                    className="w-full rounded-2xl px-6 font-bold sm:w-auto"
+                    style={{
+                      backgroundColor: currentStore.buttonBgColor,
+                      color: currentStore.buttonTextColor,
+                    }}
+                    onClick={() => {
+                      const section = document.getElementById('produtos');
+                      section?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                    }}
                   >
-                    <p className="text-[11px] font-semibold uppercase tracking-[0.16em] opacity-70">
-                      Loja online
-                    </p>
-                    <div className="mt-2 text-3xl font-black leading-none">Ativa</div>
-                    <p className="mt-2 text-sm opacity-80">Pronta para receber cliques</p>
-                  </div>
+                    <ShoppingBag className="mr-2 h-4 w-4" />
+                    {currentStore.primaryButtonText || 'Ver produtos'}
+                  </Button>
 
-                  <div className="rounded-[24px] border border-white/10 bg-white/[0.04] p-4">
-                    <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-zinc-400">
-                      Produtos
-                    </p>
-                    <div className="mt-2 text-3xl font-black text-white">{products.length}</div>
-                    <p className="mt-2 text-sm text-zinc-400">Itens disponíveis na vitrine</p>
-                  </div>
-
-                  <div className="rounded-[24px] border border-white/10 bg-white/[0.04] p-4">
-                    <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-zinc-400">
-                      Atendimento
-                    </p>
-                    <div className="mt-2 text-2xl font-black text-white">WhatsApp</div>
-                    <p className="mt-2 text-sm text-zinc-400">Contato rápido com a loja</p>
-                  </div>
-
-                  <div className="rounded-[24px] border border-white/10 bg-white/[0.04] p-4">
-                    <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-zinc-400">
-                      Destaque
-                    </p>
-                    <div className="mt-2 text-2xl font-black text-white">Catálogo</div>
-                    <p className="mt-2 text-sm text-zinc-400">Visual limpo e pronto para conversão</p>
-                  </div>
+                  <Button
+                    variant="outline"
+                    className="w-full rounded-2xl border-white/10 bg-black/20 text-white hover:bg-white/5 sm:w-auto"
+                    onClick={handleWhatsApp}
+                  >
+                    <MessageCircle className="mr-2 h-4 w-4" />
+                    {currentStore.whatsappButtonText || 'Falar no WhatsApp'}
+                  </Button>
                 </div>
               </div>
             </div>
@@ -675,10 +636,6 @@ export default function LojaPublica() {
                       <ProductImage src={ensureUrl(product.image)} alt={product.name} />
 
                       <div className="absolute inset-x-0 top-0 flex items-center justify-between p-4">
-                        <span className="rounded-full border border-white/10 bg-black/40 px-3 py-1 text-xs font-bold uppercase tracking-[0.14em] text-white/85 backdrop-blur-md">
-                          Oferta
-                        </span>
-
                         <span
                           className="rounded-full bg-black/40 px-3 py-1 text-sm font-black backdrop-blur-md"
                           style={{ color: currentStore.textColor }}
@@ -694,7 +651,7 @@ export default function LojaPublica() {
                       </h3>
 
                       <p
-                        className="mt-3 line-clamp-3 min-h-[72px] text-sm leading-6"
+                        className="mt-3 line-clamp-3 text-sm leading-6"
                         style={{ color: currentStore.mutedTextColor }}
                       >
                         {product.description || 'Sem descrição disponível para este produto.'}
