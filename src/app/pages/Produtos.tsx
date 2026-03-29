@@ -319,8 +319,20 @@ export default function Produtos() {
     setImporting(true);
 
     try {
+      const {
+        data: { session },
+        error: sessionError,
+      } = await supabase.auth.getSession();
+
+      if (sessionError || !session?.access_token) {
+        throw new Error('Sua sessão expirou. Faça login novamente.');
+      }
+
       const { data, error } = await supabase.functions.invoke('import-affiliate-product', {
         body: { url },
+        headers: {
+          Authorization: `Bearer ${session.access_token}`,
+        },
       });
 
       if (error) {

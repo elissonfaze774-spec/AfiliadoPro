@@ -1,0 +1,2 @@
+[functions.import-affiliate-product]
+verify_jwt = false

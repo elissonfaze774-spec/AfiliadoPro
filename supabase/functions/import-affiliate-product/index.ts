@@ -431,7 +431,7 @@ serve(async (req) => {
     }
 
     const authHeader = req.headers.get('Authorization') ?? ''
-    const token = authHeader.replace('Bearer ', '').trim()
+    const token = authHeader.replace(/^Bearer\s+/i, '').trim()
 
     if (!token) {
       return json(
