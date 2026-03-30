@@ -1,2 +1,4 @@
 [functions.import-affiliate-product]
 verify_jwt = false
+[functions.create-admin-store]
+verify_jwt = false

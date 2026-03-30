@@ -415,9 +415,8 @@ export default function SuperAdmin() {
         throw new Error('Sessão inválida. Faça login novamente.');
       }
 
-      let session = sessionData.session;
+      const expiresAt = sessionData.session.expires_at ?? 0;
       const nowInSeconds = Math.floor(Date.now() / 1000);
-      const expiresAt = session.expires_at ?? 0;
 
       if (expiresAt && expiresAt <= nowInSeconds + 30) {
         const { data: refreshed, error: refreshError } = await supabase.auth.refreshSession();
@@ -425,12 +424,6 @@ export default function SuperAdmin() {
         if (refreshError || !refreshed.session) {
           throw new Error('Sua sessão expirou. Faça login novamente.');
         }
-
-        session = refreshed.session;
-      }
-
-      if (!session.access_token) {
-        throw new Error('Token inválido. Faça login novamente.');
       }
 
       const { data, error } = await supabase.functions.invoke('create-admin-store', {
@@ -441,9 +434,6 @@ export default function SuperAdmin() {
           storeName: loja,
           storeSlug: slug,
           planName: 'iniciante',
-        },
-        headers: {
-          Authorization: `Bearer ${session.access_token}`,
         },
       });
 
@@ -789,7 +779,10 @@ export default function SuperAdmin() {
             <CardContent className="p-5">
               <div className="grid grid-cols-7 gap-3">
                 {sevenDayMetrics.map((item) => {
-                  const percent = Math.max((item.revenue / maxRevenue) * 100, item.revenue > 0 ? 8 : 2);
+                  const percent = Math.max(
+                    (item.revenue / maxRevenue) * 100,
+                    item.revenue > 0 ? 8 : 2,
+                  );
 
                   return (
                     <div key={item.key} className="flex flex-col items-center gap-3">
@@ -806,7 +799,9 @@ export default function SuperAdmin() {
                       <div className="text-center">
                         <p className="text-xs font-semibold text-white">{item.label}</p>
                         <p className="text-[11px] text-zinc-500">{item.orders} pedidos</p>
-                        <p className="text-[11px] text-emerald-300">{formatMoney(item.revenue)}</p>
+                        <p className="text-[11px] text-emerald-300">
+                          {formatMoney(item.revenue)}
+                        </p>
                       </div>
                     </div>
                   );
