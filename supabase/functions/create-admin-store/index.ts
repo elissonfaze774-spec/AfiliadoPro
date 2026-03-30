@@ -78,135 +78,6 @@ function getErrorMessage(error: unknown, fallback: string) {
   return fallback
 }
 
-async function createStore(
-  adminClient: any,
-  params: {
-    userId: string
-    storeName: string
-    storeSlug: string
-    planName: string
-  },
-) {
-  const attempts = [
-    {
-      store_name: params.storeName,
-      slug: params.storeSlug,
-      status: 'active',
-      plan: params.planName,
-      owner_id: params.userId,
-      is_active: true,
-    },
-    {
-      store_name: params.storeName,
-      slug: params.storeSlug,
-      status: 'active',
-      plan: params.planName,
-      owner_id: params.userId,
-    },
-    {
-      store_name: params.storeName,
-      slug: params.storeSlug,
-      status: 'active',
-      plan: params.planName,
-    },
-    {
-      name: params.storeName,
-      slug: params.storeSlug,
-      status: 'active',
-      plan_name: params.planName,
-      owner_id: params.userId,
-      is_active: true,
-    },
-    {
-      name: params.storeName,
-      slug: params.storeSlug,
-      status: 'active',
-      plan_name: params.planName,
-      owner_id: params.userId,
-    },
-    {
-      name: params.storeName,
-      slug: params.storeSlug,
-      status: 'active',
-      plan_name: params.planName,
-    },
-  ]
-
-  let lastError: unknown = null
-
-  for (const payload of attempts) {
-    const { data, error } = await adminClient
-      .from('stores')
-      .insert(payload)
-      .select('id, slug')
-      .single()
-
-    if (!error && data?.id) {
-      return data
-    }
-
-    lastError = error
-  }
-
-  throw new Error(getErrorMessage(lastError, 'Falha ao criar a estrutura na tabela stores.'))
-}
-
-async function createAdminLink(
-  adminClient: any,
-  params: {
-    userId: string
-    storeId: string
-    adminName: string
-    adminEmail: string
-  },
-) {
-  const attempts = [
-    {
-      user_id: params.userId,
-      store_id: params.storeId,
-      email: params.adminEmail,
-      name: params.adminName,
-    },
-    {
-      id: params.userId,
-      store_id: params.storeId,
-      email: params.adminEmail,
-      name: params.adminName,
-    },
-    {
-      user_id: params.userId,
-      store_id: params.storeId,
-      email: params.adminEmail,
-    },
-    {
-      id: params.userId,
-      store_id: params.storeId,
-      email: params.adminEmail,
-    },
-    {
-      store_id: params.storeId,
-      email: params.adminEmail,
-      name: params.adminName,
-    },
-    {
-      store_id: params.storeId,
-      email: params.adminEmail,
-    },
-  ]
-
-  let lastError: unknown = null
-
-  for (const payload of attempts) {
-    const { error } = await adminClient.from('admins').insert(payload)
-
-    if (!error) return
-
-    lastError = error
-  }
-
-  throw new Error(getErrorMessage(lastError, 'Falha ao vincular o admin na tabela admins.'))
-}
-
 serve(async (req: Request) => {
   if (req.method === 'OPTIONS') {
     return new Response('ok', { headers: corsHeaders })
@@ -236,6 +107,17 @@ serve(async (req: Request) => {
     const authHeader = req.headers.get('Authorization') ?? ''
     const token = authHeader.replace('Bearer ', '').trim()
 
+    if (!token) {
+      return json(
+        {
+          success: false,
+          step: 'auth-header',
+          message: 'Sessão inválida ou ausente. Faça login novamente.',
+        },
+        401,
+      )
+    }
+
     const userClient: any = createClient(supabaseUrl, anonKey, {
       global: {
         headers: {
@@ -254,17 +136,6 @@ serve(async (req: Request) => {
         persistSession: false,
       },
     })
-
-    if (!token) {
-      return json(
-        {
-          success: false,
-          step: 'auth-header',
-          message: 'Sessão inválida ou ausente. Faça login novamente.',
-        },
-        401,
-      )
-    }
 
     const {
       data: { user: requesterUser },
@@ -425,45 +296,77 @@ serve(async (req: Request) => {
     createdUserId = createdUser.user.id
 
     const { error: profileError } = await adminClient
-  .from('profiles')
-  .upsert(
-    {
-      id: createdUserId,
-      name: body.adminName,
-      email: body.adminEmail,
-      role: 'admin',
-    },
-    {
-      onConflict: 'id',
-    },
-  )
+      .from('profiles')
+      .upsert(
+        {
+          id: createdUserId,
+          name: body.adminName,
+          email: body.adminEmail,
+          role: 'admin',
+        },
+        {
+          onConflict: 'id',
+        },
+      )
 
-if (profileError) {
-  return json(
-    {
-      success: false,
-      step: 'profile-upsert',
-      message: getErrorMessage(profileError, 'Não foi possível salvar o perfil do admin.'),
-    },
-    500,
-  )
-}
+    if (profileError) {
+      return json(
+        {
+          success: false,
+          step: 'profile-upsert',
+          message: getErrorMessage(profileError, 'Não foi possível salvar o perfil do admin.'),
+        },
+        500,
+      )
+    }
 
-    const store = await createStore(adminClient, {
-      userId: createdUserId,
-      storeName: body.storeName,
-      storeSlug: body.storeSlug,
-      planName: body.planName || 'iniciante',
-    })
+    const { data: createdStore, error: createdStoreError } = await adminClient
+      .from('stores')
+      .insert({
+        store_name: body.storeName,
+        slug: body.storeSlug,
+        status: 'active',
+        plan: body.planName || 'iniciante',
+      })
+      .select('id, slug')
+      .single()
 
-    createdStoreId = String(store.id)
+    if (createdStoreError || !createdStore?.id) {
+      return json(
+        {
+          success: false,
+          step: 'store-insert',
+          message: getErrorMessage(createdStoreError, 'Não foi possível criar a estrutura.'),
+        },
+        500,
+      )
+    }
 
-    await createAdminLink(adminClient, {
-      userId: createdUserId,
-      storeId: createdStoreId,
-      adminName: body.adminName,
-      adminEmail: body.adminEmail,
-    })
+    createdStoreId = String(createdStore.id)
+
+    const { error: adminLinkError } = await adminClient
+      .from('admins')
+      .upsert(
+        {
+          id: createdUserId,
+          store_id: createdStoreId,
+          email: body.adminEmail,
+        },
+        {
+          onConflict: 'id',
+        },
+      )
+
+    if (adminLinkError) {
+      return json(
+        {
+          success: false,
+          step: 'admin-link',
+          message: getErrorMessage(adminLinkError, 'Não foi possível vincular o admin à estrutura.'),
+        },
+        500,
+      )
+    }
 
     return json({
       success: true,
@@ -490,8 +393,8 @@ if (profileError) {
       }
 
       if (createdUserId) {
+        await adminClient.from('admins').delete().eq('id', createdUserId)
         await adminClient.from('profiles').delete().eq('id', createdUserId)
-        await adminClient.from('admins').delete().eq('store_id', createdStoreId)
         await adminClient.auth.admin.deleteUser(createdUserId)
       }
     }
