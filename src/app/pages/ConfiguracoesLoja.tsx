@@ -1,9 +1,11 @@
-import { ChangeEvent, useEffect, useMemo, useState } from 'react';
+import { ChangeEvent, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   AlertTriangle,
   ArrowLeft,
+  Check,
   CheckCircle2,
+  ChevronDown,
   Copy,
   ExternalLink,
   Image as ImageIcon,
@@ -67,8 +69,50 @@ type UploadedImageState = {
   publicUrl: string;
 };
 
+type NicheOption = {
+  value: string;
+  label: string;
+};
+
 const STORAGE_BUCKET = 'store-images';
 const MAX_IMAGE_SIZE_MB = 5;
+
+const NICHE_OPTIONS: NicheOption[] = [
+  { value: 'achadinhos', label: 'Achadinhos' },
+  { value: 'eletronicos', label: 'Eletrônicos' },
+  { value: 'informatica', label: 'Informática' },
+  { value: 'celulares', label: 'Celulares' },
+  { value: 'acessorios', label: 'Acessórios' },
+  { value: 'moda', label: 'Moda' },
+  { value: 'moda-feminina', label: 'Moda Feminina' },
+  { value: 'moda-masculina', label: 'Moda Masculina' },
+  { value: 'calcados', label: 'Calçados' },
+  { value: 'bolsas', label: 'Bolsas' },
+  { value: 'beleza', label: 'Beleza' },
+  { value: 'perfumaria', label: 'Perfumaria' },
+  { value: 'maquiagem', label: 'Maquiagem' },
+  { value: 'saude', label: 'Saúde' },
+  { value: 'fitness', label: 'Fitness' },
+  { value: 'suplementos', label: 'Suplementos' },
+  { value: 'casa', label: 'Casa' },
+  { value: 'decoracao', label: 'Decoração' },
+  { value: 'cozinha', label: 'Cozinha' },
+  { value: 'utilidades-domesticas', label: 'Utilidades Domésticas' },
+  { value: 'moveis', label: 'Móveis' },
+  { value: 'infantil', label: 'Infantil' },
+  { value: 'brinquedos', label: 'Brinquedos' },
+  { value: 'bebe', label: 'Bebê' },
+  { value: 'pet', label: 'Pet' },
+  { value: 'automotivo', label: 'Automotivo' },
+  { value: 'ferramentas', label: 'Ferramentas' },
+  { value: 'esporte-lazer', label: 'Esporte e Lazer' },
+  { value: 'games', label: 'Games' },
+  { value: 'papelaria', label: 'Papelaria' },
+  { value: 'livros', label: 'Livros' },
+  { value: 'joias', label: 'Joias e Relógios' },
+  { value: 'viagem', label: 'Viagem' },
+  { value: 'ofertas-gerais', label: 'Ofertas Gerais' },
+];
 
 const DEFAULTS: Omit<
   SettingsForm,
@@ -208,6 +252,10 @@ function extractFileName(value: string) {
     const parts = trimmed.split('/');
     return parts[parts.length - 1] || trimmed;
   }
+}
+
+function getNicheLabel(value: string) {
+  return NICHE_OPTIONS.find((item) => item.value === value)?.label || 'Selecione o nicho';
 }
 
 function buildInitialForm(store: ReturnType<typeof useApp>['store']): SettingsForm {
@@ -357,6 +405,90 @@ function UploadField({
           <p className="text-xs leading-5 text-zinc-500">{helperText}</p>
         </div>
       </div>
+    </div>
+  );
+}
+
+function NicheDropdown({
+  value,
+  onChange,
+}: {
+  value: string;
+  onChange: (value: string) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const wrapperRef = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (!wrapperRef.current) return;
+      if (!wrapperRef.current.contains(event.target as Node)) {
+        setOpen(false);
+      }
+    };
+
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
+  return (
+    <div ref={wrapperRef} className="relative min-w-0">
+      <label className="mb-2 flex items-center gap-2 text-sm font-medium text-white">
+        <Sparkles className="h-4 w-4 text-emerald-400" />
+        Nicho
+      </label>
+
+      <button
+        type="button"
+        onClick={() => setOpen((prev) => !prev)}
+        className="flex h-12 w-full items-center justify-between rounded-2xl border border-white/10 bg-black/30 px-4 text-left text-white outline-none transition hover:border-emerald-500/40 focus:border-emerald-500"
+      >
+        <span className={`truncate ${value ? 'text-white' : 'text-zinc-400'}`}>
+          {getNicheLabel(value)}
+        </span>
+        <ChevronDown
+          className={`h-4 w-4 shrink-0 text-emerald-400 transition ${open ? 'rotate-180' : ''}`}
+        />
+      </button>
+
+      {open ? (
+        <div className="absolute left-0 right-0 top-[calc(100%+8px)] z-50 max-h-80 overflow-y-auto rounded-2xl border border-emerald-500/20 bg-[#07110c] p-2 shadow-[0_18px_60px_rgba(0,0,0,0.45)]">
+          <button
+            type="button"
+            onClick={() => {
+              onChange('');
+              setOpen(false);
+            }}
+            className={`flex w-full items-center justify-between rounded-xl px-3 py-3 text-left text-sm transition ${
+              value === ''
+                ? 'bg-emerald-500/15 text-emerald-300'
+                : 'text-white hover:bg-white/5'
+            }`}
+          >
+            <span>Selecione o nicho</span>
+            {value === '' ? <Check className="h-4 w-4" /> : null}
+          </button>
+
+          {NICHE_OPTIONS.map((item) => (
+            <button
+              key={item.value}
+              type="button"
+              onClick={() => {
+                onChange(item.value);
+                setOpen(false);
+              }}
+              className={`mt-1 flex w-full items-center justify-between rounded-xl px-3 py-3 text-left text-sm transition ${
+                value === item.value
+                  ? 'bg-emerald-500/15 text-emerald-300'
+                  : 'text-white hover:bg-white/5'
+              }`}
+            >
+              <span className="truncate">{item.label}</span>
+              {value === item.value ? <Check className="h-4 w-4 shrink-0" /> : null}
+            </button>
+          ))}
+        </div>
+      ) : null}
     </div>
   );
 }
@@ -538,9 +670,7 @@ export default function ConfiguracoesLoja() {
         upsert: true,
       });
 
-    if (uploadError) {
-      throw uploadError;
-    }
+    if (uploadError) throw uploadError;
 
     const { data } = supabase.storage.from(STORAGE_BUCKET).getPublicUrl(filePath);
 
@@ -559,7 +689,6 @@ export default function ConfiguracoesLoja() {
     try {
       setUploadingLogo(true);
       const result = await uploadStoreImage('logo', file);
-
       if (!result) return;
 
       setUploadedLogo(result);
@@ -585,7 +714,6 @@ export default function ConfiguracoesLoja() {
     try {
       setUploadingBanner(true);
       const result = await uploadStoreImage('banner', file);
-
       if (!result) return;
 
       setUploadedBanner(result);
@@ -866,24 +994,10 @@ export default function ConfiguracoesLoja() {
                     />
                   </div>
 
-                  <div className="min-w-0">
-                    <label className="mb-2 flex items-center gap-2 text-sm font-medium text-white">
-                      <Sparkles className="h-4 w-4 text-emerald-400" />
-                      Nicho
-                    </label>
-                    <select
-                      value={form.niche}
-                      onChange={(e) => handleChange('niche', e.target.value)}
-                      className="h-12 w-full min-w-0 rounded-2xl border border-white/10 bg-black/30 px-4 text-white outline-none transition focus:border-emerald-500"
-                    >
-                      <option value="">Selecione o nicho</option>
-                      <option value="eletronicos">Eletrônicos</option>
-                      <option value="moda">Moda</option>
-                      <option value="beleza">Beleza</option>
-                      <option value="casa">Casa</option>
-                      <option value="fitness">Fitness</option>
-                    </select>
-                  </div>
+                  <NicheDropdown
+                    value={form.niche}
+                    onChange={(value) => handleChange('niche', value)}
+                  />
 
                   <div className="min-w-0 md:col-span-2">
                     <label className="mb-2 flex items-center gap-2 text-sm font-medium text-white">
@@ -1150,8 +1264,8 @@ export default function ConfiguracoesLoja() {
                           <p className="text-xs" style={{ color: form.mutedTextColor }}>
                             Nicho
                           </p>
-                          <p className="mt-1 break-words text-base font-bold capitalize" style={{ color: form.textColor }}>
-                            {form.niche || 'Sem nicho'}
+                          <p className="mt-1 break-words text-base font-bold" style={{ color: form.textColor }}>
+                            {getNicheLabel(form.niche)}
                           </p>
                         </div>
                       </div>
