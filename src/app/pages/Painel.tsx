@@ -16,7 +16,8 @@ import {
   Settings,
   Copy,
   GraduationCap,
-  Rocket,
+  ShieldCheck,
+  CalendarClock,
 } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import { useAuth } from '../context/AuthTemp';
@@ -33,6 +34,11 @@ type StoreData = {
   whatsapp: string;
   logoUrl: string;
   bannerUrl: string;
+  active: boolean;
+  suspended: boolean;
+  accessExpiresAt: string | null;
+  autoRenew: boolean;
+  accessGrantedDays: number;
 };
 
 type AuthUserLike = {
@@ -40,6 +46,14 @@ type AuthUserLike = {
   email?: string | null;
   role?: string | null;
   storeId?: string | null;
+  access?: {
+    status?: 'active' | 'expires_today' | 'expiring_soon' | 'expired';
+    label?: string;
+    expiresAt?: string | null;
+    autoRenew?: boolean;
+    daysLeft?: number;
+    isExpired?: boolean;
+  } | null;
 };
 
 function normalizeStore(raw: any): StoreData | null {
@@ -52,6 +66,11 @@ function normalizeStore(raw: any): StoreData | null {
   const whatsapp = raw.whatsapp_number ?? raw.whatsapp ?? '';
   const logoUrl = raw.logo_url ?? '';
   const bannerUrl = raw.banner_url ?? '';
+  const active = Boolean(raw.active);
+  const suspended = Boolean(raw.suspended);
+  const accessExpiresAt = raw.access_expires_at ?? null;
+  const autoRenew = Boolean(raw.auto_renew);
+  const accessGrantedDays = Number(raw.access_granted_days ?? 0);
 
   if (!id || !name || !slug) return null;
 
@@ -63,6 +82,11 @@ function normalizeStore(raw: any): StoreData | null {
     whatsapp,
     logoUrl,
     bannerUrl,
+    active,
+    suspended,
+    accessExpiresAt,
+    autoRenew,
+    accessGrantedDays,
   };
 }
 
@@ -73,6 +97,32 @@ function getInitials(name: string) {
     .slice(0, 2)
     .map((part) => part[0]?.toUpperCase())
     .join('');
+}
+
+function formatDate(value?: string | null) {
+  if (!value) return '—';
+
+  const date = new Date(value);
+
+  if (Number.isNaN(date.getTime())) return '—';
+
+  return date.toLocaleDateString('pt-BR');
+}
+
+function getBadgeClasses(status?: string | null) {
+  if (status === 'expired') {
+    return 'border-red-500/20 bg-red-500/10 text-red-300';
+  }
+
+  if (status === 'expires_today') {
+    return 'border-amber-500/20 bg-amber-500/10 text-amber-300';
+  }
+
+  if (status === 'expiring_soon') {
+    return 'border-yellow-500/20 bg-yellow-500/10 text-yellow-300';
+  }
+
+  return 'border-emerald-500/20 bg-emerald-500/10 text-emerald-300';
 }
 
 export default function Painel() {
@@ -298,7 +348,11 @@ export default function Painel() {
               current?.niche === resolvedStore.niche &&
               current?.whatsapp === resolvedStore.whatsapp &&
               current?.logoUrl === resolvedStore.logoUrl &&
-              current?.bannerUrl === resolvedStore.bannerUrl
+              current?.bannerUrl === resolvedStore.bannerUrl &&
+              current?.accessExpiresAt === resolvedStore.accessExpiresAt &&
+              current?.autoRenew === resolvedStore.autoRenew &&
+              current?.active === resolvedStore.active &&
+              current?.suspended === resolvedStore.suspended
             ) {
               return current;
             }
@@ -426,6 +480,70 @@ export default function Painel() {
     );
   }
 
+  const access = user?.access;
+  const blocked = Boolean(access?.isExpired);
+
+  if (blocked) {
+    return (
+      <div className="min-h-screen bg-[radial-gradient(circle_at_top_left,_rgba(16,185,129,0.14),_transparent_25%),radial-gradient(circle_at_bottom_right,_rgba(34,197,94,0.08),_transparent_20%),linear-gradient(180deg,_#020202_0%,_#050505_50%,_#08120d_100%)] text-white">
+        <div className="mx-auto max-w-7xl px-4 py-8">
+          <header className="mb-8 border-b border-white/10 bg-black/40 backdrop-blur-sm">
+            <div className="mx-auto max-w-7xl px-4 py-4">
+              <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+                <div className="min-w-0">
+                  <h1 className="truncate text-2xl font-black text-white">{store.name}</h1>
+                  <div className="mt-1 flex flex-wrap items-center gap-3 text-sm">
+                    <span className="text-zinc-400">@{store.slug}</span>
+                    <span className="text-zinc-700">•</span>
+                    <span className="capitalize text-zinc-400">{store.niche || 'Sem nicho'}</span>
+                  </div>
+                </div>
+
+                <Button
+                  variant="ghost"
+                  className="text-zinc-400 hover:bg-white/5 hover:text-white"
+                  onClick={handleLogout}
+                >
+                  <LogOut className="mr-2 h-4 w-4" />
+                  Sair
+                </Button>
+              </div>
+            </div>
+          </header>
+
+          <div className="mx-auto max-w-3xl">
+            <Card className="border-amber-500/20 bg-black/40 shadow-[0_20px_60px_rgba(0,0,0,0.35)]">
+              <CardContent className="p-8 text-center">
+                <div className="mx-auto mb-6 flex h-20 w-20 items-center justify-center rounded-3xl border border-amber-500/20 bg-amber-500/10 text-amber-300">
+                  <CalendarClock className="h-10 w-10" />
+                </div>
+                <h2 className="text-3xl font-black text-white">Acesso temporariamente indisponível</h2>
+                <p className="mt-3 text-zinc-400">
+                  Sua estrutura continua preservada. Assim que a renovação for concluída,
+                  tudo volta ao normal.
+                </p>
+
+                <div className="mt-6 flex flex-wrap items-center justify-center gap-3">
+                  <span
+                    className={`inline-flex items-center gap-2 rounded-full border px-4 py-2 text-sm font-semibold ${getBadgeClasses(access?.status)}`}
+                  >
+                    <ShieldCheck className="h-4 w-4" />
+                    {access?.label || 'Expirado'}
+                  </span>
+
+                  <span className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/5 px-4 py-2 text-sm text-zinc-300">
+                    <CalendarClock className="h-4 w-4" />
+                    Vencimento: {formatDate(access?.expiresAt)}
+                  </span>
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen bg-[radial-gradient(circle_at_top_left,_rgba(16,185,129,0.14),_transparent_25%),radial-gradient(circle_at_bottom_right,_rgba(34,197,94,0.08),_transparent_20%),linear-gradient(180deg,_#020202_0%,_#050505_50%,_#08120d_100%)]">
       <header className="border-b border-white/10 bg-black/40 backdrop-blur-sm">
@@ -442,6 +560,22 @@ export default function Painel() {
                   Admin
                 </span>
               </div>
+
+              {access ? (
+                <div className="mt-3 flex flex-wrap items-center gap-3">
+                  <span
+                    className={`inline-flex items-center gap-2 rounded-full border px-4 py-2 text-xs font-semibold ${getBadgeClasses(access.status)}`}
+                  >
+                    <ShieldCheck className="h-4 w-4" />
+                    {access.label}
+                  </span>
+
+                  <span className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/5 px-4 py-2 text-xs text-zinc-300">
+                    <CalendarClock className="h-4 w-4" />
+                    Vencimento: {formatDate(access.expiresAt)}
+                  </span>
+                </div>
+              ) : null}
             </div>
 
             <div className="flex flex-wrap items-center gap-3">
@@ -635,29 +769,27 @@ export default function Painel() {
 
             <Card className="border-white/10 bg-white/[0.04] shadow-[0_10px_30px_rgba(0,0,0,0.25)]">
               <CardHeader>
-                <CardTitle className="flex items-center gap-2 text-white">
-                  <GraduationCap className="h-5 w-5 text-emerald-400" />
-                  Academia AfiliadoPRO
-                </CardTitle>
+                <CardTitle className="text-white">Checklist de ativação</CardTitle>
                 <CardDescription className="text-zinc-400">
-                  Mini aulas rápidas para deixar o admin mais confiante e mais vendedor.
+                  Faça isso para deixar sua estrutura mais forte.
                 </CardDescription>
               </CardHeader>
-              <CardContent>
-                <div className="grid gap-4 md:grid-cols-3">
-                  {academyItems.map((item, index) => (
+              <CardContent className="space-y-3">
+                {checklist.map((item, index) => (
+                  <div
+                    key={index}
+                    className="flex items-start gap-3 rounded-2xl border border-white/10 bg-black/20 p-4"
+                  >
                     <div
-                      key={index}
-                      className="rounded-3xl border border-white/10 bg-black/20 p-5 transition hover:border-emerald-500/30"
+                      className={`mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full ${
+                        item.done ? 'bg-emerald-500/20 text-emerald-300' : 'bg-white/10 text-zinc-500'
+                      }`}
                     >
-                      <div className="mb-4 inline-flex rounded-2xl bg-emerald-500/10 p-3 text-emerald-300">
-                        <Rocket className="h-5 w-5" />
-                      </div>
-                      <h3 className="text-base font-bold text-white">{item.title}</h3>
-                      <p className="mt-2 text-sm text-zinc-400">{item.description}</p>
+                      <CheckCircle className="h-4 w-4" />
                     </div>
-                  ))}
-                </div>
+                    <p className={item.done ? 'text-white' : 'text-zinc-400'}>{item.text}</p>
+                  </div>
+                ))}
               </CardContent>
             </Card>
           </div>
@@ -665,41 +797,32 @@ export default function Painel() {
           <div className="space-y-8">
             <Card className="border-white/10 bg-white/[0.04] shadow-[0_10px_30px_rgba(0,0,0,0.25)]">
               <CardHeader>
-                <CardTitle className="text-white">🚀 Missão do dia</CardTitle>
+                <CardTitle className="flex items-center gap-2 text-white">
+                  <GraduationCap className="h-5 w-5 text-emerald-400" />
+                  Academia AfiliadoPRO
+                </CardTitle>
                 <CardDescription className="text-zinc-400">
-                  Quanto mais etapas concluídas, mais sua loja fica pronta para converter.
+                  Mini aulas rápidas para te ajudar a vender mais.
                 </CardDescription>
               </CardHeader>
-              <CardContent>
-                <div className="space-y-3">
-                  {checklist.map((item, index) => (
-                    <div
-                      key={index}
-                      className="flex items-center gap-3 rounded-2xl border border-white/8 bg-black/20 px-4 py-3"
-                    >
-                      <div
-                        className={`flex h-5 w-5 items-center justify-center rounded-full border-2 ${
-                          item.done ? 'border-emerald-500 bg-emerald-500' : 'border-zinc-600'
-                        }`}
-                      >
-                        {item.done && <CheckCircle className="h-4 w-4 text-black" />}
-                      </div>
-                      <span
-                        className={`text-sm ${item.done ? 'text-zinc-500 line-through' : 'text-white'}`}
-                      >
-                        {item.text}
-                      </span>
-                    </div>
-                  ))}
-                </div>
+              <CardContent className="space-y-4">
+                {academyItems.map((item, index) => (
+                  <div
+                    key={index}
+                    className="rounded-3xl border border-white/10 bg-black/20 p-5 transition hover:border-emerald-500/30"
+                  >
+                    <h3 className="text-base font-bold text-white">{item.title}</h3>
+                    <p className="mt-2 text-sm leading-6 text-zinc-400">{item.description}</p>
+                  </div>
+                ))}
               </CardContent>
             </Card>
 
             <Card className="border-white/10 bg-white/[0.04] shadow-[0_10px_30px_rgba(0,0,0,0.25)]">
               <CardHeader>
-                <CardTitle className="text-white">Loja pública</CardTitle>
+                <CardTitle className="text-white">Link da loja</CardTitle>
                 <CardDescription className="text-zinc-400">
-                  Seu link público pronto para divulgação.
+                  Compartilhe com facilidade.
                 </CardDescription>
               </CardHeader>
               <CardContent>

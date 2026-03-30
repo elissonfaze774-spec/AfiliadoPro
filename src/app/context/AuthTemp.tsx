@@ -12,12 +12,26 @@ import { supabase } from '../../lib/supabase';
 
 export type AppRole = 'admin' | 'super-admin';
 
+export type StoreAccessStatus = 'active' | 'expires_today' | 'expiring_soon' | 'expired';
+
+export type StoreAccessInfo = {
+  storeId: string | null;
+  expiresAt: string | null;
+  autoRenew: boolean;
+  grantedDays: number;
+  status: StoreAccessStatus;
+  isExpired: boolean;
+  daysLeft: number;
+  label: string;
+};
+
 export type AppUser = {
   id: string;
   email: string;
   name: string;
   role: AppRole;
   storeId: string | null;
+  access: StoreAccessInfo | null;
 };
 
 type AuthContextType = {
@@ -51,7 +65,101 @@ function isInvalidLoginError(message: string) {
   );
 }
 
-async function resolveStoreId(authUserId: string, authUserEmail: string) {
+function getStoreAccessInfo(store: any): StoreAccessInfo | null {
+  if (!store?.id) return null;
+
+  const expiresAt = store.access_expires_at ? String(store.access_expires_at) : null;
+  const autoRenew = Boolean(store.auto_renew);
+  const grantedDays = Number(store.access_granted_days ?? 0);
+
+  if (!expiresAt) {
+    return {
+      storeId: String(store.id),
+      expiresAt: null,
+      autoRenew,
+      grantedDays,
+      status: 'expired',
+      isExpired: true,
+      daysLeft: 0,
+      label: autoRenew ? 'Expirado • Renovação automática ativa' : 'Expirado',
+    };
+  }
+
+  const now = new Date();
+  const exp = new Date(expiresAt);
+
+  if (Number.isNaN(exp.getTime())) {
+    return {
+      storeId: String(store.id),
+      expiresAt,
+      autoRenew,
+      grantedDays,
+      status: 'expired',
+      isExpired: true,
+      daysLeft: 0,
+      label: autoRenew ? 'Expirado • Renovação automática ativa' : 'Expirado',
+    };
+  }
+
+  const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
+  const startOfExpiry = new Date(exp.getFullYear(), exp.getMonth(), exp.getDate()).getTime();
+  const rawDaysLeft = Math.ceil((startOfExpiry - startOfToday) / 86400000);
+  const isExpired = exp.getTime() < now.getTime();
+
+  if (isExpired) {
+    return {
+      storeId: String(store.id),
+      expiresAt,
+      autoRenew,
+      grantedDays,
+      status: 'expired',
+      isExpired: true,
+      daysLeft: 0,
+      label: autoRenew ? 'Expirado • Renovação automática ativa' : 'Expirado',
+    };
+  }
+
+  if (startOfExpiry === startOfToday) {
+    return {
+      storeId: String(store.id),
+      expiresAt,
+      autoRenew,
+      grantedDays,
+      status: 'expires_today',
+      isExpired: false,
+      daysLeft: 0,
+      label: autoRenew ? 'Vence hoje • Renovação automática ativa' : 'Vence hoje',
+    };
+  }
+
+  if (rawDaysLeft <= 7) {
+    return {
+      storeId: String(store.id),
+      expiresAt,
+      autoRenew,
+      grantedDays,
+      status: 'expiring_soon',
+      isExpired: false,
+      daysLeft: Math.max(rawDaysLeft, 0),
+      label: autoRenew
+        ? `Vence em ${Math.max(rawDaysLeft, 0)} dia(s) • Renovação automática ativa`
+        : `Vence em ${Math.max(rawDaysLeft, 0)} dia(s)`,
+    };
+  }
+
+  return {
+    storeId: String(store.id),
+    expiresAt,
+    autoRenew,
+    grantedDays,
+    status: 'active',
+    isExpired: false,
+    daysLeft: Math.max(rawDaysLeft, 0),
+    label: autoRenew ? 'Acesso ativo • Renovação automática ativa' : 'Acesso ativo',
+  };
+}
+
+async function resolveAdminStore(authUserId: string, authUserEmail: string) {
   const normalizedEmail = normalizeEmail(authUserEmail);
 
   const { data: adminByUserId, error: adminByUserIdError } = await supabase
@@ -65,7 +173,17 @@ async function resolveStoreId(authUserId: string, authUserEmail: string) {
   }
 
   if (adminByUserId?.store_id) {
-    return adminByUserId.store_id as string;
+    const { data: storeByAdminId, error: storeByAdminIdError } = await supabase
+      .from('stores')
+      .select('id, access_expires_at, auto_renew, access_granted_days, active, suspended, status')
+      .eq('id', adminByUserId.store_id)
+      .maybeSingle();
+
+    if (storeByAdminIdError) {
+      throw new Error('Não foi possível localizar a loja do admin.');
+    }
+
+    return storeByAdminId ?? null;
   }
 
   if (normalizedEmail) {
@@ -80,13 +198,23 @@ async function resolveStoreId(authUserId: string, authUserEmail: string) {
     }
 
     if (adminByEmail?.store_id) {
-      return adminByEmail.store_id as string;
+      const { data: storeByAdminEmail, error: storeByAdminEmailError } = await supabase
+        .from('stores')
+        .select('id, access_expires_at, auto_renew, access_granted_days, active, suspended, status')
+        .eq('id', adminByEmail.store_id)
+        .maybeSingle();
+
+      if (storeByAdminEmailError) {
+        throw new Error('Não foi possível localizar a loja do admin.');
+      }
+
+      return storeByAdminEmail ?? null;
     }
   }
 
   const { data: storeByOwner, error: storeByOwnerError } = await supabase
     .from('stores')
-    .select('id')
+    .select('id, access_expires_at, auto_renew, access_granted_days, active, suspended, status')
     .eq('owner_user_id', authUserId)
     .order('created_at', { ascending: false })
     .limit(1)
@@ -96,7 +224,7 @@ async function resolveStoreId(authUserId: string, authUserEmail: string) {
     throw new Error('Não foi possível localizar a loja vinculada ao admin.');
   }
 
-  return storeByOwner?.id ?? null;
+  return storeByOwner ?? null;
 }
 
 async function loadAppUser(): Promise<AppUser | null> {
@@ -129,17 +257,21 @@ async function loadAppUser(): Promise<AppUser | null> {
   const profileEmail = normalizeEmail(profile?.email) || authUserEmail;
 
   let storeId: string | null = null;
+  let access: StoreAccessInfo | null = null;
 
   if (profileRole === 'admin') {
-    storeId = await resolveStoreId(authUserId, profileEmail);
+    const store = await resolveAdminStore(authUserId, profileEmail);
+    storeId = store?.id ? String(store.id) : null;
+    access = getStoreAccessInfo(store);
   }
 
   return {
     id: authUserId,
     email: profileEmail,
-    name: (profile?.name ?? '').trim(),
+    name: String(profile?.name ?? '').trim(),
     role: profileRole,
     storeId,
+    access,
   };
 }
 

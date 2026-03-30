@@ -39,6 +39,9 @@ type StoreData = {
   primaryButtonText: string;
   whatsappButtonText: string;
   themeMode: string;
+  active: boolean;
+  suspended: boolean;
+  accessExpiresAt: string | null;
 };
 
 type Product = {
@@ -52,7 +55,6 @@ type Product = {
 
 type SortType = 'recentes' | 'mais-caros' | 'mais-baratos' | 'nome';
 
-const MONEY_GREEN = '#22c55e';
 const MONEY_GREEN_DARK = '#052e16';
 
 function ensureUrl(value: string) {
@@ -76,6 +78,13 @@ function getInitials(name: string) {
     .slice(0, 2)
     .map((part) => part[0]?.toUpperCase())
     .join('');
+}
+
+function isStoreExpired(value?: string | null) {
+  if (!value) return true;
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return true;
+  return date.getTime() < Date.now();
 }
 
 function normalizeStore(row: any): StoreData | null {
@@ -103,6 +112,9 @@ function normalizeStore(row: any): StoreData | null {
     primaryButtonText: row.primary_button_text ?? 'Ver produtos',
     whatsappButtonText: row.whatsapp_button_text ?? 'Falar no WhatsApp',
     themeMode: row.theme_mode ?? 'dark',
+    active: Boolean(row.active),
+    suspended: Boolean(row.suspended),
+    accessExpiresAt: row.access_expires_at ?? null,
   };
 }
 
@@ -162,6 +174,36 @@ function ProductImage({
   );
 }
 
+function StoreUnavailable({ onBack }: { onBack: () => void }) {
+  return (
+    <div className="min-h-screen bg-black">
+      <div className="mx-auto flex min-h-screen max-w-3xl items-center justify-center px-4">
+        <div className="w-full rounded-[32px] border border-white/10 bg-white/[0.04] p-8 text-center">
+          <div className="mx-auto mb-5 flex h-20 w-20 items-center justify-center rounded-3xl border border-white/10 bg-black/20">
+            <StoreIcon className="h-10 w-10 text-zinc-500" />
+          </div>
+
+          <h1 className="text-3xl font-black text-white">Loja temporariamente indisponível</h1>
+          <p className="mt-3 text-zinc-400">
+            Esta loja está temporariamente indisponível no momento. Tente novamente mais tarde.
+          </p>
+
+          <div className="mt-6">
+            <Button
+              variant="outline"
+              className="rounded-2xl border-white/10 bg-black/20 text-white hover:bg-white/5"
+              onClick={onBack}
+            >
+              <ArrowLeft className="mr-2 h-4 w-4" />
+              Voltar
+            </Button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function LojaPublica() {
   const { username } = useParams();
   const navigate = useNavigate();
@@ -209,6 +251,11 @@ export default function LojaPublica() {
       }
 
       setStore(normalizedStore);
+
+      if (!normalizedStore.active || normalizedStore.suspended || isStoreExpired(normalizedStore.accessExpiresAt)) {
+        setProducts([]);
+        return;
+      }
 
       const { data: productRows, error: productsError } = await supabase
         .from('products')
@@ -414,6 +461,10 @@ export default function LojaPublica() {
     );
   }
 
+  if (!store.active || store.suspended || isStoreExpired(store.accessExpiresAt)) {
+    return <StoreUnavailable onBack={() => navigate('/')} />;
+  }
+
   const currentStore = store;
 
   return (
@@ -563,8 +614,7 @@ export default function LojaPublica() {
                     className="mt-3 max-w-3xl text-base leading-7"
                     style={{ color: currentStore.mutedTextColor }}
                   >
-                    Navegue pela vitrine, filtre mais rápido e abra o produto que mais combina com
-                    você.
+                    Navegue pela vitrine, filtre mais rápido e abra o produto que mais combina com você.
                   </p>
 
                   <div className="relative mt-5">
@@ -711,78 +761,58 @@ export default function LojaPublica() {
             className="max-h-[90vh] w-full max-w-5xl overflow-hidden rounded-[32px] border border-white/10 bg-[#050505] shadow-2xl"
             onClick={(e) => e.stopPropagation()}
           >
-            <div className="flex items-start justify-between gap-4 border-b border-white/10 px-5 py-5 md:px-6">
-              <div className="min-w-0">
-                <h3 className="truncate text-2xl font-black text-white">
-                  {selectedProduct.name}
-                </h3>
-                <p className="mt-1 truncate text-zinc-400">{currentStore.name}</p>
+            <div className="grid max-h-[90vh] overflow-auto md:grid-cols-2">
+              <div className="h-[320px] bg-black/20 md:h-full">
+                <ProductImage
+                  src={ensureUrl(selectedProduct.image)}
+                  alt={selectedProduct.name}
+                  eager
+                  className="h-full w-full object-cover"
+                />
               </div>
 
-              <button
-                type="button"
-                className="rounded-xl border border-white/10 bg-white/5 p-2 text-zinc-400 transition hover:text-white"
-                onClick={() => setSelectedProduct(null)}
-              >
-                <X className="h-5 w-5" />
-              </button>
-            </div>
+              <div className="p-6 md:p-8">
+                <div className="mb-6 flex items-start justify-between gap-4">
+                  <div>
+                    <h3 className="text-2xl font-black text-white">{selectedProduct.name}</h3>
+                    <p className="mt-2 text-2xl font-black text-emerald-400">
+                      {formatMoney(selectedProduct.priceValue)}
+                    </p>
+                  </div>
 
-            <div className="max-h-[calc(90vh-88px)] overflow-y-auto">
-              <div className="grid gap-0 lg:grid-cols-[1.05fr_0.95fr]">
-                <div className="h-[280px] bg-black/20 sm:h-[320px] lg:h-full">
-                  <ProductImage
-                    src={ensureUrl(selectedProduct.image)}
-                    alt={selectedProduct.name}
-                    className="h-full w-full object-cover"
-                  />
+                  <Button
+                    variant="ghost"
+                    className="shrink-0 rounded-2xl text-zinc-400 hover:bg-white/5 hover:text-white"
+                    onClick={() => setSelectedProduct(null)}
+                  >
+                    <X className="h-5 w-5" />
+                  </Button>
                 </div>
 
-                <div className="p-6 md:p-8">
-                  <div
-                    className="mb-4 inline-flex rounded-full px-3 py-1 text-xs font-semibold uppercase tracking-[0.14em]"
+                <p className="text-sm leading-7 text-zinc-400">
+                  {selectedProduct.description || 'Sem descrição disponível para este produto.'}
+                </p>
+
+                <div className="mt-8 flex flex-col gap-3 sm:flex-row">
+                  <Button
+                    className="flex-1 rounded-2xl font-bold"
                     style={{
-                      backgroundColor: `${currentStore.accentColor}22`,
-                      color: currentStore.accentColor,
-                      border: `1px solid ${currentStore.accentColor}33`,
+                      backgroundColor: currentStore.buttonBgColor,
+                      color: currentStore.buttonTextColor,
                     }}
+                    onClick={() => openProductAction(selectedProduct)}
                   >
-                    Produto em destaque
-                  </div>
+                    <ExternalLink className="mr-2 h-4 w-4" />
+                    Comprar agora
+                  </Button>
 
-                  <div
-                    className="mb-5 text-3xl font-black md:text-4xl"
-                    style={{ color: MONEY_GREEN }}
+                  <Button
+                    variant="outline"
+                    className="rounded-2xl border-white/10 bg-black/20 text-white hover:bg-white/5"
+                    onClick={() => setSelectedProduct(null)}
                   >
-                    {formatMoney(selectedProduct.priceValue)}
-                  </div>
-
-                  <p className="leading-7 text-zinc-300">
-                    {selectedProduct.description || 'Sem descrição disponível para este produto.'}
-                  </p>
-
-                  <div className="mt-6 flex flex-col gap-3 sm:flex-row">
-                    <Button
-                      className="rounded-2xl font-bold"
-                      style={{
-                        backgroundColor: currentStore.buttonBgColor,
-                        color: currentStore.buttonTextColor,
-                      }}
-                      onClick={() => openProductAction(selectedProduct)}
-                    >
-                      <ExternalLink className="mr-2 h-4 w-4" />
-                      Comprar agora
-                    </Button>
-
-                    <Button
-                      variant="outline"
-                      className="rounded-2xl border-white/10 bg-black/20 text-white hover:bg-white/5"
-                      onClick={handleWhatsApp}
-                    >
-                      <MessageCircle className="mr-2 h-4 w-4" />
-                      {currentStore.whatsappButtonText || 'Falar no WhatsApp'}
-                    </Button>
-                  </div>
+                    Fechar
+                  </Button>
                 </div>
               </div>
             </div>
