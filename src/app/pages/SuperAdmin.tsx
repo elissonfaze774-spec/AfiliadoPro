@@ -381,91 +381,118 @@ export default function SuperAdmin() {
   }, [loadOrdersForChart]);
 
   const handleCreate = async () => {
-    if (loading) return;
+  if (loading) return;
 
-    const name = form.name.trim();
-    const email = form.email.trim().toLowerCase();
-    const password = form.password.trim();
-    const loja = form.loja.trim();
-    const slug = generatedSlug;
+  const name = form.name.trim();
+  const email = form.email.trim().toLowerCase();
+  const password = form.password.trim();
+  const loja = form.loja.trim();
+  const slug = generatedSlug;
 
-    if (!name || !email || !password || !loja || !slug) {
-      setFeedback({
-        type: 'error',
-        message: 'Preencha todos os campos obrigatórios.',
-      });
-      return;
+  if (!name || !email || !password || !loja || !slug) {
+    setFeedback({
+      type: 'error',
+      message: 'Preencha todos os campos obrigatórios.',
+    });
+    return;
+  }
+
+  if (password.length < 6) {
+    setFeedback({
+      type: 'error',
+      message: 'A senha precisa ter pelo menos 6 caracteres.',
+    });
+    return;
+  }
+
+  setLoading(true);
+  setFeedback({ type: null, message: '' });
+
+  try {
+    const { data: sessionData, error: sessionError } = await supabase.auth.getSession();
+
+    if (sessionError || !sessionData.session) {
+      throw new Error('Sessão inválida. Faça login novamente.');
     }
 
-    if (password.length < 6) {
-      setFeedback({
-        type: 'error',
-        message: 'A senha precisa ter pelo menos 6 caracteres.',
-      });
-      return;
-    }
+    const expiresAt = sessionData.session.expires_at ?? 0;
+    const nowInSeconds = Math.floor(Date.now() / 1000);
 
-    setLoading(true);
-    setFeedback({ type: null, message: '' });
+    if (expiresAt && expiresAt <= nowInSeconds + 30) {
+      const { data: refreshed, error: refreshError } = await supabase.auth.refreshSession();
 
-    try {
-      const { data: sessionData, error: sessionError } = await supabase.auth.getSession();
-
-      if (sessionError || !sessionData.session) {
-        throw new Error('Sessão inválida. Faça login novamente.');
+      if (refreshError || !refreshed.session) {
+        throw new Error('Sua sessão expirou. Faça login novamente.');
       }
+    }
 
-      const expiresAt = sessionData.session.expires_at ?? 0;
-      const nowInSeconds = Math.floor(Date.now() / 1000);
+    const { data, error } = await supabase.functions.invoke('create-admin-store', {
+      body: {
+        adminName: name,
+        adminEmail: email,
+        adminPassword: password,
+        storeName: loja,
+        storeSlug: slug,
+        planName: 'iniciante',
+      },
+    });
 
-      if (expiresAt && expiresAt <= nowInSeconds + 30) {
-        const { data: refreshed, error: refreshError } = await supabase.auth.refreshSession();
+    if (error) {
+      const maybeError = error as {
+        message?: string;
+        context?: {
+          json?: () => Promise<any>;
+          text?: () => Promise<string>;
+        };
+      };
 
-        if (refreshError || !refreshed.session) {
-          throw new Error('Sua sessão expirou. Faça login novamente.');
+      let serverMessage = '';
+
+      try {
+        if (maybeError.context?.json) {
+          const payload = await maybeError.context.json();
+          serverMessage =
+            payload?.message ||
+            payload?.error ||
+            payload?.step ||
+            JSON.stringify(payload);
+        } else if (maybeError.context?.text) {
+          serverMessage = await maybeError.context.text();
         }
+      } catch {
+        serverMessage = '';
       }
 
-      const { data, error } = await supabase.functions.invoke('create-admin-store', {
-        body: {
-          adminName: name,
-          adminEmail: email,
-          adminPassword: password,
-          storeName: loja,
-          storeSlug: slug,
-          planName: 'iniciante',
-        },
-      });
-
-      if (error) {
-        throw new Error(error.message || 'Não foi possível criar o admin e a estrutura.');
-      }
-
-      const result = data as CreateAdminStoreResponse | null;
-
-      if (!result?.success) {
-        throw new Error(result?.message || 'Falha ao criar o admin e a estrutura.');
-      }
-
-      setFeedback({
-        type: 'success',
-        message: result.message || 'Admin e estrutura criados com sucesso.',
-      });
-
-      resetForm();
-      await loadDashboard();
-    } catch (err) {
-      const message =
-        err instanceof Error ? err.message : 'Erro inesperado ao criar admin e estrutura.';
-
-      setFeedback({
-        type: 'error',
-        message,
-      });
-    } finally {
-      setLoading(false);
+      throw new Error(
+        serverMessage || maybeError.message || 'Não foi possível criar o admin e a estrutura.',
+      );
     }
-  };
+
+    const result = data as CreateAdminStoreResponse | null;
+
+    if (!result?.success) {
+      throw new Error(result?.message || 'Falha ao criar o admin e a estrutura.');
+    }
+
+    setFeedback({
+      type: 'success',
+      message: result.message || 'Admin e estrutura criados com sucesso.',
+    });
+
+    resetForm();
+    await loadDashboard();
+  } catch (err) {
+    const message =
+      err instanceof Error ? err.message : 'Erro inesperado ao criar admin e estrutura.';
+
+    setFeedback({
+      type: 'error',
+      message,
+    });
+  } finally {
+    setLoading(false);
+  }
+};
 
   const handleLogoutRedirect = async (path: '/' | '/login') => {
     if (logoutLoading) return;
