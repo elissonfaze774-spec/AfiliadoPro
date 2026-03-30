@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { ChangeEvent, useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   AlertTriangle,
@@ -8,6 +8,7 @@ import {
   ExternalLink,
   Image as ImageIcon,
   Link as LinkIcon,
+  Loader2,
   MessageCircle,
   Palette,
   Phone,
@@ -15,7 +16,9 @@ import {
   Save,
   Sparkles,
   Store as StoreIcon,
+  Trash2,
   Type,
+  Upload,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { supabase } from '../../lib/supabase';
@@ -59,7 +62,18 @@ type Preset = {
   headerBgColor: string;
 };
 
-const DEFAULTS: Omit<SettingsForm, 'name' | 'slug' | 'whatsapp' | 'niche' | 'logoUrl' | 'bannerUrl' | 'description' | 'slogan'> = {
+type UploadedImageState = {
+  fileName: string;
+  publicUrl: string;
+};
+
+const STORAGE_BUCKET = 'store-images';
+const MAX_IMAGE_SIZE_MB = 5;
+
+const DEFAULTS: Omit<
+  SettingsForm,
+  'name' | 'slug' | 'whatsapp' | 'niche' | 'logoUrl' | 'bannerUrl' | 'description' | 'slogan'
+> = {
   primaryColor: '#052e16',
   secondaryColor: '#071b11',
   accentColor: '#10b981',
@@ -174,6 +188,28 @@ function normalizeColor(value: string, fallback: string) {
   return trimmed.startsWith('#') || trimmed.startsWith('rgb') ? trimmed : `#${trimmed}`;
 }
 
+function sanitizeFileName(fileName: string) {
+  return fileName
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^a-zA-Z0-9._-]/g, '-')
+    .replace(/-+/g, '-');
+}
+
+function extractFileName(value: string) {
+  const trimmed = String(value ?? '').trim();
+  if (!trimmed) return '';
+
+  try {
+    const url = new URL(trimmed);
+    const pathName = url.pathname.split('/').pop() || '';
+    return decodeURIComponent(pathName);
+  } catch {
+    const parts = trimmed.split('/');
+    return parts[parts.length - 1] || trimmed;
+  }
+}
+
 function buildInitialForm(store: ReturnType<typeof useApp>['store']): SettingsForm {
   return {
     name: store?.name || '',
@@ -229,6 +265,104 @@ function ColorField({
   );
 }
 
+function UploadField({
+  label,
+  value,
+  fileName,
+  previewUrl,
+  uploading,
+  onManualChange,
+  onFileChange,
+  onRemove,
+  helperText,
+}: {
+  label: string;
+  value: string;
+  fileName: string;
+  previewUrl: string;
+  uploading: boolean;
+  onManualChange: (value: string) => void;
+  onFileChange: (event: ChangeEvent<HTMLInputElement>) => void;
+  onRemove: () => void;
+  helperText: string;
+}) {
+  const inputId = label.replace(/\s+/g, '-').toLowerCase();
+
+  return (
+    <div className="rounded-[24px] border border-white/10 bg-black/20 p-4">
+      <div className="mb-4 flex items-center gap-2 text-sm font-medium text-white">
+        <ImageIcon className="h-4 w-4 text-emerald-400" />
+        {label}
+      </div>
+
+      <div className="grid gap-4 lg:grid-cols-[160px_1fr]">
+        <div className="overflow-hidden rounded-[24px] border border-white/10 bg-black/30">
+          <div className="flex h-36 items-center justify-center overflow-hidden">
+            {previewUrl ? (
+              <img src={previewUrl} alt={label} className="h-full w-full object-cover" />
+            ) : (
+              <div className="px-4 text-center text-sm text-zinc-500">
+                Nenhuma imagem selecionada
+              </div>
+            )}
+          </div>
+        </div>
+
+        <div className="space-y-3">
+          <div className="flex flex-wrap gap-3">
+            <label className="inline-flex cursor-pointer items-center rounded-2xl bg-gradient-to-r from-emerald-500 to-emerald-600 px-4 py-3 text-sm font-bold text-black transition hover:from-emerald-400 hover:to-emerald-500">
+              {uploading ? (
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+              ) : (
+                <Upload className="mr-2 h-4 w-4" />
+              )}
+              {uploading ? 'Enviando...' : 'Enviar imagem'}
+              <input
+                id={inputId}
+                type="file"
+                accept="image/*"
+                className="hidden"
+                onChange={onFileChange}
+                disabled={uploading}
+              />
+            </label>
+
+            <Button
+              type="button"
+              variant="outline"
+              className="rounded-2xl border-white/10 bg-black/20 text-white hover:bg-white/5"
+              onClick={onRemove}
+              disabled={uploading && !value}
+            >
+              <Trash2 className="mr-2 h-4 w-4" />
+              Limpar
+            </Button>
+          </div>
+
+          <input
+            value={value}
+            onChange={(e) => onManualChange(e.target.value)}
+            className="h-12 w-full rounded-2xl border border-white/10 bg-black/30 px-4 text-white outline-none transition focus:border-emerald-500"
+            placeholder="https://... ou nome do arquivo enviado"
+          />
+
+          <div className="rounded-2xl border border-white/10 bg-black/30 px-4 py-3 text-sm">
+            {fileName ? (
+              <p className="text-emerald-300">
+                Arquivo selecionado: <span className="font-semibold">{fileName}</span>
+              </p>
+            ) : (
+              <p className="text-zinc-500">Nenhum arquivo selecionado ainda.</p>
+            )}
+          </div>
+
+          <p className="text-xs text-zinc-500">{helperText}</p>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function ConfiguracoesLoja() {
   const navigate = useNavigate();
   const { store, products, refreshAppData } = useApp();
@@ -238,11 +372,34 @@ export default function ConfiguracoesLoja() {
   const [saving, setSaving] = useState(false);
   const [advancedColumnsMissing, setAdvancedColumnsMissing] = useState(false);
 
+  const [uploadingLogo, setUploadingLogo] = useState(false);
+  const [uploadingBanner, setUploadingBanner] = useState(false);
+
+  const [uploadedLogo, setUploadedLogo] = useState<UploadedImageState | null>(null);
+  const [uploadedBanner, setUploadedBanner] = useState<UploadedImageState | null>(null);
+
   useEffect(() => {
     if (!store) return;
+
     const next = buildInitialForm(store);
     setForm(next);
     setSavedSnapshot(JSON.stringify(next));
+    setUploadedLogo(
+      store?.logoUrl
+        ? {
+            fileName: extractFileName(store.logoUrl),
+            publicUrl: store.logoUrl,
+          }
+        : null,
+    );
+    setUploadedBanner(
+      store?.bannerUrl
+        ? {
+            fileName: extractFileName(store.bannerUrl),
+            publicUrl: store.bannerUrl,
+          }
+        : null,
+    );
   }, [store]);
 
   const dirty = useMemo(() => JSON.stringify(form) !== savedSnapshot, [form, savedSnapshot]);
@@ -253,6 +410,16 @@ export default function ConfiguracoesLoja() {
     if (typeof window === 'undefined') return `/loja/${previewSlug}`;
     return `${window.location.origin}/loja/${previewSlug}`;
   }, [previewSlug]);
+
+  const previewLogoUrl = useMemo(() => {
+    if (uploadedLogo?.publicUrl) return uploadedLogo.publicUrl;
+    return ensureUrl(form.logoUrl);
+  }, [form.logoUrl, uploadedLogo]);
+
+  const previewBannerUrl = useMemo(() => {
+    if (uploadedBanner?.publicUrl) return uploadedBanner.publicUrl;
+    return ensureUrl(form.bannerUrl);
+  }, [form.bannerUrl, uploadedBanner]);
 
   const previewPageStyle = useMemo(
     () => ({
@@ -346,6 +513,113 @@ export default function ConfiguracoesLoja() {
     }
   };
 
+  const uploadStoreImage = async (type: 'logo' | 'banner', file: File) => {
+    if (!store?.id) {
+      toast.error('Loja não encontrada.');
+      return null;
+    }
+
+    if (!file.type.startsWith('image/')) {
+      toast.error('Selecione apenas arquivos de imagem.');
+      return null;
+    }
+
+    const maxBytes = MAX_IMAGE_SIZE_MB * 1024 * 1024;
+    if (file.size > maxBytes) {
+      toast.error(`A imagem deve ter no máximo ${MAX_IMAGE_SIZE_MB}MB.`);
+      return null;
+    }
+
+    const safeName = sanitizeFileName(file.name);
+    const filePath = `${store.id}/${type}-${Date.now()}-${safeName}`;
+
+    const { error: uploadError } = await supabase.storage
+      .from(STORAGE_BUCKET)
+      .upload(filePath, file, {
+        cacheControl: '3600',
+        upsert: true,
+      });
+
+    if (uploadError) {
+      throw uploadError;
+    }
+
+    const { data } = supabase.storage.from(STORAGE_BUCKET).getPublicUrl(filePath);
+
+    return {
+      fileName: file.name,
+      publicUrl: data.publicUrl,
+    };
+  };
+
+  const handleLogoUpload = async (event: ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    event.target.value = '';
+
+    if (!file) return;
+
+    try {
+      setUploadingLogo(true);
+      const result = await uploadStoreImage('logo', file);
+
+      if (!result) return;
+
+      setUploadedLogo(result);
+      setForm((prev) => ({
+        ...prev,
+        logoUrl: result.fileName,
+      }));
+      toast.success('Foto da loja enviada com sucesso.');
+    } catch (error: any) {
+      console.error('Erro ao enviar logo:', error);
+      toast.error(error?.message || 'Não foi possível enviar a foto da loja.');
+    } finally {
+      setUploadingLogo(false);
+    }
+  };
+
+  const handleBannerUpload = async (event: ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    event.target.value = '';
+
+    if (!file) return;
+
+    try {
+      setUploadingBanner(true);
+      const result = await uploadStoreImage('banner', file);
+
+      if (!result) return;
+
+      setUploadedBanner(result);
+      setForm((prev) => ({
+        ...prev,
+        bannerUrl: result.fileName,
+      }));
+      toast.success('Banner enviado com sucesso.');
+    } catch (error: any) {
+      console.error('Erro ao enviar banner:', error);
+      toast.error(error?.message || 'Não foi possível enviar o banner.');
+    } finally {
+      setUploadingBanner(false);
+    }
+  };
+
+  const clearLogo = () => {
+    setUploadedLogo(null);
+    setForm((prev) => ({
+      ...prev,
+      logoUrl: '',
+    }));
+  };
+
+  const clearBanner = () => {
+    setUploadedBanner(null);
+    setForm((prev) => ({
+      ...prev,
+      bannerUrl: '',
+    }));
+  };
+
   const handleSave = async () => {
     if (!store?.id) {
       toast.error('Loja não encontrada.');
@@ -356,8 +630,8 @@ export default function ConfiguracoesLoja() {
     const normalizedSlug = slugify(form.slug || form.name);
     const normalizedWhatsapp = onlyDigits(form.whatsapp);
     const normalizedNiche = form.niche.trim().toLowerCase();
-    const normalizedLogo = ensureUrl(form.logoUrl);
-    const normalizedBanner = ensureUrl(form.bannerUrl);
+    const normalizedLogo = uploadedLogo?.publicUrl || ensureUrl(form.logoUrl);
+    const normalizedBanner = uploadedBanner?.publicUrl || ensureUrl(form.bannerUrl);
 
     if (!normalizedName) {
       toast.error('Informe o nome da loja.');
@@ -391,8 +665,8 @@ export default function ConfiguracoesLoja() {
         slug: normalizedSlug,
         whatsapp_number: normalizedWhatsapp,
         niche: normalizedNiche || null,
-        logo_url: normalizedLogo,
-        banner_url: normalizedBanner,
+        logo_url: normalizedLogo || null,
+        banner_url: normalizedBanner || null,
       };
 
       const { error: baseError } = await supabase
@@ -445,8 +719,8 @@ export default function ConfiguracoesLoja() {
         slug: normalizedSlug,
         whatsapp: normalizedWhatsapp,
         niche: normalizedNiche,
-        logoUrl: normalizedLogo,
-        bannerUrl: normalizedBanner,
+        logoUrl: uploadedLogo?.fileName || normalizedLogo,
+        bannerUrl: uploadedBanner?.fileName || normalizedBanner,
         description: form.description.trim(),
         slogan: form.slogan.trim(),
         primaryColor: normalizeColor(form.primaryColor, DEFAULTS.primaryColor),
@@ -651,31 +925,35 @@ export default function ConfiguracoesLoja() {
 
               <CardContent>
                 <div className="grid grid-cols-1 gap-5">
-                  <div>
-                    <label className="mb-2 flex items-center gap-2 text-sm font-medium text-white">
-                      <ImageIcon className="h-4 w-4 text-emerald-400" />
-                      URL da logo
-                    </label>
-                    <input
-                      value={form.logoUrl}
-                      onChange={(e) => handleChange('logoUrl', e.target.value)}
-                      className="h-12 w-full rounded-2xl border border-white/10 bg-black/30 px-4 text-white outline-none transition focus:border-emerald-500"
-                      placeholder="https://..."
-                    />
-                  </div>
+                  <UploadField
+                    label="Foto da loja"
+                    value={form.logoUrl}
+                    fileName={uploadedLogo?.fileName || ''}
+                    previewUrl={previewLogoUrl}
+                    uploading={uploadingLogo}
+                    onManualChange={(value) => {
+                      setUploadedLogo(null);
+                      handleChange('logoUrl', value);
+                    }}
+                    onFileChange={handleLogoUpload}
+                    onRemove={clearLogo}
+                    helperText="Para iniciantes, basta clicar em enviar imagem. Se preferir, também pode colar o link manualmente."
+                  />
 
-                  <div>
-                    <label className="mb-2 flex items-center gap-2 text-sm font-medium text-white">
-                      <ImageIcon className="h-4 w-4 text-emerald-400" />
-                      URL do banner
-                    </label>
-                    <input
-                      value={form.bannerUrl}
-                      onChange={(e) => handleChange('bannerUrl', e.target.value)}
-                      className="h-12 w-full rounded-2xl border border-white/10 bg-black/30 px-4 text-white outline-none transition focus:border-emerald-500"
-                      placeholder="https://..."
-                    />
-                  </div>
+                  <UploadField
+                    label="Banner da loja"
+                    value={form.bannerUrl}
+                    fileName={uploadedBanner?.fileName || ''}
+                    previewUrl={previewBannerUrl}
+                    uploading={uploadingBanner}
+                    onManualChange={(value) => {
+                      setUploadedBanner(null);
+                      handleChange('bannerUrl', value);
+                    }}
+                    onFileChange={handleBannerUpload}
+                    onRemove={clearBanner}
+                    helperText="O banner aparece no topo da loja pública. Você pode enviar pela galeria ou colar um link."
+                  />
 
                   <div className="grid grid-cols-1 gap-5 md:grid-cols-2">
                     <div>
@@ -759,6 +1037,7 @@ export default function ConfiguracoesLoja() {
                   <ColorField label="Texto do botão" value={form.buttonTextColor} onChange={(value) => handleChange('buttonTextColor', value)} />
                   <ColorField label="Texto principal" value={form.textColor} onChange={(value) => handleChange('textColor', value)} />
                   <ColorField label="Texto secundário" value={form.mutedTextColor} onChange={(value) => handleChange('mutedTextColor', value)} />
+
                   <div>
                     <label className="mb-2 block text-sm font-medium text-white">Fundo dos cards</label>
                     <input
@@ -768,6 +1047,7 @@ export default function ConfiguracoesLoja() {
                       placeholder="rgba(255,255,255,0.04)"
                     />
                   </div>
+
                   <div>
                     <label className="mb-2 block text-sm font-medium text-white">Fundo do header</label>
                     <input
@@ -810,111 +1090,69 @@ export default function ConfiguracoesLoja() {
                 >
                   <div className="relative">
                     <div className="relative h-44 overflow-hidden" style={previewHeaderStyle}>
-                      {form.bannerUrl ? (
+                      {previewBannerUrl ? (
                         <img
-                          src={ensureUrl(form.bannerUrl)}
+                          src={previewBannerUrl}
                           alt="Banner"
                           className="h-full w-full object-cover opacity-60"
                         />
                       ) : null}
 
-                      <div className="absolute inset-0 bg-gradient-to-t from-black via-black/20 to-transparent" />
+                      <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/30 to-transparent" />
+                    </div>
 
-                      <div className="absolute bottom-4 left-4 right-4 flex items-end gap-3">
-                        <div className="flex h-20 w-20 items-center justify-center overflow-hidden rounded-3xl border border-white/15 bg-black/30 text-2xl font-black text-white">
-                          {form.logoUrl ? (
-                            <img
-                              src={ensureUrl(form.logoUrl)}
-                              alt="Logo"
-                              className="h-full w-full object-cover"
-                            />
+                    <div className="relative -mt-16 px-5 pb-5">
+                      <div className="flex items-end gap-4">
+                        <div className="flex h-24 w-24 items-center justify-center overflow-hidden rounded-[28px] border border-white/15 bg-black/40 text-2xl font-black text-white shadow-2xl">
+                          {previewLogoUrl ? (
+                            <img src={previewLogoUrl} alt="Logo" className="h-full w-full object-cover" />
                           ) : (
                             <span>{getInitials(form.name || 'L')}</span>
                           )}
                         </div>
 
-                        <div className="min-w-0">
-                          <h3 className="truncate text-2xl font-black" style={{ color: form.textColor }}>
-                            {form.name || 'Nome da loja'}
-                          </h3>
-                          <p className="truncate text-sm" style={{ color: form.mutedTextColor }}>
+                        <div className="pb-2">
+                          <p className="text-xs font-semibold uppercase tracking-[0.16em]" style={{ color: form.accentColor }}>
                             @{previewSlug || 'minha-loja'}
                           </p>
+                          <h3 className="mt-1 text-2xl font-black" style={{ color: form.textColor }}>
+                            {form.name || 'Nome da loja'}
+                          </h3>
                         </div>
                       </div>
-                    </div>
 
-                    <div className="space-y-4 p-5">
-                      <div
-                        className="inline-flex rounded-full px-3 py-1 text-xs font-semibold"
-                        style={{
-                          backgroundColor: `${form.accentColor}22`,
-                          color: form.accentColor,
-                          border: `1px solid ${form.accentColor}33`,
-                        }}
-                      >
-                        {form.slogan || 'Loja personalizada'}
-                      </div>
-
-                      <p className="text-sm leading-6" style={{ color: form.textColor }}>
-                        {form.description || 'Sua descrição da loja aparecerá aqui no preview.'}
+                      <p className="mt-4 text-sm leading-6" style={{ color: form.mutedTextColor }}>
+                        {form.description || 'A descrição da sua loja aparecerá aqui no preview.'}
                       </p>
 
-                      <div className="grid grid-cols-2 gap-3">
-                        <div className="rounded-2xl p-4" style={previewCardStyle}>
-                          <p className="text-xs" style={{ color: form.mutedTextColor }}>Produtos</p>
-                          <p className="mt-1 text-xl font-black" style={{ color: form.textColor }}>
-                            {products.length}
-                          </p>
-                        </div>
+                      <div className="mt-5 flex flex-col gap-3 sm:flex-row">
+                        <button
+                          type="button"
+                          className="rounded-2xl px-5 py-3 text-sm font-bold"
+                          style={{
+                            backgroundColor: form.buttonBgColor,
+                            color: form.buttonTextColor,
+                          }}
+                        >
+                          {form.primaryButtonText || 'Ver produtos'}
+                        </button>
 
-                        <div className="rounded-2xl p-4" style={previewCardStyle}>
-                          <p className="text-xs" style={{ color: form.mutedTextColor }}>Nicho</p>
-                          <p className="mt-1 text-base font-bold capitalize" style={{ color: form.textColor }}>
-                            {form.niche || 'Sem nicho'}
-                          </p>
-                        </div>
+                        <button
+                          type="button"
+                          className="rounded-2xl border border-white/10 bg-black/20 px-5 py-3 text-sm font-bold text-white"
+                        >
+                          {form.whatsappButtonText || 'Falar no WhatsApp'}
+                        </button>
                       </div>
 
-                      <button
-                        type="button"
-                        className="w-full rounded-2xl px-4 py-4 text-base font-black transition"
-                        style={{
-                          backgroundColor: form.buttonBgColor,
-                          color: form.buttonTextColor,
-                        }}
-                      >
-                        {form.primaryButtonText || 'Ver produtos'}
-                      </button>
-
-                      <button
-                        type="button"
-                        className="w-full rounded-2xl border border-white/10 bg-black/20 px-4 py-4 text-base font-bold transition"
-                        style={{ color: form.textColor }}
-                      >
-                        {form.whatsappButtonText || 'Falar no WhatsApp'}
-                      </button>
-
-                      <div className="space-y-3 pt-2">
+                      <div className="mt-6 space-y-3">
                         {sampleProducts.map((product) => (
                           <div
                             key={product.id}
-                            className="flex items-center gap-3 rounded-2xl p-3"
+                            className="flex items-center gap-3 rounded-[24px] p-4"
                             style={previewCardStyle}
                           >
-                            <div className="h-14 w-14 overflow-hidden rounded-2xl bg-black/20">
-                              {product.image ? (
-                                <img
-                                  src={product.image}
-                                  alt={product.name}
-                                  className="h-full w-full object-cover"
-                                />
-                              ) : (
-                                <div className="flex h-full w-full items-center justify-center text-xs" style={{ color: form.mutedTextColor }}>
-                                  Sem img
-                                </div>
-                              )}
-                            </div>
+                            <div className="h-14 w-14 rounded-2xl bg-black/20" />
                             <div className="min-w-0 flex-1">
                               <p className="truncate text-sm font-bold" style={{ color: form.textColor }}>
                                 {product.name}
