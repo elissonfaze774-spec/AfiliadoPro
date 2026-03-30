@@ -16,6 +16,8 @@ type CreateAdminBody = {
   storeName: string
   storeSlug: string
   planName?: string
+  accessDays?: number
+  autoRenew?: boolean
 }
 
 class StepError extends Error {
@@ -75,7 +77,7 @@ function normalizeRole(value: unknown) {
 
 function isSuperAdminRole(value: unknown) {
   const role = normalizeRole(value)
-  return role === 'super_admin' || role === 'superadmin'
+  return role === 'super_admin' || role === 'superadmin' || role === 'super-admin'
 }
 
 function getErrorMessage(error: unknown, fallback: string) {
@@ -90,7 +92,7 @@ function getErrorMessage(error: unknown, fallback: string) {
 }
 
 async function linkAdminToStore(
-  adminClient: any,
+  adminClient: ReturnType<typeof createClient>,
   params: {
     userId: string
     storeId: string
@@ -113,9 +115,7 @@ async function linkAdminToStore(
   let lastError: unknown = null
 
   for (const payload of attempts) {
-    const { error } = await adminClient.from('admins').upsert(payload, {
-      onConflict: 'id',
-    })
+    const { error } = await adminClient.from('admins').upsert(payload)
 
     if (!error) return
 
@@ -169,7 +169,7 @@ serve(async (req: Request) => {
       )
     }
 
-    const userClient: any = createClient(supabaseUrl, anonKey, {
+    const userClient = createClient(supabaseUrl, anonKey, {
       global: {
         headers: {
           Authorization: `Bearer ${token}`,
@@ -181,7 +181,7 @@ serve(async (req: Request) => {
       },
     })
 
-    const adminClient: any = createClient(supabaseUrl, serviceRoleKey, {
+    const adminClient = createClient(supabaseUrl, serviceRoleKey, {
       auth: {
         autoRefreshToken: false,
         persistSession: false,
@@ -266,6 +266,8 @@ serve(async (req: Request) => {
       storeName: cleanText(bodyRaw.storeName),
       storeSlug: slugify(bodyRaw.storeSlug || bodyRaw.storeName),
       planName: normalizePlan(bodyRaw.planName),
+      accessDays: Number(bodyRaw.accessDays ?? 30),
+      autoRenew: Boolean(bodyRaw.autoRenew),
     }
 
     if (
@@ -291,6 +293,17 @@ serve(async (req: Request) => {
           success: false,
           step: 'password-validation',
           message: 'A senha precisa ter pelo menos 6 caracteres.',
+        },
+        400,
+      )
+    }
+
+    if (!Number.isFinite(body.accessDays) || Number(body.accessDays) <= 0) {
+      return json(
+        {
+          success: false,
+          step: 'access-days-validation',
+          message: 'A quantidade de dias de acesso é inválida.',
         },
         400,
       )
@@ -368,6 +381,10 @@ serve(async (req: Request) => {
       )
     }
 
+    const expiresAt = new Date(
+      Date.now() + Number(body.accessDays) * 24 * 60 * 60 * 1000,
+    ).toISOString()
+
     const { data: createdStore, error: createdStoreError } = await adminClient
       .from('stores')
       .insert({
@@ -376,6 +393,12 @@ serve(async (req: Request) => {
         status: 'active',
         plan: body.planName || 'iniciante',
         owner_user_id: createdUserId,
+        active: true,
+        suspended: false,
+        access_expires_at: expiresAt,
+        auto_renew: Boolean(body.autoRenew),
+        access_granted_days: Number(body.accessDays),
+        access_updated_at: new Date().toISOString(),
       })
       .select('id, slug')
       .single()
@@ -409,7 +432,7 @@ serve(async (req: Request) => {
     const serviceRoleKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
 
     if (supabaseUrl && serviceRoleKey) {
-      const adminClient: any = createClient(supabaseUrl, serviceRoleKey, {
+      const adminClient = createClient(supabaseUrl, serviceRoleKey, {
         auth: {
           autoRefreshToken: false,
           persistSession: false,

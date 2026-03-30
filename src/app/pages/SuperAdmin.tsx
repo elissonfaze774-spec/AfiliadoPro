@@ -10,11 +10,9 @@ import {
   Link2,
   Loader2,
   ShieldCheck,
-  AlertTriangle,
   X,
   RefreshCw,
   Search,
-  Filter,
   Crown,
   Wallet,
   ShoppingCart,
@@ -24,6 +22,8 @@ import {
   Trash2,
   ExternalLink,
   Settings2,
+  CalendarClock,
+  CalendarPlus2,
 } from 'lucide-react';
 import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
@@ -60,10 +60,16 @@ type StoreRow = {
   status: string | null;
   plan: string | null;
   created_at: string | null;
+  active: boolean | null;
+  suspended: boolean | null;
+  access_expires_at: string | null;
+  auto_renew: boolean | null;
+  access_granted_days: number | null;
 };
 
 type AdminRow = {
-  id: string;
+  id: string | null;
+  user_id?: string | null;
   store_id: string | null;
   email: string | null;
   created_at: string | null;
@@ -104,6 +110,11 @@ type StoreSummary = {
   revenue: number;
   productsCount: number;
   monthlyPlanPrice: number;
+  accessExpiresAt: string | null;
+  autoRenew: boolean;
+  accessGrantedDays: number;
+  active: boolean;
+  suspended: boolean;
 };
 
 type FeedbackState = {
@@ -116,6 +127,8 @@ type CredentialsModalState = {
   store: StoreSummary | null;
   email: string;
   password: string;
+  daysToAdd: string;
+  autoRenew: boolean;
 };
 
 const PLAN_LABELS: Record<string, string> = {
@@ -195,11 +208,72 @@ function getDayKey(dateLike: string | Date) {
   return date.toISOString().slice(0, 10);
 }
 
+function getAccessStatus(expiresAt?: string | null) {
+  if (!expiresAt) return 'expired';
+
+  const now = new Date();
+  const exp = new Date(expiresAt);
+
+  if (Number.isNaN(exp.getTime())) return 'expired';
+  if (exp.getTime() < now.getTime()) return 'expired';
+
+  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
+  const expDay = new Date(exp.getFullYear(), exp.getMonth(), exp.getDate()).getTime();
+  const days = Math.ceil((expDay - today) / 86400000);
+
+  if (expDay === today) return 'expires_today';
+  if (days <= 7) return 'expiring_soon';
+  return 'active';
+}
+
+function getAccessLabel(expiresAt?: string | null, autoRenew?: boolean) {
+  const status = getAccessStatus(expiresAt);
+
+  if (status === 'expired') {
+    return autoRenew ? 'Expirado • Renovação automática ativa' : 'Expirado';
+  }
+
+  if (status === 'expires_today') {
+    return autoRenew ? 'Vence hoje • Renovação automática ativa' : 'Vence hoje';
+  }
+
+  if (status === 'expiring_soon') {
+    const now = new Date();
+    const exp = new Date(expiresAt ?? '');
+    const today = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
+    const expDay = new Date(exp.getFullYear(), exp.getMonth(), exp.getDate()).getTime();
+    const days = Math.max(Math.ceil((expDay - today) / 86400000), 0);
+    return autoRenew
+      ? `Vence em ${days} dia(s) • Renovação automática ativa`
+      : `Vence em ${days} dia(s)`;
+  }
+
+  return autoRenew ? 'Acesso ativo • Renovação automática ativa' : 'Acesso ativo';
+}
+
+function getAccessClasses(expiresAt?: string | null) {
+  const status = getAccessStatus(expiresAt);
+
+  if (status === 'expired') {
+    return 'border-red-500/30 bg-red-500/10 text-red-300';
+  }
+
+  if (status === 'expires_today') {
+    return 'border-amber-500/30 bg-amber-500/10 text-amber-300';
+  }
+
+  if (status === 'expiring_soon') {
+    return 'border-yellow-500/30 bg-yellow-500/10 text-yellow-300';
+  }
+
+  return 'border-emerald-500/30 bg-emerald-500/10 text-emerald-300';
+}
+
 async function getFunctionErrorMessage(error: unknown, fallback: string) {
   const maybeError = error as {
     message?: string;
     context?: {
-      json?: () => Promise<any>;
+      json?: () => Promise<unknown>;
       text?: () => Promise<string>;
     };
   };
@@ -208,12 +282,12 @@ async function getFunctionErrorMessage(error: unknown, fallback: string) {
 
   try {
     if (maybeError?.context?.json) {
-      const payload = await maybeError.context.json();
-      serverMessage =
-        payload?.message ||
-        payload?.error ||
-        payload?.step ||
-        JSON.stringify(payload);
+      const payload = (await maybeError.context.json()) as {
+        message?: string;
+        error?: string;
+        step?: string;
+      };
+      serverMessage = payload?.message || payload?.error || payload?.step || '';
     } else if (maybeError?.context?.text) {
       serverMessage = await maybeError.context.text();
     }
@@ -233,6 +307,8 @@ export default function SuperAdmin() {
     password: '',
     loja: '',
     username: '',
+    accessDays: '30',
+    autoRenew: false,
   });
 
   const [loading, setLoading] = useState(false);
@@ -262,13 +338,15 @@ export default function SuperAdmin() {
     store: null,
     email: '',
     password: '',
+    daysToAdd: '30',
+    autoRenew: false,
   });
 
   const generatedSlug = useMemo(() => {
     return slugify(form.username || form.loja);
   }, [form.username, form.loja]);
 
-  const updateField = (field: keyof typeof form, value: string) => {
+  const updateField = (field: keyof typeof form, value: string | boolean) => {
     setForm((prev) => ({
       ...prev,
       [field]: value,
@@ -286,6 +364,8 @@ export default function SuperAdmin() {
       password: '',
       loja: '',
       username: '',
+      accessDays: '30',
+      autoRenew: false,
     });
   };
 
@@ -303,9 +383,11 @@ export default function SuperAdmin() {
       ] = await Promise.all([
         supabase
           .from('stores')
-          .select('id, store_name, slug, status, plan, created_at')
+          .select(
+            'id, store_name, slug, status, plan, created_at, active, suspended, access_expires_at, auto_renew, access_granted_days',
+          )
           .order('created_at', { ascending: false }),
-        supabase.from('admins').select('id, store_id, email, created_at'),
+        supabase.from('admins').select('id, user_id, store_id, email, created_at'),
         supabase.from('profiles').select('id, name, email, role, created_at'),
         supabase.from('orders').select('id, store_id, total, created_at'),
         supabase.from('products').select('id, store_id, created_at'),
@@ -329,6 +411,7 @@ export default function SuperAdmin() {
       const nextPlansMap = Object.fromEntries(planRows.map((plan) => [plan.id, plan]));
       setPlansMap(nextPlansMap);
 
+      const profileById = new Map(profileRows.map((profile) => [profile.id, profile]));
       const profileByEmail = new Map(
         profileRows
           .filter((profile) => normalizeText(profile.email))
@@ -365,8 +448,12 @@ export default function SuperAdmin() {
       const summaries: StoreSummary[] = storeRows.map((store) => {
         const storeAdmins = adminsByStore.get(store.id) ?? [];
         const mainAdmin = storeAdmins[0];
+        const linkedUserId = normalizeText(mainAdmin?.id) || normalizeText(mainAdmin?.user_id);
         const mainAdminEmail = normalizeText(mainAdmin?.email).toLowerCase();
-        const profile = mainAdminEmail ? profileByEmail.get(mainAdminEmail) : undefined;
+        const profile =
+          (linkedUserId ? profileById.get(linkedUserId) : undefined) ||
+          (mainAdminEmail ? profileByEmail.get(mainAdminEmail) : undefined);
+
         const storeOrders = ordersByStore.get(store.id) ?? [];
         const storeProducts = productsByStore.get(store.id) ?? [];
         const plan = normalizePlan(store.plan);
@@ -378,13 +465,18 @@ export default function SuperAdmin() {
           status: normalizeStatus(store.status),
           plan,
           createdAt: store.created_at,
-          adminId: normalizeText(mainAdmin?.id),
-          adminEmail: normalizeText(mainAdmin?.email) || '—',
+          adminId: linkedUserId,
+          adminEmail: normalizeText(mainAdmin?.email) || normalizeText(profile?.email) || '—',
           adminName: normalizeText(profile?.name) || '—',
           ordersCount: storeOrders.length,
           revenue: storeOrders.reduce((sum, order) => sum + Number(order.total ?? 0), 0),
           productsCount: storeProducts.length,
           monthlyPlanPrice: getPlanPrice(plan, nextPlansMap),
+          accessExpiresAt: store.access_expires_at ?? null,
+          autoRenew: Boolean(store.auto_renew),
+          accessGrantedDays: Number(store.access_granted_days ?? 0),
+          active: Boolean(store.active),
+          suspended: Boolean(store.suspended),
         };
       });
 
@@ -438,6 +530,7 @@ export default function SuperAdmin() {
     const password = form.password.trim();
     const loja = form.loja.trim();
     const slug = generatedSlug;
+    const accessDays = Number(form.accessDays || 0);
 
     if (!name || !email || !password || !loja || !slug) {
       setFeedback({
@@ -455,27 +548,18 @@ export default function SuperAdmin() {
       return;
     }
 
+    if (!Number.isFinite(accessDays) || accessDays <= 0) {
+      setFeedback({
+        type: 'error',
+        message: 'Informe uma quantidade válida de dias de acesso.',
+      });
+      return;
+    }
+
     setLoading(true);
     setFeedback({ type: null, message: '' });
 
     try {
-      const { data: sessionData, error: sessionError } = await supabase.auth.getSession();
-
-      if (sessionError || !sessionData.session) {
-        throw new Error('Sessão inválida. Faça login novamente.');
-      }
-
-      const expiresAt = sessionData.session.expires_at ?? 0;
-      const nowInSeconds = Math.floor(Date.now() / 1000);
-
-      if (expiresAt && expiresAt <= nowInSeconds + 30) {
-        const { data: refreshed, error: refreshError } = await supabase.auth.refreshSession();
-
-        if (refreshError || !refreshed.session) {
-          throw new Error('Sua sessão expirou. Faça login novamente.');
-        }
-      }
-
       const { data, error } = await supabase.functions.invoke('create-admin-store', {
         body: {
           adminName: name,
@@ -484,6 +568,8 @@ export default function SuperAdmin() {
           storeName: loja,
           storeSlug: slug,
           planName: 'iniciante',
+          accessDays,
+          autoRenew: form.autoRenew,
         },
       });
 
@@ -538,14 +624,25 @@ export default function SuperAdmin() {
 
   const handleUpdateStoreField = async (
     storeId: string,
-    payload: Partial<Pick<StoreRow, 'status' | 'plan'>>,
+    payload: Partial<Pick<StoreRow, 'status'>>,
     successMessage: string,
   ) => {
     setActionLoading(storeId);
     setFeedback({ type: null, message: '' });
 
     try {
-      const { error } = await supabase.from('stores').update(payload).eq('id', storeId);
+      const nextStatus = payload.status ?? 'active';
+      const nextSuspended = nextStatus === 'suspended';
+      const nextActive = nextStatus !== 'inactive';
+
+      const { error } = await supabase
+        .from('stores')
+        .update({
+          status: nextStatus,
+          suspended: nextSuspended,
+          active: nextActive,
+        })
+        .eq('id', storeId);
 
       if (error) throw error;
 
@@ -574,18 +671,22 @@ export default function SuperAdmin() {
       store,
       email: store.adminEmail === '—' ? '' : store.adminEmail,
       password: '',
+      daysToAdd: '30',
+      autoRenew: store.autoRenew,
     });
     setFeedback({ type: null, message: '' });
   };
 
   const closeCredentialsModal = () => {
-    if (actionLoading === 'save-credentials') return;
+    if (actionLoading?.startsWith('modal-')) return;
 
     setCredentialsModal({
       open: false,
       store: null,
       email: '',
       password: '',
+      daysToAdd: '30',
+      autoRenew: false,
     });
   };
 
@@ -612,7 +713,7 @@ export default function SuperAdmin() {
       return;
     }
 
-    setActionLoading('save-credentials');
+    setActionLoading('modal-save-credentials');
     setFeedback({ type: null, message: '' });
 
     try {
@@ -645,8 +746,8 @@ export default function SuperAdmin() {
         message: result.message || 'Credenciais do admin atualizadas com sucesso.',
       });
 
-      closeCredentialsModal();
       await loadDashboard();
+      closeCredentialsModal();
     } catch (error) {
       const message =
         error instanceof Error ? error.message : 'Não foi possível atualizar as credenciais do admin.';
@@ -660,9 +761,113 @@ export default function SuperAdmin() {
     }
   };
 
+  const handleAddAccessDays = async () => {
+    const store = credentialsModal.store;
+    if (!store) return;
+
+    const daysToAdd = Number(credentialsModal.daysToAdd || 0);
+
+    if (!Number.isFinite(daysToAdd) || daysToAdd <= 0) {
+      setFeedback({
+        type: 'error',
+        message: 'Informe uma quantidade válida de dias.',
+      });
+      return;
+    }
+
+    setActionLoading('modal-add-days');
+    setFeedback({ type: null, message: '' });
+
+    try {
+      const { data, error } = await supabase.functions.invoke('manage-admin-store', {
+        body: {
+          action: 'add_access_days',
+          storeId: store.id,
+          daysToAdd,
+        },
+      });
+
+      if (error) {
+        throw new Error(
+          await getFunctionErrorMessage(error, 'Não foi possível adicionar dias de acesso.'),
+        );
+      }
+
+      const result = data as ManageAdminResponse | null;
+
+      if (!result?.success) {
+        throw new Error(result?.message || 'Não foi possível adicionar dias de acesso.');
+      }
+
+      setFeedback({
+        type: 'success',
+        message: result.message || 'Dias de acesso adicionados com sucesso.',
+      });
+
+      await loadDashboard();
+    } catch (error) {
+      const message =
+        error instanceof Error ? error.message : 'Não foi possível adicionar dias de acesso.';
+
+      setFeedback({
+        type: 'error',
+        message,
+      });
+    } finally {
+      setActionLoading(null);
+    }
+  };
+
+  const handleToggleAutoRenew = async () => {
+    const store = credentialsModal.store;
+    if (!store) return;
+
+    setActionLoading('modal-auto-renew');
+    setFeedback({ type: null, message: '' });
+
+    try {
+      const { data, error } = await supabase.functions.invoke('manage-admin-store', {
+        body: {
+          action: 'set_auto_renew',
+          storeId: store.id,
+          autoRenew: credentialsModal.autoRenew,
+        },
+      });
+
+      if (error) {
+        throw new Error(
+          await getFunctionErrorMessage(error, 'Não foi possível atualizar a renovação automática.'),
+        );
+      }
+
+      const result = data as ManageAdminResponse | null;
+
+      if (!result?.success) {
+        throw new Error(result?.message || 'Não foi possível atualizar a renovação automática.');
+      }
+
+      setFeedback({
+        type: 'success',
+        message: result.message || 'Renovação automática atualizada com sucesso.',
+      });
+
+      await loadDashboard();
+    } catch (error) {
+      const message =
+        error instanceof Error ? error.message : 'Não foi possível atualizar a renovação automática.';
+
+      setFeedback({
+        type: 'error',
+        message,
+      });
+    } finally {
+      setActionLoading(null);
+    }
+  };
+
   const handleDeleteStructure = async (store: StoreSummary) => {
     const confirmed = window.confirm(
-      `Tem certeza que deseja excluir a estrutura "${store.name}"?\n\nEssa ação remove loja, pedidos, produtos, categorias, cupons e também o login do admin vinculado.`,
+      `Tem certeza que deseja excluir a estrutura "${store.name}"?\n\nEssa ação remove loja, pedidos, produtos e também o login do admin vinculado.`,
     );
 
     if (!confirmed) return;
@@ -742,7 +947,6 @@ export default function SuperAdmin() {
   const totalAdmins = stores.filter((store) => store.adminEmail !== '—').length;
   const totalOrders = stores.reduce((sum, store) => sum + store.ordersCount, 0);
   const totalRevenue = stores.reduce((sum, store) => sum + store.revenue, 0);
-  const totalProducts = stores.reduce((sum, store) => sum + store.productsCount, 0);
   const averageTicket = totalOrders > 0 ? totalRevenue / totalOrders : 0;
   const recurringRevenue = stores.reduce((sum, store) => sum + store.monthlyPlanPrice, 0);
   const activeStores = stores.filter((store) => store.status === 'active').length;
@@ -795,8 +999,8 @@ export default function SuperAdmin() {
             </h1>
 
             <p className="mt-3 text-sm leading-7 text-zinc-400 md:text-base">
-              Painel central de operação do AfiliadoPRO com métricas reais, gestão de estruturas,
-              planos, admins, faturamento e ações rápidas.
+              Painel central de operação do AfiliadoPRO com métricas, gestão de admins,
+              controle de acesso e ações rápidas.
             </p>
           </div>
 
@@ -821,6 +1025,18 @@ export default function SuperAdmin() {
             </Button>
           </div>
         </div>
+
+        {feedback.type ? (
+          <div
+            className={`mb-6 rounded-3xl border px-5 py-4 text-sm ${
+              feedback.type === 'success'
+                ? 'border-emerald-500/20 bg-emerald-500/10 text-emerald-200'
+                : 'border-red-500/20 bg-red-500/10 text-red-200'
+            }`}
+          >
+            {feedback.message}
+          </div>
+        ) : null}
 
         <div className="mb-6 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
           <Card className="border border-emerald-500/10 bg-black/55 backdrop-blur-xl">
@@ -876,7 +1092,117 @@ export default function SuperAdmin() {
           </Card>
         </div>
 
-        <div className="mb-6 grid gap-4 xl:grid-cols-[1.25fr_0.75fr]">
+        <div className="mb-6 grid gap-6 xl:grid-cols-[1fr_1fr]">
+          <Card className="border border-emerald-500/10 bg-black/55 backdrop-blur-xl">
+            <CardHeader className="border-b border-white/5">
+              <CardTitle className="flex items-center gap-2 text-white">
+                <Plus className="h-5 w-5 text-emerald-400" />
+                Criar admin + estrutura
+              </CardTitle>
+            </CardHeader>
+
+            <CardContent className="grid gap-4 p-5 md:grid-cols-2">
+              <div className="md:col-span-2">
+                <Label className="text-zinc-300">Nome do admin</Label>
+                <Input
+                  value={form.name}
+                  onChange={(e) => updateField('name', e.target.value)}
+                  className="mt-2 h-12 rounded-2xl border-white/10 bg-white/5 text-white"
+                  placeholder="Nome completo"
+                />
+              </div>
+
+              <div>
+                <Label className="text-zinc-300">Email</Label>
+                <Input
+                  value={form.email}
+                  onChange={(e) => updateField('email', e.target.value)}
+                  className="mt-2 h-12 rounded-2xl border-white/10 bg-white/5 text-white"
+                  placeholder="email@exemplo.com"
+                />
+              </div>
+
+              <div>
+                <Label className="text-zinc-300">Senha</Label>
+                <Input
+                  type="password"
+                  value={form.password}
+                  onChange={(e) => updateField('password', e.target.value)}
+                  className="mt-2 h-12 rounded-2xl border-white/10 bg-white/5 text-white"
+                  placeholder="Mínimo 6 caracteres"
+                />
+              </div>
+
+              <div>
+                <Label className="text-zinc-300">Nome da estrutura</Label>
+                <Input
+                  value={form.loja}
+                  onChange={(e) => updateField('loja', e.target.value)}
+                  className="mt-2 h-12 rounded-2xl border-white/10 bg-white/5 text-white"
+                  placeholder="Nome da estrutura"
+                />
+              </div>
+
+              <div>
+                <Label className="text-zinc-300">Link da estrutura</Label>
+                <Input
+                  value={form.username}
+                  onChange={(e) => updateField('username', e.target.value)}
+                  className="mt-2 h-12 rounded-2xl border-white/10 bg-white/5 text-white"
+                  placeholder={generatedSlug || 'slug-da-loja'}
+                />
+              </div>
+
+              <div>
+                <Label className="text-zinc-300">Dias de acesso</Label>
+                <Input
+                  type="number"
+                  min="1"
+                  value={form.accessDays}
+                  onChange={(e) => updateField('accessDays', e.target.value)}
+                  className="mt-2 h-12 rounded-2xl border-white/10 bg-white/5 text-white"
+                  placeholder="30"
+                />
+              </div>
+
+              <div className="flex items-end">
+                <label className="flex h-12 w-full items-center gap-3 rounded-2xl border border-white/10 bg-white/5 px-4 text-sm text-white">
+                  <input
+                    type="checkbox"
+                    checked={form.autoRenew}
+                    onChange={(e) => updateField('autoRenew', e.target.checked)}
+                  />
+                  Renovação automática
+                </label>
+              </div>
+
+              <div className="md:col-span-2">
+                <div className="mb-3 flex items-center gap-2 text-xs text-zinc-500">
+                  <Link2 className="h-4 w-4" />
+                  Slug gerado: <span className="font-semibold text-zinc-300">{generatedSlug || '—'}</span>
+                </div>
+
+                <Button
+                  onClick={() => void handleCreate()}
+                  disabled={loading}
+                  className="h-12 w-full rounded-2xl bg-emerald-500 text-base font-bold text-black hover:bg-emerald-400"
+                >
+                  {loading ? (
+                    <>
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                      Criando...
+                    </>
+                  ) : (
+                    <>
+                      <Plus className="mr-2 h-4 w-4" />
+                      Criar admin e estrutura
+                    </>
+                  )}
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+
           <Card className="border border-emerald-500/10 bg-black/55 backdrop-blur-xl">
             <CardHeader className="border-b border-white/5">
               <CardTitle className="flex items-center gap-2 text-white">
@@ -918,241 +1244,64 @@ export default function SuperAdmin() {
               </div>
             </CardContent>
           </Card>
-
-          <Card className="border border-emerald-500/10 bg-black/55 backdrop-blur-xl">
-            <CardHeader className="border-b border-white/5">
-              <CardTitle className="flex items-center gap-2 text-white">
-                <Crown className="h-5 w-5 text-emerald-400" />
-                Resumo operacional
-              </CardTitle>
-            </CardHeader>
-
-            <CardContent className="grid gap-4 p-5">
-              <div className="rounded-2xl border border-white/10 bg-white/5 p-4">
-                <p className="text-sm text-zinc-400">Produtos cadastrados</p>
-                <p className="mt-1 text-2xl font-black text-white">{totalProducts}</p>
-              </div>
-
-              <div className="rounded-2xl border border-white/10 bg-white/5 p-4">
-                <p className="text-sm text-zinc-400">Plano Simples</p>
-                <p className="mt-1 text-2xl font-black text-white">
-                  {formatMoney(Number(plansMap.iniciante?.price ?? 59.9))}
-                </p>
-              </div>
-
-              <div className="rounded-2xl border border-white/10 bg-white/5 p-4">
-                <p className="text-sm text-zinc-400">Plano Pro</p>
-                <p className="mt-1 text-2xl font-black text-white">
-                  {formatMoney(Number(plansMap.pro?.price ?? 99.9))}
-                </p>
-              </div>
-
-              <div className="rounded-2xl border border-white/10 bg-white/5 p-4">
-                <p className="text-sm text-zinc-400">Plano Premium</p>
-                <p className="mt-1 text-2xl font-black text-white">
-                  {formatMoney(Number(plansMap.premium?.price ?? 149.9))}
-                </p>
-              </div>
-            </CardContent>
-          </Card>
         </div>
 
-        <Card className="mb-6 border border-emerald-500/10 bg-black/55 shadow-[0_20px_60px_rgba(0,0,0,0.45)] backdrop-blur-xl">
-          <CardHeader className="border-b border-white/5">
-            <CardTitle className="text-xl font-black text-white">Criar novo admin</CardTitle>
-          </CardHeader>
-
-          <CardContent className="space-y-6 pt-6">
-            <div className="grid gap-4 md:grid-cols-2">
-              <div className="space-y-2">
-                <Label className="text-zinc-200">Nome do cliente</Label>
-                <div className="relative">
-                  <User className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-zinc-500" />
-                  <Input
-                    className="h-12 rounded-2xl border border-white/10 bg-white/5 pl-10 text-white placeholder:text-zinc-500 focus-visible:ring-1 focus-visible:ring-emerald-500"
-                    placeholder="Nome do cliente"
-                    value={form.name}
-                    onChange={(e) => updateField('name', e.target.value)}
-                  />
-                </div>
-              </div>
-
-              <div className="space-y-2">
-                <Label className="text-zinc-200">Nome da estrutura</Label>
-                <div className="relative">
-                  <Store className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-zinc-500" />
-                  <Input
-                    className="h-12 rounded-2xl border border-white/10 bg-white/5 pl-10 text-white placeholder:text-zinc-500 focus-visible:ring-1 focus-visible:ring-emerald-500"
-                    placeholder="Nome da estrutura"
-                    value={form.loja}
-                    onChange={(e) => updateField('loja', e.target.value)}
-                  />
-                </div>
-              </div>
-
-              <div className="space-y-2">
-                <Label className="text-zinc-200">Email do admin</Label>
-                <div className="relative">
-                  <Mail className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-zinc-500" />
-                  <Input
-                    type="email"
-                    className="h-12 rounded-2xl border border-white/10 bg-white/5 pl-10 text-white placeholder:text-zinc-500 focus-visible:ring-1 focus-visible:ring-emerald-500"
-                    placeholder="email@exemplo.com"
-                    value={form.email}
-                    onChange={(e) => updateField('email', e.target.value)}
-                  />
-                </div>
-              </div>
-
-              <div className="space-y-2">
-                <Label className="text-zinc-200">Senha inicial</Label>
-                <div className="relative">
-                  <Lock className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-zinc-500" />
-                  <Input
-                    type="password"
-                    className="h-12 rounded-2xl border border-white/10 bg-white/5 pl-10 text-white placeholder:text-zinc-500 focus-visible:ring-1 focus-visible:ring-emerald-500"
-                    placeholder="Senha inicial"
-                    value={form.password}
-                    onChange={(e) => updateField('password', e.target.value)}
-                  />
-                </div>
-              </div>
-
-              <div className="space-y-2 md:col-span-2">
-                <Label className="text-zinc-200">Link da estrutura</Label>
-                <div className="relative">
-                  <Link2 className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-zinc-500" />
-                  <Input
-                    className="h-12 rounded-2xl border border-white/10 bg-white/5 pl-10 text-white placeholder:text-zinc-500 focus-visible:ring-1 focus-visible:ring-emerald-500"
-                    placeholder="minha-estrutura"
-                    value={form.username}
-                    onChange={(e) => updateField('username', e.target.value)}
-                  />
-                </div>
-                <p className="text-xs text-zinc-500">
-                  Link final:{' '}
-                  <span className="font-medium text-emerald-300">
-                    {generatedSlug || 'minha-estrutura'}
-                  </span>
-                </p>
-              </div>
-            </div>
-
-            {feedback.type && (
-              <div
-                className={[
-                  'rounded-2xl border px-4 py-3 text-sm',
-                  feedback.type === 'success'
-                    ? 'border-emerald-500/30 bg-emerald-500/10 text-emerald-300'
-                    : 'border-red-500/30 bg-red-500/10 text-red-300',
-                ].join(' ')}
-              >
-                {feedback.message}
-              </div>
-            )}
-
-            <Button
-              className="h-12 w-full rounded-2xl bg-emerald-500 font-bold text-black shadow-[0_10px_30px_rgba(34,197,94,0.28)] transition hover:bg-emerald-400 disabled:opacity-70"
-              onClick={() => void handleCreate()}
-              disabled={loading}
-            >
-              {loading ? (
-                <>
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  Criando admin + estrutura...
-                </>
-              ) : (
-                <>
-                  <Plus className="mr-2 h-4 w-4" />
-                  Criar admin + estrutura
-                </>
-              )}
-            </Button>
-          </CardContent>
-        </Card>
-
-        <Card className="border border-emerald-500/10 bg-black/55 shadow-[0_20px_60px_rgba(0,0,0,0.45)] backdrop-blur-xl">
+        <Card className="border border-emerald-500/10 bg-black/55 backdrop-blur-xl">
           <CardHeader className="border-b border-white/5">
             <div className="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
-              <CardTitle className="text-xl font-black text-white">
-                Gestão completa das estruturas
+              <CardTitle className="flex items-center gap-2 text-white">
+                <Crown className="h-5 w-5 text-emerald-400" />
+                Estruturas criadas
               </CardTitle>
 
-              <div className="grid gap-3 md:grid-cols-4">
+              <div className="grid gap-3 md:grid-cols-4 xl:w-[860px]">
                 <div className="relative">
                   <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-zinc-500" />
                   <Input
-                    className="h-11 rounded-2xl border border-white/10 bg-white/5 pl-10 text-white placeholder:text-zinc-500"
-                    placeholder="Buscar loja, admin ou slug"
                     value={search}
                     onChange={(e) => setSearch(e.target.value)}
+                    className="h-11 rounded-2xl border-white/10 bg-white/5 pl-10 text-white"
+                    placeholder="Buscar..."
                   />
                 </div>
 
-                <div className="relative">
-                  <Filter className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-zinc-500" />
-                  <select
-                    className="h-11 w-full rounded-2xl border border-white/10 bg-white/5 pl-10 pr-4 text-sm text-white outline-none"
-                    value={statusFilter}
-                    onChange={(e) =>
-                      setStatusFilter(e.target.value as 'all' | 'active' | 'suspended' | 'inactive')
-                    }
-                  >
-                    <option value="all" className="bg-black text-white">
-                      Todos status
-                    </option>
-                    <option value="active" className="bg-black text-white">
-                      Ativas
-                    </option>
-                    <option value="suspended" className="bg-black text-white">
-                      Suspensas
-                    </option>
-                    <option value="inactive" className="bg-black text-white">
-                      Inativas
-                    </option>
-                  </select>
-                </div>
+                <select
+                  className="h-11 rounded-2xl border border-white/10 bg-white/5 px-4 text-sm text-white outline-none"
+                  value={statusFilter}
+                  onChange={(e) =>
+                    setStatusFilter(e.target.value as 'all' | 'active' | 'suspended' | 'inactive')
+                  }
+                >
+                  <option value="all" className="bg-black text-white">Todos status</option>
+                  <option value="active" className="bg-black text-white">Ativas</option>
+                  <option value="suspended" className="bg-black text-white">Suspensas</option>
+                  <option value="inactive" className="bg-black text-white">Inativas</option>
+                </select>
 
                 <select
-                  className="h-11 w-full rounded-2xl border border-white/10 bg-white/5 px-4 text-sm text-white outline-none"
+                  className="h-11 rounded-2xl border border-white/10 bg-white/5 px-4 text-sm text-white outline-none"
                   value={planFilter}
                   onChange={(e) =>
                     setPlanFilter(e.target.value as 'all' | 'iniciante' | 'pro' | 'premium')
                   }
                 >
-                  <option value="all" className="bg-black text-white">
-                    Todos planos
-                  </option>
-                  <option value="iniciante" className="bg-black text-white">
-                    Simples
-                  </option>
-                  <option value="pro" className="bg-black text-white">
-                    Pro
-                  </option>
-                  <option value="premium" className="bg-black text-white">
-                    Premium
-                  </option>
+                  <option value="all" className="bg-black text-white">Todos planos</option>
+                  <option value="iniciante" className="bg-black text-white">Simples</option>
+                  <option value="pro" className="bg-black text-white">Pro</option>
+                  <option value="premium" className="bg-black text-white">Premium</option>
                 </select>
 
                 <select
-                  className="h-11 w-full rounded-2xl border border-white/10 bg-white/5 px-4 text-sm text-white outline-none"
+                  className="h-11 rounded-2xl border border-white/10 bg-white/5 px-4 text-sm text-white outline-none"
                   value={sortBy}
                   onChange={(e) =>
                     setSortBy(e.target.value as 'revenue' | 'orders' | 'name' | 'createdAt')
                   }
                 >
-                  <option value="orders" className="bg-black text-white">
-                    Ordenar por pedidos
-                  </option>
-                  <option value="revenue" className="bg-black text-white">
-                    Ordenar por faturamento
-                  </option>
-                  <option value="name" className="bg-black text-white">
-                    Ordenar por nome
-                  </option>
-                  <option value="createdAt" className="bg-black text-white">
-                    Ordenar por criação
-                  </option>
+                  <option value="orders" className="bg-black text-white">Ordenar por pedidos</option>
+                  <option value="revenue" className="bg-black text-white">Ordenar por faturamento</option>
+                  <option value="name" className="bg-black text-white">Ordenar por nome</option>
+                  <option value="createdAt" className="bg-black text-white">Ordenar por criação</option>
                 </select>
               </div>
             </div>
@@ -1160,59 +1309,56 @@ export default function SuperAdmin() {
 
           <CardContent className="p-5">
             {dashboardLoading ? (
-              <div className="flex min-h-[240px] items-center justify-center rounded-3xl border border-white/10 bg-white/5">
-                <div className="flex items-center gap-3 text-zinc-300">
-                  <Loader2 className="h-5 w-5 animate-spin" />
-                  Carregando dados do Super Admin...
-                </div>
+              <div className="flex items-center justify-center py-16 text-zinc-400">
+                <Loader2 className="mr-2 h-5 w-5 animate-spin" />
+                Carregando...
               </div>
             ) : filteredStores.length === 0 ? (
-              <div className="rounded-3xl border border-dashed border-white/10 bg-white/5 p-10 text-center">
-                <p className="text-lg font-bold text-white">Nenhuma estrutura encontrada</p>
-                <p className="mt-2 text-sm text-zinc-400">
-                  Ajuste os filtros ou crie uma nova estrutura acima.
-                </p>
+              <div className="py-16 text-center text-zinc-400">
+                Nenhuma estrutura encontrada.
               </div>
             ) : (
-              <div className="grid gap-4">
+              <div className="space-y-5">
                 {filteredStores.map((store) => {
                   const isBusy =
                     actionLoading === store.id ||
-                    actionLoading === `delete-${store.id}` ||
-                    actionLoading === 'save-credentials';
+                    actionLoading === `delete-${store.id}`;
 
-                  const publicUrl = `${window.location.origin.replace(/\/$/, '')}/loja/${store.slug}`;
+                  const publicUrl = `${window.location.origin}/loja/${store.slug}`;
 
                   return (
                     <div
                       key={store.id}
-                      className="rounded-[28px] border border-white/10 bg-white/5 p-5 backdrop-blur-sm"
+                      className="rounded-[28px] border border-white/10 bg-white/[0.03] p-5"
                     >
-                      <div className="flex flex-col gap-5 xl:flex-row xl:items-start xl:justify-between">
-                        <div className="grid flex-1 gap-4">
-                          <div className="flex flex-wrap items-center gap-3">
+                      <div className="flex flex-col gap-6 xl:flex-row xl:items-start xl:justify-between">
+                        <div className="flex-1">
+                          <div className="mb-4 flex flex-wrap items-center gap-3">
                             <h3 className="text-2xl font-black text-white">{store.name}</h3>
 
                             <span
-                              className={[
-                                'rounded-full border px-3 py-1 text-xs font-semibold',
-                                getStatusClasses(store.status),
-                              ].join(' ')}
+                              className={`inline-flex rounded-full border px-3 py-1 text-xs font-semibold ${getStatusClasses(store.status)}`}
                             >
                               {getStatusLabel(store.status)}
                             </span>
 
-                            <span className="rounded-full border border-emerald-500/20 bg-emerald-500/10 px-3 py-1 text-xs font-semibold text-emerald-300">
-                              {getPlanLabel(store.plan)}
+                            <span className="inline-flex rounded-full border border-cyan-500/20 bg-cyan-500/10 px-3 py-1 text-xs font-semibold text-cyan-300">
+                              Plano {getPlanLabel(store.plan)}
+                            </span>
+
+                            <span
+                              className={`inline-flex rounded-full border px-3 py-1 text-xs font-semibold ${getAccessClasses(store.accessExpiresAt)}`}
+                            >
+                              {getAccessLabel(store.accessExpiresAt, store.autoRenew)}
                             </span>
                           </div>
 
-                          <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+                          <div className="mb-5 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
                             <div className="rounded-3xl border border-white/10 bg-black/35 p-5">
                               <p className="text-[11px] uppercase tracking-[0.25em] text-zinc-500">
                                 Admin
                               </p>
-                              <p className="mt-3 text-lg font-bold text-white">{store.adminName}</p>
+                              <p className="mt-3 text-lg font-black text-white">{store.adminName}</p>
                               <p className="mt-1 text-sm text-zinc-400">{store.adminEmail}</p>
                             </div>
 
@@ -1240,38 +1386,19 @@ export default function SuperAdmin() {
 
                             <div className="rounded-3xl border border-white/10 bg-black/35 p-5">
                               <p className="text-[11px] uppercase tracking-[0.25em] text-zinc-500">
-                                Produtos
+                                Acesso
                               </p>
-                              <p className="mt-3 text-3xl font-black text-white">{store.productsCount}</p>
-                              <p className="mt-1 text-sm text-zinc-400">Slug: {store.slug}</p>
+                              <p className="mt-3 text-lg font-black text-white">
+                                {formatDate(store.accessExpiresAt)}
+                              </p>
+                              <p className="mt-1 text-sm text-zinc-400">
+                                {store.autoRenew ? 'Renovação automática ativa' : 'Renovação manual'}
+                              </p>
                             </div>
                           </div>
                         </div>
 
                         <div className="grid w-full gap-3 xl:w-[320px]">
-                          <select
-                            className="h-11 w-full rounded-2xl border border-white/10 bg-white/5 px-4 text-sm text-white outline-none"
-                            value={store.plan}
-                            onChange={(e) =>
-                              void handleUpdateStoreField(
-                                store.id,
-                                { plan: e.target.value },
-                                `Plano da estrutura "${store.name}" atualizado.`,
-                              )
-                            }
-                            disabled={isBusy}
-                          >
-                            <option value="iniciante" className="bg-black text-white">
-                              Plano Simples
-                            </option>
-                            <option value="pro" className="bg-black text-white">
-                              Plano Pro
-                            </option>
-                            <option value="premium" className="bg-black text-white">
-                              Plano Premium
-                            </option>
-                          </select>
-
                           <Button
                             variant="outline"
                             className="h-11 rounded-2xl border-white/10 bg-white/5 text-white hover:bg-white/10"
@@ -1342,128 +1469,168 @@ export default function SuperAdmin() {
 
       {credentialsModal.open && credentialsModal.store && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 p-4 backdrop-blur-sm">
-          <div className="w-full max-w-lg rounded-[28px] border border-emerald-500/20 bg-[#050505] p-6 shadow-[0_20px_80px_rgba(0,0,0,0.55)]">
-            <div className="flex items-start justify-between gap-4">
+          <div className="w-full max-w-2xl rounded-[28px] border border-emerald-500/20 bg-[#050505] p-6 shadow-[0_20px_80px_rgba(0,0,0,0.55)]">
+            <div className="mb-6 flex items-center justify-between">
               <div>
-                <div className="mb-4 flex h-12 w-12 items-center justify-center rounded-2xl border border-emerald-500/20 bg-emerald-500/10 text-emerald-400">
-                  <Settings2 className="h-5 w-5" />
-                </div>
-
-                <h2 className="text-xl font-black text-white">
-                  Gerenciar admin de {credentialsModal.store.name}
-                </h2>
-                <p className="mt-2 text-sm leading-6 text-zinc-400">
-                  Aqui você altera o email e a senha do admin. Deixe a senha em branco se não quiser mudar.
+                <h3 className="text-2xl font-black text-white">Gerenciar admin</h3>
+                <p className="mt-1 text-sm text-zinc-400">
+                  {credentialsModal.store.name}
                 </p>
               </div>
 
-              <button
-                type="button"
+              <Button
+                variant="ghost"
+                className="rounded-2xl text-zinc-400 hover:bg-white/5 hover:text-white"
                 onClick={closeCredentialsModal}
-                className="rounded-xl border border-white/10 bg-white/5 p-2 text-zinc-400 transition hover:bg-white/10 hover:text-white"
               >
-                <X className="h-4 w-4" />
-              </button>
+                <X className="h-5 w-5" />
+              </Button>
             </div>
 
-            <div className="mt-6 grid gap-4">
-              <div className="space-y-2">
-                <Label className="text-zinc-200">Novo email do admin</Label>
-                <div className="relative">
-                  <Mail className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-zinc-500" />
-                  <Input
-                    type="email"
-                    className="h-12 rounded-2xl border border-white/10 bg-white/5 pl-10 text-white placeholder:text-zinc-500"
-                    placeholder="email@exemplo.com"
-                    value={credentialsModal.email}
+            <div className="mb-5 grid gap-4 md:grid-cols-2">
+              <div className="rounded-3xl border border-white/10 bg-white/[0.03] p-4">
+                <p className="text-xs uppercase tracking-[0.25em] text-zinc-500">Status</p>
+                <p className={`mt-2 text-sm font-semibold ${getAccessClasses(credentialsModal.store.accessExpiresAt).split(' ').pop()}`}>
+                  {getAccessLabel(credentialsModal.store.accessExpiresAt, credentialsModal.store.autoRenew)}
+                </p>
+              </div>
+
+              <div className="rounded-3xl border border-white/10 bg-white/[0.03] p-4">
+                <p className="text-xs uppercase tracking-[0.25em] text-zinc-500">Vencimento</p>
+                <p className="mt-2 text-sm font-semibold text-white">
+                  {formatDate(credentialsModal.store.accessExpiresAt)}
+                </p>
+              </div>
+            </div>
+
+            <div className="grid gap-4 md:grid-cols-2">
+              <div>
+                <Label className="text-zinc-300">Novo email</Label>
+                <Input
+                  value={credentialsModal.email}
+                  onChange={(e) =>
+                    setCredentialsModal((prev) => ({ ...prev, email: e.target.value }))
+                  }
+                  className="mt-2 h-12 rounded-2xl border-white/10 bg-white/5 text-white"
+                  placeholder="novoemail@exemplo.com"
+                />
+              </div>
+
+              <div>
+                <Label className="text-zinc-300">Nova senha</Label>
+                <Input
+                  type="password"
+                  value={credentialsModal.password}
+                  onChange={(e) =>
+                    setCredentialsModal((prev) => ({ ...prev, password: e.target.value }))
+                  }
+                  className="mt-2 h-12 rounded-2xl border-white/10 bg-white/5 text-white"
+                  placeholder="Mínimo 6 caracteres"
+                />
+              </div>
+
+              <div>
+                <Label className="text-zinc-300">Adicionar dias</Label>
+                <Input
+                  type="number"
+                  min="1"
+                  value={credentialsModal.daysToAdd}
+                  onChange={(e) =>
+                    setCredentialsModal((prev) => ({ ...prev, daysToAdd: e.target.value }))
+                  }
+                  className="mt-2 h-12 rounded-2xl border-white/10 bg-white/5 text-white"
+                  placeholder="30"
+                />
+              </div>
+
+              <div className="flex items-end">
+                <label className="flex h-12 w-full items-center gap-3 rounded-2xl border border-white/10 bg-white/5 px-4 text-sm text-white">
+                  <input
+                    type="checkbox"
+                    checked={credentialsModal.autoRenew}
                     onChange={(e) =>
-                      setCredentialsModal((prev) => ({
-                        ...prev,
-                        email: e.target.value,
-                      }))
+                      setCredentialsModal((prev) => ({ ...prev, autoRenew: e.target.checked }))
                     }
                   />
-                </div>
+                  Renovação automática
+                </label>
               </div>
+            </div>
 
-              <div className="space-y-2">
-                <Label className="text-zinc-200">Nova senha</Label>
-                <div className="relative">
-                  <Lock className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-zinc-500" />
-                  <Input
-                    type="password"
-                    className="h-12 rounded-2xl border border-white/10 bg-white/5 pl-10 text-white placeholder:text-zinc-500"
-                    placeholder="Deixe em branco para manter"
-                    value={credentialsModal.password}
-                    onChange={(e) =>
-                      setCredentialsModal((prev) => ({
-                        ...prev,
-                        password: e.target.value,
-                      }))
-                    }
-                  />
-                </div>
-              </div>
+            <div className="mt-6 grid gap-3 md:grid-cols-3">
+              <Button
+                onClick={() => void handleSaveCredentials()}
+                disabled={actionLoading === 'modal-save-credentials'}
+                className="h-12 rounded-2xl bg-emerald-500 font-bold text-black hover:bg-emerald-400"
+              >
+                {actionLoading === 'modal-save-credentials' ? (
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    Salvando...
+                  </>
+                ) : (
+                  <>
+                    <ShieldCheck className="mr-2 h-4 w-4" />
+                    Salvar credenciais
+                  </>
+                )}
+              </Button>
 
-              <div className="grid gap-3 md:grid-cols-2">
-                <Button
-                  variant="outline"
-                  className="h-12 rounded-2xl border-white/10 bg-white/5 text-white hover:bg-white/10"
-                  onClick={closeCredentialsModal}
-                  disabled={actionLoading === 'save-credentials'}
-                >
-                  Cancelar
-                </Button>
+              <Button
+                variant="outline"
+                onClick={() => void handleAddAccessDays()}
+                disabled={actionLoading === 'modal-add-days'}
+                className="h-12 rounded-2xl border-white/10 bg-white/5 text-white hover:bg-white/10"
+              >
+                {actionLoading === 'modal-add-days' ? (
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    Adicionando...
+                  </>
+                ) : (
+                  <>
+                    <CalendarPlus2 className="mr-2 h-4 w-4" />
+                    Adicionar dias
+                  </>
+                )}
+              </Button>
 
-                <Button
-                  className="h-12 rounded-2xl bg-emerald-500 font-bold text-black hover:bg-emerald-400"
-                  onClick={() => void handleSaveCredentials()}
-                  disabled={actionLoading === 'save-credentials'}
-                >
-                  {actionLoading === 'save-credentials' ? (
-                    <>
-                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                      Salvando...
-                    </>
-                  ) : (
-                    'Salvar credenciais'
-                  )}
-                </Button>
-              </div>
+              <Button
+                variant="outline"
+                onClick={() => void handleToggleAutoRenew()}
+                disabled={actionLoading === 'modal-auto-renew'}
+                className="h-12 rounded-2xl border-white/10 bg-white/5 text-white hover:bg-white/10"
+              >
+                {actionLoading === 'modal-auto-renew' ? (
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    Salvando...
+                  </>
+                ) : (
+                  <>
+                    <CalendarClock className="mr-2 h-4 w-4" />
+                    Salvar renovação
+                  </>
+                )}
+              </Button>
             </div>
           </div>
         </div>
       )}
 
-      {showLogoutModal && (
+      {showLogoutModal ? (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 p-4 backdrop-blur-sm">
-          <div className="w-full max-w-md rounded-[28px] border border-emerald-500/20 bg-[#050505] p-6 shadow-[0_20px_80px_rgba(0,0,0,0.55)]">
-            <div className="flex items-start justify-between gap-4">
-              <div>
-                <div className="mb-4 flex h-12 w-12 items-center justify-center rounded-2xl border border-emerald-500/20 bg-emerald-500/10 text-emerald-400">
-                  <AlertTriangle className="h-5 w-5" />
-                </div>
-
-                <h2 className="text-xl font-black text-white">Deseja sair?</h2>
-                <p className="mt-2 text-sm leading-6 text-zinc-400">
-                  Escolha para onde deseja ir após encerrar sua sessão.
-                </p>
-              </div>
-
-              <button
-                type="button"
-                onClick={() => !logoutLoading && setShowLogoutModal(false)}
-                className="rounded-xl border border-white/10 bg-white/5 p-2 text-zinc-400 transition hover:bg-white/10 hover:text-white"
-              >
-                <X className="h-4 w-4" />
-              </button>
-            </div>
+          <div className="w-full max-w-md rounded-[28px] border border-white/10 bg-[#050505] p-6 text-white">
+            <h3 className="text-2xl font-black">Deseja sair?</h3>
+            <p className="mt-2 text-sm text-zinc-400">
+              Escolha para onde deseja ir após sair.
+            </p>
 
             <div className="mt-6 grid gap-3">
               <Button
-                className="h-12 rounded-2xl bg-emerald-500 font-bold text-black hover:bg-emerald-400"
                 onClick={() => void handleLogoutRedirect('/login')}
                 disabled={logoutLoading}
+                className="h-12 rounded-2xl bg-emerald-500 font-bold text-black hover:bg-emerald-400"
               >
                 {logoutLoading ? (
                   <>
@@ -1471,22 +1638,34 @@ export default function SuperAdmin() {
                     Saindo...
                   </>
                 ) : (
-                  'Ir para Login'
+                  <>
+                    <LogOut className="mr-2 h-4 w-4" />
+                    Sair para login
+                  </>
                 )}
               </Button>
 
               <Button
                 variant="outline"
-                className="h-12 rounded-2xl border-white/10 bg-white/5 text-white hover:bg-white/10"
                 onClick={() => void handleLogoutRedirect('/')}
                 disabled={logoutLoading}
+                className="h-12 rounded-2xl border-white/10 bg-white/5 text-white hover:bg-white/10"
               >
-                Ir para Início
+                Sair para página inicial
+              </Button>
+
+              <Button
+                variant="ghost"
+                onClick={() => setShowLogoutModal(false)}
+                disabled={logoutLoading}
+                className="h-12 rounded-2xl text-zinc-400 hover:bg-white/5 hover:text-white"
+              >
+                Cancelar
               </Button>
             </div>
           </div>
         </div>
-      )}
+      ) : null}
     </div>
   );
 }

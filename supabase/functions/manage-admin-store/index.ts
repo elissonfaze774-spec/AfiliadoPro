@@ -10,10 +10,16 @@ const corsHeaders = {
 type JsonRecord = Record<string, unknown>
 
 type ManageBody = {
-  action: 'delete_structure' | 'update_admin_credentials'
+  action:
+    | 'delete_structure'
+    | 'update_admin_credentials'
+    | 'add_access_days'
+    | 'set_auto_renew'
   storeId: string
   adminEmail?: string
   adminPassword?: string
+  daysToAdd?: number
+  autoRenew?: boolean
 }
 
 class StepError extends Error {
@@ -55,7 +61,7 @@ function normalizeRole(value: unknown) {
 
 function isSuperAdminRole(value: unknown) {
   const role = normalizeRole(value)
-  return role === 'super_admin' || role === 'superadmin'
+  return role === 'super_admin' || role === 'superadmin' || role === 'super-admin'
 }
 
 function getErrorMessage(error: unknown, fallback: string) {
@@ -69,10 +75,10 @@ function getErrorMessage(error: unknown, fallback: string) {
   return fallback
 }
 
-async function getAdminByStore(adminClient: any, storeId: string) {
+async function getAdminByStore(adminClient: ReturnType<typeof createClient>, storeId: string) {
   const { data, error } = await adminClient
     .from('admins')
-    .select('id, store_id, email')
+    .select('id, user_id, store_id, email')
     .eq('store_id', storeId)
     .maybeSingle()
 
@@ -84,11 +90,37 @@ async function getAdminByStore(adminClient: any, storeId: string) {
     )
   }
 
-  if (!data?.id) {
+  const authUserId = cleanText(data?.id) || cleanText(data?.user_id)
+
+  if (!authUserId) {
     throw new StepError('admin-missing', 'Nenhum admin vinculado a esta estrutura.', 404)
   }
 
-  return data
+  return {
+    authUserId,
+    email: cleanText(data?.email),
+  }
+}
+
+async function tableExists(adminClient: ReturnType<typeof createClient>, tableName: string) {
+  const { data, error } = await adminClient
+    .rpc('to_regclass', { name: `public.${tableName}` })
+    .single()
+
+  if (error) return false
+  return Boolean(data)
+}
+
+async function deleteIfTableExists(
+  adminClient: ReturnType<typeof createClient>,
+  tableName: string,
+  column: string,
+  value: string,
+) {
+  const exists = await tableExists(adminClient, tableName)
+  if (!exists) return
+
+  await adminClient.from(tableName).delete().eq(column, value)
 }
 
 serve(async (req: Request) => {
@@ -128,7 +160,7 @@ serve(async (req: Request) => {
       )
     }
 
-    const userClient: any = createClient(supabaseUrl, anonKey, {
+    const userClient = createClient(supabaseUrl, anonKey, {
       global: {
         headers: {
           Authorization: `Bearer ${token}`,
@@ -140,7 +172,7 @@ serve(async (req: Request) => {
       },
     })
 
-    const adminClient: any = createClient(supabaseUrl, serviceRoleKey, {
+    const adminClient = createClient(supabaseUrl, serviceRoleKey, {
       auth: {
         autoRefreshToken: false,
         persistSession: false,
@@ -212,6 +244,8 @@ serve(async (req: Request) => {
       storeId: cleanText(bodyRaw.storeId),
       adminEmail: normalizeEmail(bodyRaw.adminEmail),
       adminPassword: cleanText(bodyRaw.adminPassword),
+      daysToAdd: Number(bodyRaw.daysToAdd ?? 0),
+      autoRenew: Boolean(bodyRaw.autoRenew),
     }
 
     if (!body.action || !body.storeId) {
@@ -255,7 +289,7 @@ serve(async (req: Request) => {
 
       const authPayload: Record<string, unknown> = {}
 
-      if (nextEmail && nextEmail !== String(adminRow.email ?? '').toLowerCase()) {
+      if (nextEmail && nextEmail !== adminRow.email.toLowerCase()) {
         authPayload.email = nextEmail
       }
 
@@ -275,7 +309,7 @@ serve(async (req: Request) => {
       }
 
       const { error: updateAuthError } = await adminClient.auth.admin.updateUserById(
-        adminRow.id,
+        adminRow.authUserId,
         authPayload,
       )
 
@@ -291,7 +325,7 @@ serve(async (req: Request) => {
         const { error: profileEmailError } = await adminClient
           .from('profiles')
           .update({ email: nextEmail })
-          .eq('id', adminRow.id)
+          .eq('id', adminRow.authUserId)
 
         if (profileEmailError) {
           throw new StepError(
@@ -304,7 +338,7 @@ serve(async (req: Request) => {
         const { error: adminEmailError } = await adminClient
           .from('admins')
           .update({ email: nextEmail })
-          .eq('id', adminRow.id)
+          .eq('store_id', body.storeId)
 
         if (adminEmailError) {
           throw new StepError(
@@ -322,84 +356,133 @@ serve(async (req: Request) => {
       })
     }
 
-    if (body.action === 'delete_structure') {
-      const adminRow = await getAdminByStore(adminClient, body.storeId)
-
-      const deleteOrders = await adminClient.from('orders').delete().eq('store_id', body.storeId)
-      if (deleteOrders.error) {
-        throw new StepError(
-          'delete-orders',
-          getErrorMessage(deleteOrders.error, 'Não foi possível excluir os pedidos.'),
-          500,
+    if (body.action === 'add_access_days') {
+      if (!Number.isFinite(body.daysToAdd) || Number(body.daysToAdd) <= 0) {
+        return json(
+          {
+            success: false,
+            step: 'access-days-validation',
+            message: 'Informe uma quantidade válida de dias.',
+          },
+          400,
         )
       }
 
-      const deleteCoupons = await adminClient.from('coupons').delete().eq('store_id', body.storeId)
-      if (deleteCoupons.error) {
+      const { data: store, error: storeError } = await adminClient
+        .from('stores')
+        .select('id, access_expires_at, access_granted_days')
+        .eq('id', body.storeId)
+        .maybeSingle()
+
+      if (storeError || !store) {
         throw new StepError(
-          'delete-coupons',
-          getErrorMessage(deleteCoupons.error, 'Não foi possível excluir os cupons.'),
-          500,
+          'store-fetch',
+          getErrorMessage(storeError, 'Não foi possível localizar a estrutura.'),
+          404,
         )
       }
 
-      const deleteProducts = await adminClient.from('products').delete().eq('store_id', body.storeId)
-      if (deleteProducts.error) {
-        throw new StepError(
-          'delete-products',
-          getErrorMessage(deleteProducts.error, 'Não foi possível excluir os produtos.'),
-          500,
-        )
-      }
+      const now = new Date()
+      const currentExpiry = store.access_expires_at ? new Date(store.access_expires_at) : null
+      const baseDate =
+        currentExpiry && !Number.isNaN(currentExpiry.getTime()) && currentExpiry.getTime() > now.getTime()
+          ? currentExpiry
+          : now
 
-      const deleteCategories = await adminClient.from('categories').delete().eq('store_id', body.storeId)
-      if (deleteCategories.error) {
-        throw new StepError(
-          'delete-categories',
-          getErrorMessage(deleteCategories.error, 'Não foi possível excluir as categorias.'),
-          500,
-        )
-      }
+      const nextExpiry = new Date(
+        baseDate.getTime() + Number(body.daysToAdd) * 24 * 60 * 60 * 1000,
+      ).toISOString()
 
-      const deleteAdmins = await adminClient.from('admins').delete().eq('store_id', body.storeId)
-      if (deleteAdmins.error) {
-        throw new StepError(
-          'delete-admin-link',
-          getErrorMessage(deleteAdmins.error, 'Não foi possível excluir o vínculo do admin.'),
-          500,
-        )
-      }
+      const { error: updateStoreError } = await adminClient
+        .from('stores')
+        .update({
+          access_expires_at: nextExpiry,
+          access_granted_days: Number(store.access_granted_days ?? 0) + Number(body.daysToAdd),
+          access_updated_at: new Date().toISOString(),
+        })
+        .eq('id', body.storeId)
 
-      const deleteStore = await adminClient.from('stores').delete().eq('id', body.storeId)
-      if (deleteStore.error) {
+      if (updateStoreError) {
         throw new StepError(
-          'delete-store',
-          getErrorMessage(deleteStore.error, 'Não foi possível excluir a estrutura.'),
-          500,
-        )
-      }
-
-      const deleteProfile = await adminClient.from('profiles').delete().eq('id', adminRow.id)
-      if (deleteProfile.error) {
-        throw new StepError(
-          'delete-profile',
-          getErrorMessage(deleteProfile.error, 'Não foi possível excluir o perfil do admin.'),
-          500,
-        )
-      }
-
-      const { error: deleteUserError } = await adminClient.auth.admin.deleteUser(adminRow.id)
-      if (deleteUserError) {
-        throw new StepError(
-          'delete-auth-user',
-          getErrorMessage(deleteUserError, 'Não foi possível excluir o usuário do Auth.'),
+          'store-access-update',
+          getErrorMessage(updateStoreError, 'Não foi possível atualizar os dias de acesso.'),
           500,
         )
       }
 
       return json({
         success: true,
-        step: 'structure-deleted',
+        step: 'access-days-updated',
+        message: `${body.daysToAdd} dia(s) adicionados com sucesso.`,
+      })
+    }
+
+    if (body.action === 'set_auto_renew') {
+      const { error: updateStoreError } = await adminClient
+        .from('stores')
+        .update({
+          auto_renew: Boolean(body.autoRenew),
+          access_updated_at: new Date().toISOString(),
+        })
+        .eq('id', body.storeId)
+
+      if (updateStoreError) {
+        throw new StepError(
+          'store-auto-renew-update',
+          getErrorMessage(updateStoreError, 'Não foi possível atualizar a renovação automática.'),
+          500,
+        )
+      }
+
+      return json({
+        success: true,
+        step: 'auto-renew-updated',
+        message: Boolean(body.autoRenew)
+          ? 'Renovação automática ativada com sucesso.'
+          : 'Renovação automática desativada com sucesso.',
+      })
+    }
+
+    if (body.action === 'delete_structure') {
+      const adminRow = await getAdminByStore(adminClient, body.storeId)
+
+      await deleteIfTableExists(adminClient, 'orders', 'store_id', body.storeId)
+      await deleteIfTableExists(adminClient, 'products', 'store_id', body.storeId)
+      await deleteIfTableExists(adminClient, 'categories', 'store_id', body.storeId)
+      await deleteIfTableExists(adminClient, 'coupons', 'store_id', body.storeId)
+
+      const { error: deleteAdminsError } = await adminClient
+        .from('admins')
+        .delete()
+        .eq('store_id', body.storeId)
+
+      if (deleteAdminsError) {
+        throw new StepError(
+          'delete-admin-link',
+          getErrorMessage(deleteAdminsError, 'Não foi possível remover o vínculo do admin.'),
+          500,
+        )
+      }
+
+      const { error: deleteStoreError } = await adminClient
+        .from('stores')
+        .delete()
+        .eq('id', body.storeId)
+
+      if (deleteStoreError) {
+        throw new StepError(
+          'delete-store',
+          getErrorMessage(deleteStoreError, 'Não foi possível remover a estrutura.'),
+          500,
+        )
+      }
+
+      await adminClient.from('profiles').delete().eq('id', adminRow.authUserId)
+      await adminClient.auth.admin.deleteUser(adminRow.authUserId)
+
+      return json({
+        success: true,
+        step: 'deleted',
         message: 'Estrutura excluída com sucesso.',
       })
     }
@@ -413,14 +496,19 @@ serve(async (req: Request) => {
       400,
     )
   } catch (error) {
-    const step = error instanceof StepError ? error.step : 'catch'
-    const status = error instanceof StepError ? error.status : 500
+    const step =
+      error instanceof StepError ? error.step : 'catch'
+
+    const status =
+      error instanceof StepError ? error.status : 500
+
+    const message = getErrorMessage(error, 'Erro interno ao processar a ação.')
 
     return json(
       {
         success: false,
         step,
-        message: getErrorMessage(error, 'Erro interno ao gerenciar a estrutura.'),
+        message,
       },
       status,
     )
