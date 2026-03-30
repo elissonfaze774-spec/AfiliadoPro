@@ -2,3 +2,5 @@
 verify_jwt = false
 [functions.create-admin-store]
 verify_jwt = false
+[functions.manage-admin-store]
+verify_jwt = false

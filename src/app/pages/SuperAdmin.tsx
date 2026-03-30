@@ -22,8 +22,8 @@ import {
   BarChart3,
   Power,
   Trash2,
-  KeyRound,
   ExternalLink,
+  Settings2,
 } from 'lucide-react';
 import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
@@ -37,7 +37,12 @@ type CreateAdminStoreResponse = {
   adminUserId?: string;
   storeId?: string;
   slug?: string;
-  temporaryPassword?: string;
+};
+
+type ManageAdminResponse = {
+  success: boolean;
+  message?: string;
+  step?: string;
 };
 
 type PlanRow = {
@@ -92,6 +97,7 @@ type StoreSummary = {
   status: string;
   plan: string;
   createdAt: string | null;
+  adminId: string;
   adminEmail: string;
   adminName: string;
   ordersCount: number;
@@ -103,6 +109,13 @@ type StoreSummary = {
 type FeedbackState = {
   type: 'success' | 'error' | null;
   message: string;
+};
+
+type CredentialsModalState = {
+  open: boolean;
+  store: StoreSummary | null;
+  email: string;
+  password: string;
 };
 
 const PLAN_LABELS: Record<string, string> = {
@@ -182,6 +195,35 @@ function getDayKey(dateLike: string | Date) {
   return date.toISOString().slice(0, 10);
 }
 
+async function getFunctionErrorMessage(error: unknown, fallback: string) {
+  const maybeError = error as {
+    message?: string;
+    context?: {
+      json?: () => Promise<any>;
+      text?: () => Promise<string>;
+    };
+  };
+
+  let serverMessage = '';
+
+  try {
+    if (maybeError?.context?.json) {
+      const payload = await maybeError.context.json();
+      serverMessage =
+        payload?.message ||
+        payload?.error ||
+        payload?.step ||
+        JSON.stringify(payload);
+    } else if (maybeError?.context?.text) {
+      serverMessage = await maybeError.context.text();
+    }
+  } catch {
+    serverMessage = '';
+  }
+
+  return serverMessage || maybeError?.message || fallback;
+}
+
 export default function SuperAdmin() {
   const navigate = useNavigate();
 
@@ -214,6 +256,13 @@ export default function SuperAdmin() {
   );
   const [planFilter, setPlanFilter] = useState<'all' | 'iniciante' | 'pro' | 'premium'>('all');
   const [sortBy, setSortBy] = useState<'revenue' | 'orders' | 'name' | 'createdAt'>('orders');
+
+  const [credentialsModal, setCredentialsModal] = useState<CredentialsModalState>({
+    open: false,
+    store: null,
+    email: '',
+    password: '',
+  });
 
   const generatedSlug = useMemo(() => {
     return slugify(form.username || form.loja);
@@ -329,6 +378,7 @@ export default function SuperAdmin() {
           status: normalizeStatus(store.status),
           plan,
           createdAt: store.created_at,
+          adminId: normalizeText(mainAdmin?.id),
           adminEmail: normalizeText(mainAdmin?.email) || '—',
           adminName: normalizeText(profile?.name) || '—',
           ordersCount: storeOrders.length,
@@ -381,118 +431,96 @@ export default function SuperAdmin() {
   }, [loadOrdersForChart]);
 
   const handleCreate = async () => {
-  if (loading) return;
+    if (loading) return;
 
-  const name = form.name.trim();
-  const email = form.email.trim().toLowerCase();
-  const password = form.password.trim();
-  const loja = form.loja.trim();
-  const slug = generatedSlug;
+    const name = form.name.trim();
+    const email = form.email.trim().toLowerCase();
+    const password = form.password.trim();
+    const loja = form.loja.trim();
+    const slug = generatedSlug;
 
-  if (!name || !email || !password || !loja || !slug) {
-    setFeedback({
-      type: 'error',
-      message: 'Preencha todos os campos obrigatórios.',
-    });
-    return;
-  }
-
-  if (password.length < 6) {
-    setFeedback({
-      type: 'error',
-      message: 'A senha precisa ter pelo menos 6 caracteres.',
-    });
-    return;
-  }
-
-  setLoading(true);
-  setFeedback({ type: null, message: '' });
-
-  try {
-    const { data: sessionData, error: sessionError } = await supabase.auth.getSession();
-
-    if (sessionError || !sessionData.session) {
-      throw new Error('Sessão inválida. Faça login novamente.');
+    if (!name || !email || !password || !loja || !slug) {
+      setFeedback({
+        type: 'error',
+        message: 'Preencha todos os campos obrigatórios.',
+      });
+      return;
     }
 
-    const expiresAt = sessionData.session.expires_at ?? 0;
-    const nowInSeconds = Math.floor(Date.now() / 1000);
+    if (password.length < 6) {
+      setFeedback({
+        type: 'error',
+        message: 'A senha precisa ter pelo menos 6 caracteres.',
+      });
+      return;
+    }
 
-    if (expiresAt && expiresAt <= nowInSeconds + 30) {
-      const { data: refreshed, error: refreshError } = await supabase.auth.refreshSession();
+    setLoading(true);
+    setFeedback({ type: null, message: '' });
 
-      if (refreshError || !refreshed.session) {
-        throw new Error('Sua sessão expirou. Faça login novamente.');
+    try {
+      const { data: sessionData, error: sessionError } = await supabase.auth.getSession();
+
+      if (sessionError || !sessionData.session) {
+        throw new Error('Sessão inválida. Faça login novamente.');
       }
-    }
 
-    const { data, error } = await supabase.functions.invoke('create-admin-store', {
-      body: {
-        adminName: name,
-        adminEmail: email,
-        adminPassword: password,
-        storeName: loja,
-        storeSlug: slug,
-        planName: 'iniciante',
-      },
-    });
+      const expiresAt = sessionData.session.expires_at ?? 0;
+      const nowInSeconds = Math.floor(Date.now() / 1000);
 
-    if (error) {
-      const maybeError = error as {
-        message?: string;
-        context?: {
-          json?: () => Promise<any>;
-          text?: () => Promise<string>;
-        };
-      };
+      if (expiresAt && expiresAt <= nowInSeconds + 30) {
+        const { data: refreshed, error: refreshError } = await supabase.auth.refreshSession();
 
-      let serverMessage = '';
-
-      try {
-        if (maybeError.context?.json) {
-          const payload = await maybeError.context.json();
-          serverMessage =
-            payload?.message ||
-            payload?.error ||
-            payload?.step ||
-            JSON.stringify(payload);
-        } else if (maybeError.context?.text) {
-          serverMessage = await maybeError.context.text();
+        if (refreshError || !refreshed.session) {
+          throw new Error('Sua sessão expirou. Faça login novamente.');
         }
-      } catch {
-        serverMessage = '';
       }
 
-      throw new Error(
-        serverMessage || maybeError.message || 'Não foi possível criar o admin e a estrutura.',
-      );
+      const { data, error } = await supabase.functions.invoke('create-admin-store', {
+        body: {
+          adminName: name,
+          adminEmail: email,
+          adminPassword: password,
+          storeName: loja,
+          storeSlug: slug,
+          planName: 'iniciante',
+        },
+      });
+
+      if (error) {
+        throw new Error(
+          await getFunctionErrorMessage(
+            error,
+            'Não foi possível criar o admin e a estrutura.',
+          ),
+        );
+      }
+
+      const result = data as CreateAdminStoreResponse | null;
+
+      if (!result?.success) {
+        throw new Error(result?.message || 'Falha ao criar o admin e a estrutura.');
+      }
+
+      setFeedback({
+        type: 'success',
+        message: result.message || 'Admin e estrutura criados com sucesso.',
+      });
+
+      resetForm();
+      await loadDashboard();
+    } catch (err) {
+      const message =
+        err instanceof Error ? err.message : 'Erro inesperado ao criar admin e estrutura.';
+
+      setFeedback({
+        type: 'error',
+        message,
+      });
+    } finally {
+      setLoading(false);
     }
-
-    const result = data as CreateAdminStoreResponse | null;
-
-    if (!result?.success) {
-      throw new Error(result?.message || 'Falha ao criar o admin e a estrutura.');
-    }
-
-    setFeedback({
-      type: 'success',
-      message: result.message || 'Admin e estrutura criados com sucesso.',
-    });
-
-    resetForm();
-    await loadDashboard();
-  } catch (err) {
-    const message =
-      err instanceof Error ? err.message : 'Erro inesperado ao criar admin e estrutura.';
-
-    setFeedback({
-      type: 'error',
-      message,
-    });
-  } finally {
-    setLoading(false);
-  }
-};
+  };
 
   const handleLogoutRedirect = async (path: '/' | '/login') => {
     if (logoutLoading) return;
@@ -540,32 +568,88 @@ export default function SuperAdmin() {
     }
   };
 
-  const handleSendReset = async (email: string) => {
-    if (!email || email === '—') {
+  const openCredentialsModal = (store: StoreSummary) => {
+    setCredentialsModal({
+      open: true,
+      store,
+      email: store.adminEmail === '—' ? '' : store.adminEmail,
+      password: '',
+    });
+    setFeedback({ type: null, message: '' });
+  };
+
+  const closeCredentialsModal = () => {
+    if (actionLoading === 'save-credentials') return;
+
+    setCredentialsModal({
+      open: false,
+      store: null,
+      email: '',
+      password: '',
+    });
+  };
+
+  const handleSaveCredentials = async () => {
+    const store = credentialsModal.store;
+    if (!store) return;
+
+    const email = credentialsModal.email.trim().toLowerCase();
+    const password = credentialsModal.password.trim();
+
+    if (!email && !password) {
       setFeedback({
         type: 'error',
-        message: 'Este admin não possui email válido para redefinição.',
+        message: 'Informe ao menos o novo email ou a nova senha.',
       });
       return;
     }
 
-    setActionLoading(`reset-${email}`);
+    if (password && password.length < 6) {
+      setFeedback({
+        type: 'error',
+        message: 'A nova senha precisa ter pelo menos 6 caracteres.',
+      });
+      return;
+    }
+
+    setActionLoading('save-credentials');
     setFeedback({ type: null, message: '' });
 
     try {
-      const { error } = await supabase.auth.resetPasswordForEmail(email, {
-        redirectTo: `${window.location.origin}/recuperar-senha`,
+      const { data, error } = await supabase.functions.invoke('manage-admin-store', {
+        body: {
+          action: 'update_admin_credentials',
+          storeId: store.id,
+          adminEmail: email,
+          adminPassword: password,
+        },
       });
 
-      if (error) throw error;
+      if (error) {
+        throw new Error(
+          await getFunctionErrorMessage(
+            error,
+            'Não foi possível atualizar as credenciais do admin.',
+          ),
+        );
+      }
+
+      const result = data as ManageAdminResponse | null;
+
+      if (!result?.success) {
+        throw new Error(result?.message || 'Não foi possível atualizar as credenciais do admin.');
+      }
 
       setFeedback({
         type: 'success',
-        message: `Link de redefinição enviado para ${email}.`,
+        message: result.message || 'Credenciais do admin atualizadas com sucesso.',
       });
+
+      closeCredentialsModal();
+      await loadDashboard();
     } catch (error) {
       const message =
-        error instanceof Error ? error.message : 'Não foi possível enviar o reset de senha.';
+        error instanceof Error ? error.message : 'Não foi possível atualizar as credenciais do admin.';
 
       setFeedback({
         type: 'error',
@@ -578,7 +662,7 @@ export default function SuperAdmin() {
 
   const handleDeleteStructure = async (store: StoreSummary) => {
     const confirmed = window.confirm(
-      `Tem certeza que deseja excluir a estrutura "${store.name}"?\n\nEssa ação remove loja, pedidos, produtos, categorias, cupons e vínculo do admin da estrutura.`,
+      `Tem certeza que deseja excluir a estrutura "${store.name}"?\n\nEssa ação remove loja, pedidos, produtos, categorias, cupons e também o login do admin vinculado.`,
     );
 
     if (!confirmed) return;
@@ -587,30 +671,28 @@ export default function SuperAdmin() {
     setFeedback({ type: null, message: '' });
 
     try {
-      const deleteOrders = await supabase.from('orders').delete().eq('store_id', store.id);
-      if (deleteOrders.error) throw deleteOrders.error;
+      const { data, error } = await supabase.functions.invoke('manage-admin-store', {
+        body: {
+          action: 'delete_structure',
+          storeId: store.id,
+        },
+      });
 
-      const deleteProducts = await supabase.from('products').delete().eq('store_id', store.id);
-      if (deleteProducts.error) throw deleteProducts.error;
+      if (error) {
+        throw new Error(
+          await getFunctionErrorMessage(error, 'Não foi possível excluir a estrutura.'),
+        );
+      }
 
-      const deleteCategories = await supabase.from('categories').delete().eq('store_id', store.id);
-      if (deleteCategories.error) throw deleteCategories.error;
+      const result = data as ManageAdminResponse | null;
 
-      const deleteCoupons = await supabase.from('coupons').delete().eq('store_id', store.id);
-      if (deleteCoupons.error) throw deleteCoupons.error;
-
-      const clearAdmins = await supabase
-        .from('admins')
-        .update({ store_id: null })
-        .eq('store_id', store.id);
-      if (clearAdmins.error) throw clearAdmins.error;
-
-      const deleteStore = await supabase.from('stores').delete().eq('id', store.id);
-      if (deleteStore.error) throw deleteStore.error;
+      if (!result?.success) {
+        throw new Error(result?.message || 'Não foi possível excluir a estrutura.');
+      }
 
       setFeedback({
         type: 'success',
-        message: `Estrutura "${store.name}" removida com sucesso.`,
+        message: result.message || `Estrutura "${store.name}" removida com sucesso.`,
       });
 
       await loadDashboard();
@@ -1097,7 +1179,7 @@ export default function SuperAdmin() {
                   const isBusy =
                     actionLoading === store.id ||
                     actionLoading === `delete-${store.id}` ||
-                    actionLoading === `reset-${store.adminEmail}`;
+                    actionLoading === 'save-credentials';
 
                   const publicUrl = `${window.location.origin.replace(/\/$/, '')}/loja/${store.slug}`;
 
@@ -1190,48 +1272,44 @@ export default function SuperAdmin() {
                             </option>
                           </select>
 
-                          <div className="grid gap-2 md:grid-cols-2 xl:grid-cols-1">
-                            <Button
-                              variant="outline"
-                              className="h-11 rounded-2xl border-white/10 bg-white/5 text-white hover:bg-white/10"
-                              onClick={() =>
-                                void handleUpdateStoreField(
-                                  store.id,
-                                  {
-                                    status: store.status === 'suspended' ? 'active' : 'suspended',
-                                  },
-                                  store.status === 'suspended'
-                                    ? `Estrutura "${store.name}" ativada.`
-                                    : `Estrutura "${store.name}" suspensa.`,
-                                )
-                              }
-                              disabled={isBusy}
-                            >
-                              <Power className="mr-2 h-4 w-4" />
-                              {store.status === 'suspended' ? 'Ativar' : 'Suspender'}
-                            </Button>
-                          </div>
+                          <Button
+                            variant="outline"
+                            className="h-11 rounded-2xl border-white/10 bg-white/5 text-white hover:bg-white/10"
+                            onClick={() =>
+                              void handleUpdateStoreField(
+                                store.id,
+                                {
+                                  status: store.status === 'suspended' ? 'active' : 'suspended',
+                                },
+                                store.status === 'suspended'
+                                  ? `Estrutura "${store.name}" ativada.`
+                                  : `Estrutura "${store.name}" suspensa.`,
+                              )
+                            }
+                            disabled={isBusy}
+                          >
+                            <Power className="mr-2 h-4 w-4" />
+                            {store.status === 'suspended' ? 'Ativar' : 'Suspender'}
+                          </Button>
 
-                          <div className="grid gap-2 md:grid-cols-2 xl:grid-cols-1">
-                            <Button
-                              variant="outline"
-                              className="h-11 rounded-2xl border-white/10 bg-white/5 text-white hover:bg-white/10"
-                              onClick={() => void handleSendReset(store.adminEmail)}
-                              disabled={isBusy}
-                            >
-                              <KeyRound className="mr-2 h-4 w-4" />
-                              Resetar senha
-                            </Button>
+                          <Button
+                            variant="outline"
+                            className="h-11 rounded-2xl border-white/10 bg-white/5 text-white hover:bg-white/10"
+                            onClick={() => openCredentialsModal(store)}
+                            disabled={isBusy}
+                          >
+                            <Settings2 className="mr-2 h-4 w-4" />
+                            Gerenciar admin
+                          </Button>
 
-                            <Button
-                              variant="outline"
-                              className="h-11 rounded-2xl border-white/10 bg-white/5 text-white hover:bg-white/10"
-                              onClick={() => window.open(publicUrl, '_blank', 'noopener,noreferrer')}
-                            >
-                              <ExternalLink className="mr-2 h-4 w-4" />
-                              Ver estrutura
-                            </Button>
-                          </div>
+                          <Button
+                            variant="outline"
+                            className="h-11 rounded-2xl border-white/10 bg-white/5 text-white hover:bg-white/10"
+                            onClick={() => window.open(publicUrl, '_blank', 'noopener,noreferrer')}
+                          >
+                            <ExternalLink className="mr-2 h-4 w-4" />
+                            Ver estrutura
+                          </Button>
 
                           <Button
                             variant="outline"
@@ -1261,6 +1339,101 @@ export default function SuperAdmin() {
           </CardContent>
         </Card>
       </div>
+
+      {credentialsModal.open && credentialsModal.store && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 p-4 backdrop-blur-sm">
+          <div className="w-full max-w-lg rounded-[28px] border border-emerald-500/20 bg-[#050505] p-6 shadow-[0_20px_80px_rgba(0,0,0,0.55)]">
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <div className="mb-4 flex h-12 w-12 items-center justify-center rounded-2xl border border-emerald-500/20 bg-emerald-500/10 text-emerald-400">
+                  <Settings2 className="h-5 w-5" />
+                </div>
+
+                <h2 className="text-xl font-black text-white">
+                  Gerenciar admin de {credentialsModal.store.name}
+                </h2>
+                <p className="mt-2 text-sm leading-6 text-zinc-400">
+                  Aqui você altera o email e a senha do admin. Deixe a senha em branco se não quiser mudar.
+                </p>
+              </div>
+
+              <button
+                type="button"
+                onClick={closeCredentialsModal}
+                className="rounded-xl border border-white/10 bg-white/5 p-2 text-zinc-400 transition hover:bg-white/10 hover:text-white"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+
+            <div className="mt-6 grid gap-4">
+              <div className="space-y-2">
+                <Label className="text-zinc-200">Novo email do admin</Label>
+                <div className="relative">
+                  <Mail className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-zinc-500" />
+                  <Input
+                    type="email"
+                    className="h-12 rounded-2xl border border-white/10 bg-white/5 pl-10 text-white placeholder:text-zinc-500"
+                    placeholder="email@exemplo.com"
+                    value={credentialsModal.email}
+                    onChange={(e) =>
+                      setCredentialsModal((prev) => ({
+                        ...prev,
+                        email: e.target.value,
+                      }))
+                    }
+                  />
+                </div>
+              </div>
+
+              <div className="space-y-2">
+                <Label className="text-zinc-200">Nova senha</Label>
+                <div className="relative">
+                  <Lock className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-zinc-500" />
+                  <Input
+                    type="password"
+                    className="h-12 rounded-2xl border border-white/10 bg-white/5 pl-10 text-white placeholder:text-zinc-500"
+                    placeholder="Deixe em branco para manter"
+                    value={credentialsModal.password}
+                    onChange={(e) =>
+                      setCredentialsModal((prev) => ({
+                        ...prev,
+                        password: e.target.value,
+                      }))
+                    }
+                  />
+                </div>
+              </div>
+
+              <div className="grid gap-3 md:grid-cols-2">
+                <Button
+                  variant="outline"
+                  className="h-12 rounded-2xl border-white/10 bg-white/5 text-white hover:bg-white/10"
+                  onClick={closeCredentialsModal}
+                  disabled={actionLoading === 'save-credentials'}
+                >
+                  Cancelar
+                </Button>
+
+                <Button
+                  className="h-12 rounded-2xl bg-emerald-500 font-bold text-black hover:bg-emerald-400"
+                  onClick={() => void handleSaveCredentials()}
+                  disabled={actionLoading === 'save-credentials'}
+                >
+                  {actionLoading === 'save-credentials' ? (
+                    <>
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                      Salvando...
+                    </>
+                  ) : (
+                    'Salvar credenciais'
+                  )}
+                </Button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {showLogoutModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 p-4 backdrop-blur-sm">
