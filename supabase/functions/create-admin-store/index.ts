@@ -53,7 +53,6 @@ function slugify(value: unknown) {
 
 function normalizePlan(value: unknown) {
   const plan = cleanText(value).toLowerCase()
-
   if (plan === 'premium') return 'premium'
   if (plan === 'pro') return 'pro'
   return 'iniciante'
@@ -136,7 +135,11 @@ async function createStore(
   let lastError: unknown = null
 
   for (const payload of attempts) {
-    const { data, error } = await adminClient.from('stores').insert(payload).select('id, slug').single()
+    const { data, error } = await adminClient
+      .from('stores')
+      .insert(payload)
+      .select('id, slug')
+      .single()
 
     if (!error && data?.id) {
       return data
@@ -145,7 +148,7 @@ async function createStore(
     lastError = error
   }
 
-  throw new Error(getErrorMessage(lastError, 'Não foi possível criar a estrutura da loja.'))
+  throw new Error(getErrorMessage(lastError, 'Falha ao criar a estrutura na tabela stores.'))
 }
 
 async function createAdminLink(
@@ -196,14 +199,12 @@ async function createAdminLink(
   for (const payload of attempts) {
     const { error } = await adminClient.from('admins').insert(payload)
 
-    if (!error) {
-      return
-    }
+    if (!error) return
 
     lastError = error
   }
 
-  throw new Error(getErrorMessage(lastError, 'Não foi possível vincular o admin à estrutura.'))
+  throw new Error(getErrorMessage(lastError, 'Falha ao vincular o admin na tabela admins.'))
 }
 
 serve(async (req: Request) => {
@@ -224,6 +225,7 @@ serve(async (req: Request) => {
       return json(
         {
           success: false,
+          step: 'env',
           message:
             'Variáveis SUPABASE_URL, SUPABASE_ANON_KEY/PUBLISHABLE_KEY e SUPABASE_SERVICE_ROLE_KEY precisam estar configuradas.',
         },
@@ -233,16 +235,6 @@ serve(async (req: Request) => {
 
     const authHeader = req.headers.get('Authorization') ?? ''
     const token = authHeader.replace('Bearer ', '').trim()
-
-    if (!token) {
-      return json(
-        {
-          success: false,
-          message: 'Sessão inválida ou ausente. Faça login novamente.',
-        },
-        401,
-      )
-    }
 
     const userClient: any = createClient(supabaseUrl, anonKey, {
       global: {
@@ -263,6 +255,17 @@ serve(async (req: Request) => {
       },
     })
 
+    if (!token) {
+      return json(
+        {
+          success: false,
+          step: 'auth-header',
+          message: 'Sessão inválida ou ausente. Faça login novamente.',
+        },
+        401,
+      )
+    }
+
     const {
       data: { user: requesterUser },
       error: requesterAuthError,
@@ -272,7 +275,11 @@ serve(async (req: Request) => {
       return json(
         {
           success: false,
-          message: 'Não foi possível validar o usuário autenticado.',
+          step: 'auth-user',
+          message: getErrorMessage(
+            requesterAuthError,
+            'Não foi possível validar o usuário autenticado.',
+          ),
         },
         401,
       )
@@ -280,7 +287,7 @@ serve(async (req: Request) => {
 
     const { data: requesterProfile, error: requesterProfileError } = await adminClient
       .from('profiles')
-      .select('id, role')
+      .select('id, role, email, name')
       .eq('id', requesterUser.id)
       .maybeSingle()
 
@@ -288,17 +295,30 @@ serve(async (req: Request) => {
       return json(
         {
           success: false,
-          message: 'Erro ao validar permissões do usuário.',
+          step: 'requester-profile',
+          message: getErrorMessage(requesterProfileError, 'Erro ao validar perfil do solicitante.'),
         },
         500,
       )
     }
 
-    if (!isSuperAdminRole(requesterProfile?.role)) {
+    if (!requesterProfile) {
       return json(
         {
           success: false,
-          message: 'Apenas super admin pode criar novos admins.',
+          step: 'requester-profile-missing',
+          message: 'Seu usuário logado não possui registro na tabela profiles.',
+        },
+        500,
+      )
+    }
+
+    if (!isSuperAdminRole(requesterProfile.role)) {
+      return json(
+        {
+          success: false,
+          step: 'requester-role',
+          message: `Seu perfil não é super admin. Role atual: ${String(requesterProfile.role ?? 'vazio')}`,
         },
         403,
       )
@@ -310,6 +330,7 @@ serve(async (req: Request) => {
       return json(
         {
           success: false,
+          step: 'body',
           message: 'Corpo da requisição inválido.',
         },
         400,
@@ -335,6 +356,7 @@ serve(async (req: Request) => {
       return json(
         {
           success: false,
+          step: 'body-validation',
           message: 'Preencha nome, email, senha e nome da estrutura.',
         },
         400,
@@ -345,6 +367,7 @@ serve(async (req: Request) => {
       return json(
         {
           success: false,
+          step: 'password-validation',
           message: 'A senha precisa ter pelo menos 6 caracteres.',
         },
         400,
@@ -361,7 +384,8 @@ serve(async (req: Request) => {
       return json(
         {
           success: false,
-          message: 'Não foi possível validar o link da estrutura.',
+          step: 'store-slug-check',
+          message: getErrorMessage(existingStoreError, 'Não foi possível validar o link da estrutura.'),
         },
         500,
       )
@@ -371,6 +395,7 @@ serve(async (req: Request) => {
       return json(
         {
           success: false,
+          step: 'store-slug-exists',
           message: 'Esse link da estrutura já está em uso. Escolha outro.',
         },
         409,
@@ -390,10 +415,8 @@ serve(async (req: Request) => {
       return json(
         {
           success: false,
-          message: getErrorMessage(
-            createUserError,
-            'Não foi possível criar o usuário do admin no Auth.',
-          ),
+          step: 'auth-create-user',
+          message: getErrorMessage(createUserError, 'Não foi possível criar o usuário no Auth.'),
         },
         400,
       )
@@ -409,7 +432,14 @@ serve(async (req: Request) => {
     })
 
     if (profileError) {
-      throw new Error(getErrorMessage(profileError, 'Não foi possível criar o perfil do admin.'))
+      return json(
+        {
+          success: false,
+          step: 'profile-insert',
+          message: getErrorMessage(profileError, 'Não foi possível criar o perfil do admin.'),
+        },
+        500,
+      )
     }
 
     const store = await createStore(adminClient, {
@@ -430,6 +460,7 @@ serve(async (req: Request) => {
 
     return json({
       success: true,
+      step: 'done',
       message: 'Admin e estrutura criados com sucesso.',
       adminUserId: createdUserId,
       storeId: createdStoreId,
@@ -452,8 +483,8 @@ serve(async (req: Request) => {
       }
 
       if (createdUserId) {
-        await adminClient.from('admins').delete().or(`id.eq.${createdUserId},user_id.eq.${createdUserId}`)
         await adminClient.from('profiles').delete().eq('id', createdUserId)
+        await adminClient.from('admins').delete().eq('store_id', createdStoreId)
         await adminClient.auth.admin.deleteUser(createdUserId)
       }
     }
@@ -461,6 +492,7 @@ serve(async (req: Request) => {
     return json(
       {
         success: false,
+        step: 'catch',
         message: getErrorMessage(error, 'Erro interno ao criar admin e estrutura.'),
       },
       500,
