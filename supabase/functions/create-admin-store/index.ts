@@ -18,6 +18,17 @@ type CreateAdminBody = {
   planName?: string
 }
 
+class StepError extends Error {
+  step: string
+  status: number
+
+  constructor(step: string, message: string, status = 500) {
+    super(message)
+    this.step = step
+    this.status = status
+  }
+}
+
 function json(data: unknown, status = 200) {
   return new Response(JSON.stringify(data), {
     status,
@@ -76,6 +87,46 @@ function getErrorMessage(error: unknown, fallback: string) {
   }
 
   return fallback
+}
+
+async function linkAdminToStore(
+  adminClient: any,
+  params: {
+    userId: string
+    storeId: string
+    adminEmail: string
+  },
+) {
+  const attempts = [
+    {
+      id: params.userId,
+      store_id: params.storeId,
+      email: params.adminEmail,
+    },
+    {
+      user_id: params.userId,
+      store_id: params.storeId,
+      email: params.adminEmail,
+    },
+  ]
+
+  let lastError: unknown = null
+
+  for (const payload of attempts) {
+    const { error } = await adminClient.from('admins').upsert(payload, {
+      onConflict: 'id',
+    })
+
+    if (!error) return
+
+    lastError = error
+  }
+
+  throw new StepError(
+    'admin-link',
+    getErrorMessage(lastError, 'Não foi possível vincular o admin à estrutura.'),
+    500,
+  )
 }
 
 serve(async (req: Request) => {
@@ -310,12 +361,9 @@ serve(async (req: Request) => {
       )
 
     if (profileError) {
-      return json(
-        {
-          success: false,
-          step: 'profile-upsert',
-          message: getErrorMessage(profileError, 'Não foi possível salvar o perfil do admin.'),
-        },
+      throw new StepError(
+        'profile-upsert',
+        getErrorMessage(profileError, 'Não foi possível salvar o perfil do admin.'),
         500,
       )
     }
@@ -327,46 +375,26 @@ serve(async (req: Request) => {
         slug: body.storeSlug,
         status: 'active',
         plan: body.planName || 'iniciante',
+        owner_user_id: createdUserId,
       })
       .select('id, slug')
       .single()
 
     if (createdStoreError || !createdStore?.id) {
-      return json(
-        {
-          success: false,
-          step: 'store-insert',
-          message: getErrorMessage(createdStoreError, 'Não foi possível criar a estrutura.'),
-        },
+      throw new StepError(
+        'store-insert',
+        getErrorMessage(createdStoreError, 'Não foi possível criar a estrutura.'),
         500,
       )
     }
 
     createdStoreId = String(createdStore.id)
 
-    const { error: adminLinkError } = await adminClient
-      .from('admins')
-      .upsert(
-        {
-          id: createdUserId,
-          store_id: createdStoreId,
-          email: body.adminEmail,
-        },
-        {
-          onConflict: 'id',
-        },
-      )
-
-    if (adminLinkError) {
-      return json(
-        {
-          success: false,
-          step: 'admin-link',
-          message: getErrorMessage(adminLinkError, 'Não foi possível vincular o admin à estrutura.'),
-        },
-        500,
-      )
-    }
+    await linkAdminToStore(adminClient, {
+      userId: createdUserId,
+      storeId: createdStoreId,
+      adminEmail: body.adminEmail,
+    })
 
     return json({
       success: true,
@@ -393,19 +421,27 @@ serve(async (req: Request) => {
       }
 
       if (createdUserId) {
-        await adminClient.from('admins').delete().eq('id', createdUserId)
+        await adminClient.from('admins').delete().or(`id.eq.${createdUserId},user_id.eq.${createdUserId}`)
         await adminClient.from('profiles').delete().eq('id', createdUserId)
         await adminClient.auth.admin.deleteUser(createdUserId)
       }
     }
 
+    const step =
+      error instanceof StepError ? error.step : 'catch'
+
+    const status =
+      error instanceof StepError ? error.status : 500
+
+    const message = getErrorMessage(error, 'Erro interno ao criar admin e estrutura.')
+
     return json(
       {
         success: false,
-        step: 'catch',
-        message: getErrorMessage(error, 'Erro interno ao criar admin e estrutura.'),
+        step,
+        message,
       },
-      500,
+      status,
     )
   }
 })
