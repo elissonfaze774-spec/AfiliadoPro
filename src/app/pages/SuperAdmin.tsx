@@ -411,16 +411,11 @@ export default function SuperAdmin() {
     try {
       const { data: sessionData, error: sessionError } = await supabase.auth.getSession();
 
-      if (sessionError) {
-        throw new Error('Não foi possível validar sua sessão. Faça login novamente.');
-      }
-
-      let session = sessionData.session;
-
-      if (!session) {
+      if (sessionError || !sessionData.session) {
         throw new Error('Sessão inválida. Faça login novamente.');
       }
 
+      let session = sessionData.session;
       const nowInSeconds = Math.floor(Date.now() / 1000);
       const expiresAt = session.expires_at ?? 0;
 
@@ -434,56 +429,37 @@ export default function SuperAdmin() {
         session = refreshed.session;
       }
 
-      const accessToken = session.access_token;
-      const anonKey = import.meta.env.VITE_SUPABASE_ANON_KEY as string;
-      const supabaseUrl = import.meta.env.VITE_SUPABASE_URL as string;
-
-      if (!accessToken) {
+      if (!session.access_token) {
         throw new Error('Token inválido. Faça login novamente.');
       }
 
-      if (!anonKey || !supabaseUrl) {
-        throw new Error('Variáveis do Supabase não configuradas corretamente.');
-      }
-
-      const response = await fetch(`${supabaseUrl}/functions/v1/create-admin-store`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          apikey: anonKey,
-          Authorization: `Bearer ${accessToken}`,
-        },
-        body: JSON.stringify({
+      const { data, error } = await supabase.functions.invoke('create-admin-store', {
+        body: {
           adminName: name,
           adminEmail: email,
           adminPassword: password,
           storeName: loja,
           storeSlug: slug,
-        }),
+          planName: 'iniciante',
+        },
+        headers: {
+          Authorization: `Bearer ${session.access_token}`,
+        },
       });
 
-      const rawText = await response.text();
-      let data: CreateAdminStoreResponse | null = null;
-
-      try {
-        data = rawText ? (JSON.parse(rawText) as CreateAdminStoreResponse) : null;
-      } catch {
-        data = null;
+      if (error) {
+        throw new Error(error.message || 'Não foi possível criar o admin e a estrutura.');
       }
 
-      if (!response.ok) {
-        throw new Error(
-          data?.message || rawText || 'Não foi possível criar o admin e a estrutura.',
-        );
-      }
+      const result = data as CreateAdminStoreResponse | null;
 
-      if (!data?.success) {
-        throw new Error(data?.message || 'Falha ao criar o admin e a estrutura.');
+      if (!result?.success) {
+        throw new Error(result?.message || 'Falha ao criar o admin e a estrutura.');
       }
 
       setFeedback({
         type: 'success',
-        message: 'Admin e estrutura criados com sucesso.',
+        message: result.message || 'Admin e estrutura criados com sucesso.',
       });
 
       resetForm();
@@ -720,8 +696,8 @@ export default function SuperAdmin() {
             </h1>
 
             <p className="mt-3 text-sm leading-7 text-zinc-400 md:text-base">
-              Painel central de operação do AfiliadoPRO com métricas reais, gestão de
-              estruturas, planos, admins, faturamento e ações rápidas.
+              Painel central de operação do AfiliadoPRO com métricas reais, gestão de estruturas,
+              planos, admins, faturamento e ações rápidas.
             </p>
           </div>
 
@@ -813,10 +789,7 @@ export default function SuperAdmin() {
             <CardContent className="p-5">
               <div className="grid grid-cols-7 gap-3">
                 {sevenDayMetrics.map((item) => {
-                  const percent = Math.max(
-                    (item.revenue / maxRevenue) * 100,
-                    item.revenue > 0 ? 8 : 2,
-                  );
+                  const percent = Math.max((item.revenue / maxRevenue) * 100, item.revenue > 0 ? 8 : 2);
 
                   return (
                     <div key={item.key} className="flex flex-col items-center gap-3">
@@ -833,9 +806,7 @@ export default function SuperAdmin() {
                       <div className="text-center">
                         <p className="text-xs font-semibold text-white">{item.label}</p>
                         <p className="text-[11px] text-zinc-500">{item.orders} pedidos</p>
-                        <p className="text-[11px] text-emerald-300">
-                          {formatMoney(item.revenue)}
-                        </p>
+                        <p className="text-[11px] text-emerald-300">{formatMoney(item.revenue)}</p>
                       </div>
                     </div>
                   );
@@ -859,7 +830,7 @@ export default function SuperAdmin() {
               </div>
 
               <div className="rounded-2xl border border-white/10 bg-white/5 p-4">
-                <p className="text-sm text-zinc-400">Plano mais barato</p>
+                <p className="text-sm text-zinc-400">Plano Simples</p>
                 <p className="mt-1 text-2xl font-black text-white">
                   {formatMoney(Number(plansMap.iniciante?.price ?? 59.9))}
                 </p>
@@ -884,9 +855,7 @@ export default function SuperAdmin() {
 
         <Card className="mb-6 border border-emerald-500/10 bg-black/55 shadow-[0_20px_60px_rgba(0,0,0,0.45)] backdrop-blur-xl">
           <CardHeader className="border-b border-white/5">
-            <CardTitle className="text-xl font-black text-white">
-              Criar novo admin
-            </CardTitle>
+            <CardTitle className="text-xl font-black text-white">Criar novo admin</CardTitle>
           </CardHeader>
 
           <CardContent className="space-y-6 pt-6">
@@ -1121,9 +1090,10 @@ export default function SuperAdmin() {
                             <h3 className="text-2xl font-black text-white">{store.name}</h3>
 
                             <span
-                              className={`rounded-full border px-3 py-1 text-xs font-semibold ${getStatusClasses(
-                                store.status,
-                              )}`}
+                              className={[
+                                'rounded-full border px-3 py-1 text-xs font-semibold',
+                                getStatusClasses(store.status),
+                              ].join(' ')}
                             >
                               {getStatusLabel(store.status)}
                             </span>
@@ -1133,78 +1103,72 @@ export default function SuperAdmin() {
                             </span>
                           </div>
 
-                          <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
-                            <div className="rounded-2xl border border-white/10 bg-black/30 p-4">
-                              <p className="text-xs uppercase tracking-[0.18em] text-zinc-500">
+                          <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+                            <div className="rounded-3xl border border-white/10 bg-black/35 p-5">
+                              <p className="text-[11px] uppercase tracking-[0.25em] text-zinc-500">
                                 Admin
                               </p>
-                              <p className="mt-2 text-sm font-semibold text-white">
-                                {store.adminName}
-                              </p>
-                              <p className="mt-1 text-xs text-zinc-400">{store.adminEmail}</p>
+                              <p className="mt-3 text-lg font-bold text-white">{store.adminName}</p>
+                              <p className="mt-1 text-sm text-zinc-400">{store.adminEmail}</p>
                             </div>
 
-                            <div className="rounded-2xl border border-white/10 bg-black/30 p-4">
-                              <p className="text-xs uppercase tracking-[0.18em] text-zinc-500">
+                            <div className="rounded-3xl border border-white/10 bg-black/35 p-5">
+                              <p className="text-[11px] uppercase tracking-[0.25em] text-zinc-500">
                                 Pedidos
                               </p>
-                              <p className="mt-2 text-2xl font-black text-white">
-                                {store.ordersCount}
-                              </p>
-                              <p className="mt-1 text-xs text-zinc-400">
+                              <p className="mt-3 text-3xl font-black text-white">{store.ordersCount}</p>
+                              <p className="mt-1 text-sm text-zinc-400">
                                 Criada em {formatDate(store.createdAt)}
                               </p>
                             </div>
 
-                            <div className="rounded-2xl border border-white/10 bg-black/30 p-4">
-                              <p className="text-xs uppercase tracking-[0.18em] text-zinc-500">
+                            <div className="rounded-3xl border border-white/10 bg-black/35 p-5">
+                              <p className="text-[11px] uppercase tracking-[0.25em] text-zinc-500">
                                 Faturamento
                               </p>
-                              <p className="mt-2 text-2xl font-black text-emerald-400">
+                              <p className="mt-3 text-3xl font-black text-emerald-400">
                                 {formatMoney(store.revenue)}
                               </p>
-                              <p className="mt-1 text-xs text-zinc-400">
+                              <p className="mt-1 text-sm text-zinc-400">
                                 Ticket mensal do plano: {formatMoney(store.monthlyPlanPrice)}
                               </p>
                             </div>
 
-                            <div className="rounded-2xl border border-white/10 bg-black/30 p-4">
-                              <p className="text-xs uppercase tracking-[0.18em] text-zinc-500">
+                            <div className="rounded-3xl border border-white/10 bg-black/35 p-5">
+                              <p className="text-[11px] uppercase tracking-[0.25em] text-zinc-500">
                                 Produtos
                               </p>
-                              <p className="mt-2 text-2xl font-black text-white">
-                                {store.productsCount}
-                              </p>
-                              <p className="mt-1 text-xs text-zinc-400">Slug: {store.slug}</p>
+                              <p className="mt-3 text-3xl font-black text-white">{store.productsCount}</p>
+                              <p className="mt-1 text-sm text-zinc-400">Slug: {store.slug}</p>
                             </div>
                           </div>
                         </div>
 
-                        <div className="grid gap-3 xl:w-[320px]">
-                          <div className="grid gap-2 md:grid-cols-2 xl:grid-cols-1">
-                            <select
-                              className="h-11 w-full rounded-2xl border border-white/10 bg-white/5 px-4 text-sm text-white outline-none"
-                              value={store.plan}
-                              disabled={isBusy}
-                              onChange={(e) =>
-                                void handleUpdateStoreField(
-                                  store.id,
-                                  { plan: e.target.value },
-                                  `Plano da estrutura "${store.name}" atualizado.`,
-                                )
-                              }
-                            >
-                              <option value="iniciante" className="bg-black text-white">
-                                Plano Simples
-                              </option>
-                              <option value="pro" className="bg-black text-white">
-                                Plano Pro
-                              </option>
-                              <option value="premium" className="bg-black text-white">
-                                Plano Premium
-                              </option>
-                            </select>
+                        <div className="grid w-full gap-3 xl:w-[320px]">
+                          <select
+                            className="h-11 w-full rounded-2xl border border-white/10 bg-white/5 px-4 text-sm text-white outline-none"
+                            value={store.plan}
+                            onChange={(e) =>
+                              void handleUpdateStoreField(
+                                store.id,
+                                { plan: e.target.value },
+                                `Plano da estrutura "${store.name}" atualizado.`,
+                              )
+                            }
+                            disabled={isBusy}
+                          >
+                            <option value="iniciante" className="bg-black text-white">
+                              Plano Simples
+                            </option>
+                            <option value="pro" className="bg-black text-white">
+                              Plano Pro
+                            </option>
+                            <option value="premium" className="bg-black text-white">
+                              Plano Premium
+                            </option>
+                          </select>
 
+                          <div className="grid gap-2 md:grid-cols-2 xl:grid-cols-1">
                             <Button
                               variant="outline"
                               className="h-11 rounded-2xl border-white/10 bg-white/5 text-white hover:bg-white/10"
@@ -1322,16 +1286,7 @@ export default function SuperAdmin() {
                 onClick={() => void handleLogoutRedirect('/')}
                 disabled={logoutLoading}
               >
-                Ir para Tela Inicial
-              </Button>
-
-              <Button
-                variant="ghost"
-                className="h-12 rounded-2xl text-zinc-400 hover:bg-white/5 hover:text-white"
-                onClick={() => setShowLogoutModal(false)}
-                disabled={logoutLoading}
-              >
-                Cancelar
+                Ir para Início
               </Button>
             </div>
           </div>
