@@ -424,23 +424,30 @@ serve(async (req: Request) => {
 
     createdUserId = createdUser.user.id
 
-    const { error: profileError } = await adminClient.from('profiles').insert({
+    const { error: profileError } = await adminClient
+  .from('profiles')
+  .upsert(
+    {
       id: createdUserId,
       name: body.adminName,
       email: body.adminEmail,
       role: 'admin',
-    })
+    },
+    {
+      onConflict: 'id',
+    },
+  )
 
-    if (profileError) {
-      return json(
-        {
-          success: false,
-          step: 'profile-insert',
-          message: getErrorMessage(profileError, 'Não foi possível criar o perfil do admin.'),
-        },
-        500,
-      )
-    }
+if (profileError) {
+  return json(
+    {
+      success: false,
+      step: 'profile-upsert',
+      message: getErrorMessage(profileError, 'Não foi possível salvar o perfil do admin.'),
+    },
+    500,
+  )
+}
 
     const store = await createStore(adminClient, {
       userId: createdUserId,
