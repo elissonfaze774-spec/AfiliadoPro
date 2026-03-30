@@ -7,6 +7,17 @@ const corsHeaders = {
   'Access-Control-Allow-Methods': 'POST, OPTIONS',
 }
 
+type JsonRecord = Record<string, unknown>
+
+type CreateAdminBody = {
+  adminName: string
+  adminEmail: string
+  adminPassword: string
+  storeName: string
+  storeSlug: string
+  planName?: string
+}
+
 function json(data: unknown, status = 200) {
   return new Response(JSON.stringify(data), {
     status,
@@ -17,401 +28,191 @@ function json(data: unknown, status = 200) {
   })
 }
 
-function isRecord(value: unknown): value is Record<string, unknown> {
+function isRecord(value: unknown): value is JsonRecord {
   return typeof value === 'object' && value !== null && !Array.isArray(value)
 }
 
-function ensureUrl(value: string) {
-  const trimmed = String(value ?? '').trim()
-  if (!trimmed) return ''
-  if (/^https?:\/\//i.test(trimmed)) return trimmed
-  return `https://${trimmed}`
-}
-
 function cleanText(value: unknown) {
-  return String(value ?? '')
-    .replace(/\s+/g, ' ')
-    .replace(/&nbsp;/gi, ' ')
-    .trim()
+  return String(value ?? '').trim().replace(/\s+/g, ' ')
 }
 
-function decodeHtmlEntities(value: string) {
-  return String(value ?? '')
-    .replace(/&amp;/g, '&')
-    .replace(/&quot;/g, '"')
-    .replace(/&#39;/g, "'")
-    .replace(/&apos;/g, "'")
-    .replace(/&lt;/g, '<')
-    .replace(/&gt;/g, '>')
+function normalizeEmail(value: unknown) {
+  return cleanText(value).toLowerCase()
 }
 
-function stripHtml(value: string) {
-  return cleanText(decodeHtmlEntities(String(value ?? '').replace(/<[^>]+>/g, ' ')))
+function slugify(value: unknown) {
+  return cleanText(value)
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .replace(/[^a-z0-9\s-]/g, '')
+    .replace(/\s+/g, '-')
+    .replace(/-+/g, '-')
+    .replace(/^-+|-+$/g, '')
 }
 
-function normalizePrice(value: unknown) {
-  if (typeof value === 'number' && Number.isFinite(value)) return value
+function normalizePlan(value: unknown) {
+  const plan = cleanText(value).toLowerCase()
 
-  const raw = String(value ?? '').trim()
-  if (!raw) return 0
+  if (plan === 'premium') return 'premium'
+  if (plan === 'pro') return 'pro'
+  return 'iniciante'
+}
 
-  const cleaned = raw.replace(/[^\d,.-]/g, '')
-  if (!cleaned) return 0
+function normalizeRole(value: unknown) {
+  return cleanText(value).toLowerCase().replace(/\s+/g, '_').replace(/-/g, '_')
+}
 
-  const hasComma = cleaned.includes(',')
-  const hasDot = cleaned.includes('.')
+function isSuperAdminRole(value: unknown) {
+  const role = normalizeRole(value)
+  return role === 'super_admin' || role === 'superadmin'
+}
 
-  let normalized = cleaned
+function getErrorMessage(error: unknown, fallback: string) {
+  if (error instanceof Error && error.message) return error.message
 
-  if (hasComma && hasDot) {
-    if (cleaned.lastIndexOf(',') > cleaned.lastIndexOf('.')) {
-      normalized = cleaned.replace(/\./g, '').replace(',', '.')
-    } else {
-      normalized = cleaned.replace(/,/g, '')
-    }
-  } else if (hasComma) {
-    normalized = cleaned.replace(/\./g, '').replace(',', '.')
+  if (isRecord(error)) {
+    const message = cleanText(error.message)
+    if (message) return message
   }
 
-  const number = Number(normalized)
-  return Number.isFinite(number) ? number : 0
+  return fallback
 }
 
-function formatMoney(value: number) {
-  return Number(value || 0).toLocaleString('pt-BR', {
-    style: 'currency',
-    currency: 'BRL',
-  })
-}
-
-function uniqueStrings(values: string[]) {
-  return Array.from(new Set(values.map((item) => cleanText(item)).filter(Boolean)))
-}
-
-function toAbsoluteUrl(value: string, baseUrl: string) {
-  const trimmed = String(value ?? '').trim()
-  if (!trimmed || trimmed.startsWith('data:')) return ''
-
-  try {
-    return new URL(trimmed, baseUrl).toString()
-  } catch {
-    return ''
-  }
-}
-
-function getHostLabel(url: string) {
-  try {
-    const host = new URL(url).hostname.replace(/^www\./i, '')
-    const first = host.split('.')[0] ?? 'Loja'
-    return first.charAt(0).toUpperCase() + first.slice(1)
-  } catch {
-    return 'Loja'
-  }
-}
-
-function escapeRegExp(value: string) {
-  return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
-}
-
-function extractFirstMatch(html: string, patterns: RegExp[]) {
-  for (const pattern of patterns) {
-    const match = html.match(pattern)
-    if (match?.[1]) {
-      return cleanText(decodeHtmlEntities(match[1]))
-    }
-  }
-  return ''
-}
-
-function extractTitle(html: string) {
-  return extractFirstMatch(html, [/<title[^>]*>([\s\S]*?)<\/title>/i])
-}
-
-function extractMetaContent(html: string, keys: string[]) {
-  for (const key of keys) {
-    const escaped = escapeRegExp(key)
-
-    const patterns = [
-      new RegExp(
-        `<meta[^>]+(?:property|name|itemprop)=["']${escaped}["'][^>]+content=["']([\\s\\S]*?)["'][^>]*>`,
-        'i',
-      ),
-      new RegExp(
-        `<meta[^>]+content=["']([\\s\\S]*?)["'][^>]+(?:property|name|itemprop)=["']${escaped}["'][^>]*>`,
-        'i',
-      ),
-    ]
-
-    const content = extractFirstMatch(html, patterns)
-    if (content) return content
-  }
-
-  return ''
-}
-
-function tryParseJson(value: string): unknown {
-  try {
-    return JSON.parse(value)
-  } catch {
-    return null
-  }
-}
-
-function flattenJsonLd(value: unknown): Record<string, unknown>[] {
-  if (Array.isArray(value)) {
-    return value.flatMap(flattenJsonLd)
-  }
-
-  if (isRecord(value)) {
-    const current: Record<string, unknown>[] = [value]
-    const graph = value['@graph']
-
-    if (Array.isArray(graph)) {
-      return [...current, ...graph.flatMap(flattenJsonLd)]
-    }
-
-    return current
-  }
-
-  return []
-}
-
-function isProductType(value: unknown) {
-  if (!value) return false
-
-  if (Array.isArray(value)) {
-    return value.some(isProductType)
-  }
-
-  const type = String(value).toLowerCase()
-  return type.includes('product')
-}
-
-function findProductJsonLd(html: string): Record<string, unknown> | null {
-  const matches = [
-    ...html.matchAll(/<script[^>]+type=["']application\/ld\+json["'][^>]*>([\s\S]*?)<\/script>/gi),
+async function createStore(
+  adminClient: any,
+  params: {
+    userId: string
+    storeName: string
+    storeSlug: string
+    planName: string
+  },
+) {
+  const attempts = [
+    {
+      store_name: params.storeName,
+      slug: params.storeSlug,
+      status: 'active',
+      plan: params.planName,
+      owner_id: params.userId,
+      is_active: true,
+    },
+    {
+      store_name: params.storeName,
+      slug: params.storeSlug,
+      status: 'active',
+      plan: params.planName,
+      owner_id: params.userId,
+    },
+    {
+      store_name: params.storeName,
+      slug: params.storeSlug,
+      status: 'active',
+      plan: params.planName,
+    },
+    {
+      name: params.storeName,
+      slug: params.storeSlug,
+      status: 'active',
+      plan_name: params.planName,
+      owner_id: params.userId,
+      is_active: true,
+    },
+    {
+      name: params.storeName,
+      slug: params.storeSlug,
+      status: 'active',
+      plan_name: params.planName,
+      owner_id: params.userId,
+    },
+    {
+      name: params.storeName,
+      slug: params.storeSlug,
+      status: 'active',
+      plan_name: params.planName,
+    },
   ]
 
-  for (const match of matches) {
-    const parsed = tryParseJson(match[1] ?? '')
-    const flattened = flattenJsonLd(parsed)
+  let lastError: unknown = null
 
-    for (const item of flattened) {
-      if (isProductType(item['@type'])) {
-        return item
-      }
+  for (const payload of attempts) {
+    const { data, error } = await adminClient.from('stores').insert(payload).select('id, slug').single()
+
+    if (!error && data?.id) {
+      return data
     }
+
+    lastError = error
   }
 
-  return null
+  throw new Error(getErrorMessage(lastError, 'Não foi possível criar a estrutura da loja.'))
 }
 
-function getString(record: Record<string, unknown> | null, key: string) {
-  if (!record) return ''
-
-  const value = record[key]
-
-  if (typeof value === 'string') return cleanText(decodeHtmlEntities(value))
-  if (typeof value === 'number') return String(value)
-
-  return ''
-}
-
-function getNestedRecord(
-  record: Record<string, unknown> | null,
-  key: string,
-): Record<string, unknown> | null {
-  if (!record) return null
-
-  const value = record[key]
-
-  if (isRecord(value)) return value
-
-  if (Array.isArray(value)) {
-    const firstRecord = value.find((item) => isRecord(item))
-    return isRecord(firstRecord) ? firstRecord : null
-  }
-
-  return null
-}
-
-function extractImagesFromProduct(record: Record<string, unknown> | null) {
-  if (!record) return []
-
-  const value = record['image']
-  const images: string[] = []
-
-  if (typeof value === 'string') {
-    images.push(value)
-  } else if (Array.isArray(value)) {
-    for (const item of value) {
-      if (typeof item === 'string') {
-        images.push(item)
-      } else if (isRecord(item)) {
-        const url = getString(item, 'url')
-        if (url) images.push(url)
-      }
-    }
-  } else if (isRecord(value)) {
-    const url = getString(value, 'url')
-    if (url) images.push(url)
-  }
-
-  return uniqueStrings(images)
-}
-
-function extractPriceFromOffers(offers: unknown): number {
-  if (!offers) return 0
-
-  if (Array.isArray(offers)) {
-    for (const item of offers) {
-      const price = extractPriceFromOffers(item)
-      if (price > 0) return price
-    }
-    return 0
-  }
-
-  if (!isRecord(offers)) return 0
-
-  const directCandidates = [offers['price'], offers['lowPrice'], offers['highPrice']]
-
-  for (const candidate of directCandidates) {
-    const price = normalizePrice(candidate)
-    if (price > 0) return price
-  }
-
-  const priceSpecification = offers['priceSpecification']
-
-  if (Array.isArray(priceSpecification)) {
-    for (const item of priceSpecification) {
-      const price = extractPriceFromOffers(item)
-      if (price > 0) return price
-    }
-  } else if (isRecord(priceSpecification)) {
-    const price = extractPriceFromOffers(priceSpecification)
-    if (price > 0) return price
-  }
-
-  return 0
-}
-
-function extractFallbackImagesFromHtml(html: string, baseUrl: string) {
-  const matches = [...html.matchAll(/<img[^>]+src=["']([^"']+)["']/gi)]
-
-  return uniqueStrings(
-    matches
-      .map((match) => toAbsoluteUrl(match[1] ?? '', baseUrl))
-      .filter(Boolean),
-  )
-    .filter((item) => !/logo|icon|sprite|avatar|thumb/i.test(item))
-    .slice(0, 8)
-}
-
-function extractFallbackPrice(html: string) {
-  const patterns = [
-    /"price"\s*:\s*"([^"]+)"/i,
-    /"salePrice"\s*:\s*"([^"]+)"/i,
-    /"price"\s*:\s*([0-9.,]+)/i,
-    /R\$\s?([0-9]{1,3}(?:\.[0-9]{3})*,[0-9]{2})/i,
+async function createAdminLink(
+  adminClient: any,
+  params: {
+    userId: string
+    storeId: string
+    adminName: string
+    adminEmail: string
+  },
+) {
+  const attempts = [
+    {
+      user_id: params.userId,
+      store_id: params.storeId,
+      email: params.adminEmail,
+      name: params.adminName,
+    },
+    {
+      id: params.userId,
+      store_id: params.storeId,
+      email: params.adminEmail,
+      name: params.adminName,
+    },
+    {
+      user_id: params.userId,
+      store_id: params.storeId,
+      email: params.adminEmail,
+    },
+    {
+      id: params.userId,
+      store_id: params.storeId,
+      email: params.adminEmail,
+    },
+    {
+      store_id: params.storeId,
+      email: params.adminEmail,
+      name: params.adminName,
+    },
+    {
+      store_id: params.storeId,
+      email: params.adminEmail,
+    },
   ]
 
-  for (const pattern of patterns) {
-    const match = html.match(pattern)
-    if (match?.[1]) {
-      const price = normalizePrice(match[1])
-      if (price > 0) return price
+  let lastError: unknown = null
+
+  for (const payload of attempts) {
+    const { error } = await adminClient.from('admins').insert(payload)
+
+    if (!error) {
+      return
     }
+
+    lastError = error
   }
 
-  return 0
+  throw new Error(getErrorMessage(lastError, 'Não foi possível vincular o admin à estrutura.'))
 }
 
-function sanitizeTitle(value: string, siteName?: string) {
-  let title = cleanText(decodeHtmlEntities(value))
-
-  if (!title) return ''
-
-  const separators = [' | ', ' - ', ' — ', ' :: ']
-
-  for (const separator of separators) {
-    if (title.includes(separator)) {
-      const parts = title
-        .split(separator)
-        .map((item) => cleanText(item))
-        .filter(Boolean)
-
-      if (parts.length > 0) {
-        const candidate = parts.sort((a, b) => b.length - a.length)[0]
-        if (candidate) {
-          title = candidate
-          break
-        }
-      }
-    }
-  }
-
-  if (siteName) {
-    const escaped = escapeRegExp(siteName)
-    title = cleanText(title.replace(new RegExp(escaped, 'ig'), ''))
-  }
-
-  return title.replace(/\s{2,}/g, ' ').trim()
-}
-
-function buildCommercialName(rawName: string) {
-  const base = sanitizeTitle(rawName)
-
-  if (!base) return ''
-
-  const words = base.split(' ').filter(Boolean)
-
-  if (words.length <= 2) {
-    return `${base} Premium`
-  }
-
-  return base
-}
-
-function buildGeneratedDescription(params: {
-  productName: string
-  rawDescription: string
-  priceValue: number
-}) {
-  const { productName, rawDescription, priceValue } = params
-
-  const cleanDescription = stripHtml(rawDescription)
-  const firstSentence =
-    cleanDescription
-      .split(/(?<=[.!?])\s+/)
-      .map((item) => cleanText(item))
-      .filter(Boolean)[0] ?? ''
-
-  const intro = `Conheça o ${productName}, uma opção com forte potencial de conversão para vitrine e divulgação.`
-  const benefit = firstSentence
-    ? firstSentence
-    : 'Ideal para destacar benefícios, despertar interesse e aumentar cliques na oferta.'
-  const valueText =
-    priceValue > 0
-      ? `Faixa de valor identificada: ${formatMoney(priceValue)}.`
-      : 'Preço sujeito à variação conforme a plataforma de origem.'
-
-  return cleanText(`${intro} ${benefit} ${valueText}`)
-}
-
-function buildShortCopy(productName: string) {
-  return cleanText(
-    `${productName} com apresentação forte, visual atrativo e ótima proposta para chamar atenção rápida.`,
-  )
-}
-
-function buildCta(productName: string) {
-  return cleanText(`Clique agora e confira a oferta de ${productName}.`)
-}
-
-serve(async (req) => {
+serve(async (req: Request) => {
   if (req.method === 'OPTIONS') {
     return new Response('ok', { headers: corsHeaders })
   }
+
+  let createdUserId = ''
+  let createdStoreId = ''
 
   try {
     const supabaseUrl = Deno.env.get('SUPABASE_URL') ?? ''
@@ -443,7 +244,7 @@ serve(async (req) => {
       )
     }
 
-    const userClient = createClient(supabaseUrl, anonKey, {
+    const userClient: any = createClient(supabaseUrl, anonKey, {
       global: {
         headers: {
           Authorization: `Bearer ${token}`,
@@ -455,7 +256,7 @@ serve(async (req) => {
       },
     })
 
-    const admin = createClient(supabaseUrl, serviceRoleKey, {
+    const adminClient: any = createClient(supabaseUrl, serviceRoleKey, {
       auth: {
         autoRefreshToken: false,
         persistSession: false,
@@ -477,7 +278,7 @@ serve(async (req) => {
       )
     }
 
-    const { data: requesterProfile, error: requesterProfileError } = await admin
+    const { data: requesterProfile, error: requesterProfileError } = await adminClient
       .from('profiles')
       .select('id, role')
       .eq('id', requesterUser.id)
@@ -493,148 +294,174 @@ serve(async (req) => {
       )
     }
 
-    const requesterRole = String(requesterProfile?.role ?? '').trim().toLowerCase()
-
-    if (!['admin', 'super-admin'].includes(requesterRole)) {
+    if (!isSuperAdminRole(requesterProfile?.role)) {
       return json(
         {
           success: false,
-          message: 'Apenas admin ou super admin podem importar produtos.',
+          message: 'Apenas super admin pode criar novos admins.',
         },
         403,
       )
     }
 
-    const body = await req.json().catch(() => null)
-    const sourceUrl = ensureUrl(String(isRecord(body) ? body.url ?? '' : ''))
+    const bodyRaw = await req.json().catch(() => null)
 
-    if (!sourceUrl) {
+    if (!isRecord(bodyRaw)) {
       return json(
         {
           success: false,
-          message: 'Informe um link válido para importar o produto.',
+          message: 'Corpo da requisição inválido.',
         },
         400,
       )
     }
 
-    const response = await fetch(sourceUrl, {
-      method: 'GET',
-      redirect: 'follow',
-      headers: {
-        'user-agent':
-          'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0 Safari/537.36',
-        accept:
-          'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8',
-        'accept-language': 'pt-BR,pt;q=0.9,en-US;q=0.8,en;q=0.7',
-        pragma: 'no-cache',
-        'cache-control': 'no-cache',
+    const body: CreateAdminBody = {
+      adminName: cleanText(bodyRaw.adminName),
+      adminEmail: normalizeEmail(bodyRaw.adminEmail),
+      adminPassword: cleanText(bodyRaw.adminPassword),
+      storeName: cleanText(bodyRaw.storeName),
+      storeSlug: slugify(bodyRaw.storeSlug || bodyRaw.storeName),
+      planName: normalizePlan(bodyRaw.planName),
+    }
+
+    if (
+      !body.adminName ||
+      !body.adminEmail ||
+      !body.adminPassword ||
+      !body.storeName ||
+      !body.storeSlug
+    ) {
+      return json(
+        {
+          success: false,
+          message: 'Preencha nome, email, senha e nome da estrutura.',
+        },
+        400,
+      )
+    }
+
+    if (body.adminPassword.length < 6) {
+      return json(
+        {
+          success: false,
+          message: 'A senha precisa ter pelo menos 6 caracteres.',
+        },
+        400,
+      )
+    }
+
+    const { data: existingStore, error: existingStoreError } = await adminClient
+      .from('stores')
+      .select('id')
+      .eq('slug', body.storeSlug)
+      .maybeSingle()
+
+    if (existingStoreError) {
+      return json(
+        {
+          success: false,
+          message: 'Não foi possível validar o link da estrutura.',
+        },
+        500,
+      )
+    }
+
+    if (existingStore?.id) {
+      return json(
+        {
+          success: false,
+          message: 'Esse link da estrutura já está em uso. Escolha outro.',
+        },
+        409,
+      )
+    }
+
+    const { data: createdUser, error: createUserError } = await adminClient.auth.admin.createUser({
+      email: body.adminEmail,
+      password: body.adminPassword,
+      email_confirm: true,
+      user_metadata: {
+        name: body.adminName,
       },
-      signal: AbortSignal.timeout(15000),
     })
 
-    if (!response.ok) {
+    if (createUserError || !createdUser?.user) {
       return json(
         {
           success: false,
-          message: `Não foi possível abrir o link informado. Status: ${response.status}.`,
+          message: getErrorMessage(
+            createUserError,
+            'Não foi possível criar o usuário do admin no Auth.',
+          ),
         },
         400,
       )
     }
 
-    const finalUrl = response.url || sourceUrl
-    const html = await response.text()
+    createdUserId = createdUser.user.id
 
-    if (!html || html.length < 100) {
-      return json(
-        {
-          success: false,
-          message: 'A página retornou conteúdo insuficiente para importar o produto.',
-        },
-        400,
-      )
-    }
-
-    const productJsonLd = findProductJsonLd(html)
-
-    const siteName =
-      extractMetaContent(html, ['og:site_name', 'application-name']) || getHostLabel(finalUrl)
-
-    const rawTitle =
-      getString(productJsonLd, 'name') ||
-      extractMetaContent(html, ['og:title', 'twitter:title']) ||
-      extractTitle(html) ||
-      ''
-
-    const rawDescription =
-      getString(productJsonLd, 'description') ||
-      extractMetaContent(html, ['og:description', 'twitter:description', 'description']) ||
-      ''
-
-    const offersRecord = getNestedRecord(productJsonLd, 'offers')
-    const productImages = extractImagesFromProduct(productJsonLd)
-
-    const rawImages = uniqueStrings([
-      ...productImages,
-      extractMetaContent(html, ['og:image', 'twitter:image']),
-      ...extractFallbackImagesFromHtml(html, finalUrl),
-    ])
-      .map((item) => toAbsoluteUrl(item, finalUrl))
-      .filter(Boolean)
-      .slice(0, 8)
-
-    const priceValue =
-      extractPriceFromOffers(offersRecord) ||
-      normalizePrice(extractMetaContent(html, ['product:price:amount', 'og:price:amount', 'price'])) ||
-      extractFallbackPrice(html)
-
-    const sanitizedName = sanitizeTitle(rawTitle, siteName)
-    const generatedName = buildCommercialName(sanitizedName)
-    const finalName = generatedName || sanitizedName || 'Produto importado'
-
-    const generatedDescription = buildGeneratedDescription({
-      productName: finalName,
-      rawDescription,
-      priceValue,
+    const { error: profileError } = await adminClient.from('profiles').insert({
+      id: createdUserId,
+      name: body.adminName,
+      email: body.adminEmail,
+      role: 'admin',
     })
 
-    if (!finalName && !rawImages.length && !priceValue) {
-      return json(
-        {
-          success: false,
-          message:
-            'Não consegui extrair dados suficientes desse link. Tente outro produto ou preencha manualmente.',
-        },
-        400,
-      )
+    if (profileError) {
+      throw new Error(getErrorMessage(profileError, 'Não foi possível criar o perfil do admin.'))
     }
+
+    const store = await createStore(adminClient, {
+      userId: createdUserId,
+      storeName: body.storeName,
+      storeSlug: body.storeSlug,
+      planName: body.planName || 'iniciante',
+    })
+
+    createdStoreId = String(store.id)
+
+    await createAdminLink(adminClient, {
+      userId: createdUserId,
+      storeId: createdStoreId,
+      adminName: body.adminName,
+      adminEmail: body.adminEmail,
+    })
 
     return json({
       success: true,
-      data: {
-        sourceUrl,
-        finalUrl,
-        siteName,
-        rawName: sanitizedName,
-        generatedName: finalName,
-        priceValue,
-        priceFormatted: formatMoney(priceValue),
-        image: rawImages[0] ?? '',
-        images: rawImages,
-        rawDescription: stripHtml(rawDescription),
-        generatedDescription,
-        shortCopy: buildShortCopy(finalName),
-        cta: buildCta(finalName),
-      },
+      message: 'Admin e estrutura criados com sucesso.',
+      adminUserId: createdUserId,
+      storeId: createdStoreId,
+      slug: body.storeSlug,
     })
   } catch (error) {
-    const message = error instanceof Error ? error.message : 'Erro interno inesperado.'
+    const supabaseUrl = Deno.env.get('SUPABASE_URL') ?? ''
+    const serviceRoleKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
+
+    if (supabaseUrl && serviceRoleKey) {
+      const adminClient: any = createClient(supabaseUrl, serviceRoleKey, {
+        auth: {
+          autoRefreshToken: false,
+          persistSession: false,
+        },
+      })
+
+      if (createdStoreId) {
+        await adminClient.from('stores').delete().eq('id', createdStoreId)
+      }
+
+      if (createdUserId) {
+        await adminClient.from('admins').delete().or(`id.eq.${createdUserId},user_id.eq.${createdUserId}`)
+        await adminClient.from('profiles').delete().eq('id', createdUserId)
+        await adminClient.auth.admin.deleteUser(createdUserId)
+      }
+    }
 
     return json(
       {
         success: false,
-        message,
+        message: getErrorMessage(error, 'Erro interno ao criar admin e estrutura.'),
       },
       500,
     )
