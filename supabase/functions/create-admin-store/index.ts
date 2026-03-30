@@ -92,7 +92,7 @@ function getErrorMessage(error: unknown, fallback: string) {
 }
 
 async function linkAdminToStore(
-  adminClient: ReturnType<typeof createClient>,
+  adminClient: any,
   params: {
     userId: string
     storeId: string
@@ -169,7 +169,7 @@ serve(async (req: Request) => {
       )
     }
 
-    const userClient = createClient(supabaseUrl, anonKey, {
+    const userClient: any = createClient(supabaseUrl, anonKey, {
       global: {
         headers: {
           Authorization: `Bearer ${token}`,
@@ -181,7 +181,7 @@ serve(async (req: Request) => {
       },
     })
 
-    const adminClient = createClient(supabaseUrl, serviceRoleKey, {
+    const adminClient: any = createClient(supabaseUrl, serviceRoleKey, {
       auth: {
         autoRefreshToken: false,
         persistSession: false,
@@ -432,7 +432,7 @@ serve(async (req: Request) => {
     const serviceRoleKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
 
     if (supabaseUrl && serviceRoleKey) {
-      const adminClient = createClient(supabaseUrl, serviceRoleKey, {
+      const adminClient: any = createClient(supabaseUrl, serviceRoleKey, {
         auth: {
           autoRefreshToken: false,
           persistSession: false,
@@ -450,12 +450,8 @@ serve(async (req: Request) => {
       }
     }
 
-    const step =
-      error instanceof StepError ? error.step : 'catch'
-
-    const status =
-      error instanceof StepError ? error.status : 500
-
+    const step = error instanceof StepError ? error.step : 'catch'
+    const status = error instanceof StepError ? error.status : 500
     const message = getErrorMessage(error, 'Erro interno ao criar admin e estrutura.')
 
     return json(

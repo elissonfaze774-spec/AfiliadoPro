@@ -75,7 +75,7 @@ function getErrorMessage(error: unknown, fallback: string) {
   return fallback
 }
 
-async function getAdminByStore(adminClient: ReturnType<typeof createClient>, storeId: string) {
+async function getAdminByStore(adminClient: any, storeId: string) {
   const { data, error } = await adminClient
     .from('admins')
     .select('id, user_id, store_id, email')
@@ -100,27 +100,6 @@ async function getAdminByStore(adminClient: ReturnType<typeof createClient>, sto
     authUserId,
     email: cleanText(data?.email),
   }
-}
-
-async function tableExists(adminClient: ReturnType<typeof createClient>, tableName: string) {
-  const { data, error } = await adminClient
-    .rpc('to_regclass', { name: `public.${tableName}` })
-    .single()
-
-  if (error) return false
-  return Boolean(data)
-}
-
-async function deleteIfTableExists(
-  adminClient: ReturnType<typeof createClient>,
-  tableName: string,
-  column: string,
-  value: string,
-) {
-  const exists = await tableExists(adminClient, tableName)
-  if (!exists) return
-
-  await adminClient.from(tableName).delete().eq(column, value)
 }
 
 serve(async (req: Request) => {
@@ -160,7 +139,7 @@ serve(async (req: Request) => {
       )
     }
 
-    const userClient = createClient(supabaseUrl, anonKey, {
+    const userClient: any = createClient(supabaseUrl, anonKey, {
       global: {
         headers: {
           Authorization: `Bearer ${token}`,
@@ -172,7 +151,7 @@ serve(async (req: Request) => {
       },
     })
 
-    const adminClient = createClient(supabaseUrl, serviceRoleKey, {
+    const adminClient: any = createClient(supabaseUrl, serviceRoleKey, {
       auth: {
         autoRefreshToken: false,
         persistSession: false,
@@ -421,7 +400,7 @@ serve(async (req: Request) => {
       const { error: updateStoreError } = await adminClient
         .from('stores')
         .update({
-          auto_renew: Boolean(body.autoRenew),
+          auto_renew: body.autoRenew,
           access_updated_at: new Date().toISOString(),
         })
         .eq('id', body.storeId)
@@ -437,7 +416,7 @@ serve(async (req: Request) => {
       return json({
         success: true,
         step: 'auto-renew-updated',
-        message: Boolean(body.autoRenew)
+        message: body.autoRenew
           ? 'Renovação automática ativada com sucesso.'
           : 'Renovação automática desativada com sucesso.',
       })
@@ -446,10 +425,10 @@ serve(async (req: Request) => {
     if (body.action === 'delete_structure') {
       const adminRow = await getAdminByStore(adminClient, body.storeId)
 
-      await deleteIfTableExists(adminClient, 'orders', 'store_id', body.storeId)
-      await deleteIfTableExists(adminClient, 'products', 'store_id', body.storeId)
-      await deleteIfTableExists(adminClient, 'categories', 'store_id', body.storeId)
-      await deleteIfTableExists(adminClient, 'coupons', 'store_id', body.storeId)
+      await adminClient.from('orders').delete().eq('store_id', body.storeId)
+      await adminClient.from('products').delete().eq('store_id', body.storeId)
+      await adminClient.from('categories').delete().eq('store_id', body.storeId)
+      await adminClient.from('coupons').delete().eq('store_id', body.storeId)
 
       const { error: deleteAdminsError } = await adminClient
         .from('admins')
@@ -496,12 +475,8 @@ serve(async (req: Request) => {
       400,
     )
   } catch (error) {
-    const step =
-      error instanceof StepError ? error.step : 'catch'
-
-    const status =
-      error instanceof StepError ? error.status : 500
-
+    const step = error instanceof StepError ? error.step : 'catch'
+    const status = error instanceof StepError ? error.status : 500
     const message = getErrorMessage(error, 'Erro interno ao processar a ação.')
 
     return json(
