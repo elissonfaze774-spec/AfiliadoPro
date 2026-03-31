@@ -18,6 +18,11 @@ import {
   GraduationCap,
   ShieldCheck,
   CalendarClock,
+  Bell,
+  ChevronRight,
+  Target,
+  Rocket,
+  LayoutGrid,
 } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import { useAuth } from '../context/AuthTemp';
@@ -54,6 +59,22 @@ type AuthUserLike = {
     daysLeft?: number;
     isExpired?: boolean;
   } | null;
+};
+
+type QuickAction = {
+  title: string;
+  description: string;
+  icon: any;
+  onClick: () => void;
+  primary?: boolean;
+  disabled?: boolean;
+};
+
+type NotificationItem = {
+  id: string;
+  title: string;
+  description: string;
+  highlight?: boolean;
 };
 
 function normalizeStore(raw: any): StoreData | null {
@@ -133,6 +154,7 @@ export default function Painel() {
   const [store, setStore] = useState<StoreData | null>(null);
   const [loadingStore, setLoadingStore] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [showNotifications, setShowNotifications] = useState(false);
 
   const storeChannelRef = useRef<ReturnType<typeof supabase.channel> | null>(null);
   const lastStoreIdRef = useRef<string | null>(null);
@@ -153,21 +175,18 @@ export default function Painel() {
         title: 'Produtos ativos',
         value: products.length,
         helper: products.length === 1 ? '1 produto na loja' : `${products.length} produtos na loja`,
-        color: 'from-emerald-500 to-green-500',
       },
       {
         icon: MousePointerClick,
         title: 'Cliques',
         value: clicks,
         helper: 'Interesse gerado pelos seus links',
-        color: 'from-cyan-500 to-emerald-500',
       },
       {
         icon: FileText,
         title: 'Conteúdos',
         value: contents.length,
         helper: 'Textos gerados para vender mais',
-        color: 'from-lime-500 to-emerald-500',
       },
       {
         icon: DollarSign,
@@ -177,7 +196,6 @@ export default function Painel() {
           currency: 'BRL',
         }),
         helper: 'Estimativa visual do painel',
-        color: 'from-yellow-400 to-emerald-500',
       },
     ],
     [products.length, clicks, contents.length, estimatedEarnings],
@@ -201,16 +219,127 @@ export default function Painel() {
 
   const academyItems = [
     {
-      title: 'Aula 1 — O que vender primeiro',
-      description: 'Comece por produtos visuais, simples e com preço fácil de entender.',
+      title: 'O que vender primeiro',
+      description: 'Comece por produtos mais visuais, simples e fáceis de explicar.',
     },
     {
-      title: 'Aula 2 — Como gerar confiança',
-      description: 'Use banner bonito, nome forte, imagens limpas e descrição objetiva.',
+      title: 'Como passar confiança',
+      description: 'Banner bonito, foto da loja e descrição forte ajudam muito na conversão.',
     },
     {
-      title: 'Aula 3 — Como ter mais cliques',
-      description: 'Poste seus produtos em grupos, status, reels e conversas privadas.',
+      title: 'Como ter mais cliques',
+      description: 'Divulgue em grupos, status, reels e conversas privadas todos os dias.',
+    },
+  ];
+
+  const completedChecklist = useMemo(() => checklist.filter((item) => item.done).length, [checklist]);
+  const checklistPercent = useMemo(() => Math.round((completedChecklist / checklist.length) * 100), [completedChecklist, checklist.length]);
+
+  const nextBestAction = useMemo(() => {
+    if (products.length < 3) {
+      return {
+        title: 'Adicione mais produtos',
+        description: 'Quanto mais produtos bons você tiver, maior a chance de gerar cliques e comissão.',
+        actionLabel: 'Ir para Produtos',
+        onClick: () => navigate('/produtos'),
+      };
+    }
+
+    if (!store?.bannerUrl || !store?.logoUrl) {
+      return {
+        title: 'Deixe sua loja com cara profissional',
+        description: 'Envie logo e banner para passar mais confiança e vender melhor.',
+        actionLabel: 'Ir para Configurações',
+        onClick: () => navigate('/configuracoes'),
+      };
+    }
+
+    if (contents.length === 0) {
+      return {
+        title: 'Gere seu primeiro conteúdo',
+        description: 'Use a geração de conteúdo para divulgar mais rápido e sem travar.',
+        actionLabel: 'Gerar conteúdo',
+        onClick: () => navigate('/gerar-conteudo'),
+      };
+    }
+
+    return {
+      title: 'Sua loja já está forte, agora divulgue',
+      description: 'Copie seu link e comece a espalhar suas ofertas para gerar cliques.',
+      actionLabel: 'Copiar link',
+      onClick: () => handleCopyStoreLink(),
+    };
+  }, [products.length, store?.bannerUrl, store?.logoUrl, contents.length, navigate]);
+
+  const notifications = useMemo<NotificationItem[]>(() => {
+    const items: NotificationItem[] = [
+      {
+        id: 'motivation-1',
+        title: 'Vamos pra cima',
+        description: 'Uma pequena ação agora pode trazer sua próxima comissão.',
+        highlight: true,
+      },
+    ];
+
+    if (products.length < 3) {
+      items.push({
+        id: 'products-warning',
+        title: 'Adicione mais produtos',
+        description: 'Sua loja fica mais forte quando tem mais opções para divulgar.',
+      });
+    }
+
+    if (!store?.bannerUrl || !store?.logoUrl) {
+      items.push({
+        id: 'visual-warning',
+        title: 'Sua loja pode ficar mais profissional',
+        description: 'Envie foto e banner para passar mais confiança.',
+      });
+    }
+
+    if (contents.length === 0) {
+      items.push({
+        id: 'content-warning',
+        title: 'Você ainda não gerou conteúdo',
+        description: 'Use o gerador para acelerar sua divulgação.',
+      });
+    }
+
+    items.push({
+      id: 'motivation-2',
+      title: 'Já vendeu hoje?',
+      description: 'Se ainda não divulgou, esse é um ótimo momento para começar.',
+    });
+
+    return items.slice(0, 4);
+  }, [products.length, store?.bannerUrl, store?.logoUrl, contents.length]);
+
+  const quickActions: QuickAction[] = [
+    {
+      title: 'Produtos',
+      description: 'Adicione, edite e organize seus produtos.',
+      icon: FolderKanban,
+      onClick: () => navigate('/produtos'),
+      primary: true,
+    },
+    {
+      title: 'Gerar conteúdo',
+      description: 'Crie textos prontos para divulgar mais rápido.',
+      icon: Sparkles,
+      onClick: () => navigate('/gerar-conteudo'),
+      disabled: products.length === 0,
+    },
+    {
+      title: 'Ver loja',
+      description: 'Abra sua loja pública e veja como ficou.',
+      icon: ExternalLink,
+      onClick: () => navigate(`/loja/${store?.slug}`),
+    },
+    {
+      title: 'Configurações',
+      description: 'Personalize sua loja e deixe tudo mais profissional.',
+      icon: Settings,
+      onClick: () => navigate('/configuracoes'),
     },
   ];
 
@@ -545,20 +674,23 @@ export default function Painel() {
   }
 
   return (
-    <div className="min-h-screen bg-[radial-gradient(circle_at_top_left,_rgba(16,185,129,0.14),_transparent_25%),radial-gradient(circle_at_bottom_right,_rgba(34,197,94,0.08),_transparent_20%),linear-gradient(180deg,_#020202_0%,_#050505_50%,_#08120d_100%)]">
+    <div className="min-h-screen overflow-x-hidden bg-[radial-gradient(circle_at_top_left,_rgba(16,185,129,0.14),_transparent_25%),radial-gradient(circle_at_bottom_right,_rgba(34,197,94,0.08),_transparent_20%),linear-gradient(180deg,_#020202_0%,_#050505_50%,_#08120d_100%)]">
       <header className="border-b border-white/10 bg-black/40 backdrop-blur-sm">
         <div className="mx-auto max-w-7xl px-4 py-4">
-          <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+          <div className="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
             <div className="min-w-0">
-              <h1 className="truncate text-2xl font-black text-white">{store.name}</h1>
-              <div className="mt-1 flex flex-wrap items-center gap-3 text-sm">
-                <span className="text-zinc-400">@{store.slug}</span>
-                <span className="text-zinc-700">•</span>
-                <span className="capitalize text-zinc-400">{store.niche || 'Sem nicho'}</span>
-                <span className="inline-flex items-center gap-1 rounded-full border border-emerald-500/20 bg-emerald-500/10 px-2.5 py-1 text-emerald-300">
+              <div className="flex flex-wrap items-center gap-2">
+                <h1 className="truncate text-2xl font-black text-white">{store.name}</h1>
+                <span className="inline-flex items-center gap-1 rounded-full border border-emerald-500/20 bg-emerald-500/10 px-2.5 py-1 text-xs text-emerald-300">
                   <Crown className="h-3.5 w-3.5" />
                   Admin
                 </span>
+              </div>
+
+              <div className="mt-2 flex flex-wrap items-center gap-3 text-sm">
+                <span className="text-zinc-400">@{store.slug}</span>
+                <span className="text-zinc-700">•</span>
+                <span className="capitalize text-zinc-400">{store.niche || 'Sem nicho'}</span>
               </div>
 
               {access ? (
@@ -579,6 +711,45 @@ export default function Painel() {
             </div>
 
             <div className="flex flex-wrap items-center gap-3">
+              <div className="relative">
+                <Button
+                  variant="outline"
+                  className="border-white/10 bg-black/30 text-white hover:bg-white/5"
+                  onClick={() => setShowNotifications((prev) => !prev)}
+                >
+                  <Bell className="mr-2 h-4 w-4" />
+                  Avisos
+                  <span className="ml-2 inline-flex h-5 min-w-[20px] items-center justify-center rounded-full bg-emerald-500 px-1.5 text-[10px] font-bold text-black">
+                    {notifications.length}
+                  </span>
+                </Button>
+
+                {showNotifications ? (
+                  <div className="absolute right-0 top-[calc(100%+10px)] z-50 w-[320px] max-w-[calc(100vw-32px)] rounded-3xl border border-white/10 bg-[#07110c]/95 p-3 shadow-[0_20px_60px_rgba(0,0,0,0.45)] backdrop-blur-xl">
+                    <div className="mb-2 px-2 py-1">
+                      <p className="text-sm font-bold text-white">Central de avisos</p>
+                      <p className="text-xs text-zinc-400">Motivação, dicas e lembretes leves.</p>
+                    </div>
+
+                    <div className="space-y-2">
+                      {notifications.map((item) => (
+                        <div
+                          key={item.id}
+                          className={`rounded-2xl border p-3 ${
+                            item.highlight
+                              ? 'border-emerald-500/20 bg-emerald-500/10'
+                              : 'border-white/10 bg-black/20'
+                          }`}
+                        >
+                          <p className="text-sm font-semibold text-white">{item.title}</p>
+                          <p className="mt-1 text-xs leading-5 text-zinc-400">{item.description}</p>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                ) : null}
+              </div>
+
               <Button
                 variant="outline"
                 className="border-white/10 bg-black/30 text-white hover:bg-white/5"
@@ -587,33 +758,6 @@ export default function Painel() {
               >
                 <RefreshCw className={`mr-2 h-4 w-4 ${refreshing ? 'animate-spin' : ''}`} />
                 Atualizar
-              </Button>
-
-              <Button
-                variant="outline"
-                className="border-white/10 bg-black/30 text-white hover:bg-white/5"
-                onClick={handleCopyStoreLink}
-              >
-                <Copy className="mr-2 h-4 w-4" />
-                Copiar link
-              </Button>
-
-              <Button
-                variant="outline"
-                className="border-emerald-500/20 bg-black/30 text-white hover:bg-emerald-500/10"
-                onClick={() => navigate(`/loja/${store.slug}`)}
-              >
-                <ExternalLink className="mr-2 h-4 w-4" />
-                Ver loja
-              </Button>
-
-              <Button
-                variant="outline"
-                className="border-white/10 bg-black/30 text-white hover:bg-white/5"
-                onClick={() => navigate('/configuracoes')}
-              >
-                <Settings className="mr-2 h-4 w-4" />
-                Configurações
               </Button>
 
               <Button
@@ -629,172 +773,235 @@ export default function Painel() {
         </div>
       </header>
 
-      <div className="mx-auto max-w-7xl px-4 py-8">
-        <Card className="mb-8 overflow-hidden border-emerald-500/20 bg-black/40 shadow-[0_20px_60px_rgba(0,0,0,0.35)]">
-          <div className="relative">
-            <div className="h-48 w-full bg-gradient-to-r from-emerald-700 via-emerald-600 to-green-500">
-              {store.bannerUrl ? (
-                <img
-                  src={store.bannerUrl}
-                  alt={store.name}
-                  className="h-full w-full object-cover opacity-60"
-                />
-              ) : null}
-            </div>
+      <div className="mx-auto max-w-7xl space-y-6 px-4 py-6 md:space-y-8 md:py-8">
+        <section className="grid grid-cols-1 gap-4 xl:grid-cols-[minmax(0,1.2fr)_360px]">
+          <Card className="overflow-hidden border-emerald-500/20 bg-black/40 shadow-[0_20px_60px_rgba(0,0,0,0.35)]">
+            <div className="relative">
+              <div className="h-44 w-full bg-gradient-to-r from-emerald-700 via-emerald-600 to-green-500 md:h-52">
+                {store.bannerUrl ? (
+                  <img
+                    src={store.bannerUrl}
+                    alt={store.name}
+                    className="h-full w-full object-cover opacity-60"
+                  />
+                ) : null}
+              </div>
 
-            <div className="absolute inset-0 bg-gradient-to-t from-black via-black/35 to-transparent" />
+              <div className="absolute inset-0 bg-gradient-to-t from-black via-black/35 to-transparent" />
 
-            <div className="absolute bottom-0 left-0 right-0 p-6">
-              <div className="flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
-                <div className="flex items-end gap-4">
-                  <div className="flex h-20 w-20 items-center justify-center overflow-hidden rounded-3xl border border-white/15 bg-black/40 text-2xl font-black text-white shadow-xl">
-                    {store.logoUrl ? (
-                      <img
-                        src={store.logoUrl}
-                        alt={store.name}
-                        className="h-full w-full object-cover"
-                      />
-                    ) : (
-                      <span>{getInitials(store.name || 'A')}</span>
-                    )}
+              <div className="absolute inset-x-0 bottom-0 p-4 md:p-6">
+                <div className="flex flex-col gap-5">
+                  <div className="flex items-end gap-4">
+                    <div className="flex h-20 w-20 shrink-0 items-center justify-center overflow-hidden rounded-3xl border border-white/15 bg-black/40 text-2xl font-black text-white shadow-xl">
+                      {store.logoUrl ? (
+                        <img
+                          src={store.logoUrl}
+                          alt={store.name}
+                          className="h-full w-full object-cover"
+                        />
+                      ) : (
+                        <span>{getInitials(store.name || 'A')}</span>
+                      )}
+                    </div>
+
+                    <div className="min-w-0">
+                      <p className="mb-2 inline-flex rounded-full border border-emerald-400/20 bg-emerald-400/10 px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.18em] text-emerald-300 md:text-xs">
+                        Painel principal
+                      </p>
+                      <h2 className="text-2xl font-black text-white md:text-4xl">
+                        Sua estrutura para vender mais
+                      </h2>
+                      <p className="mt-2 max-w-2xl text-sm text-zinc-300 md:text-base">
+                        Organização, motivação e velocidade para você divulgar melhor todos os dias.
+                      </p>
+                    </div>
                   </div>
 
-                  <div>
-                    <p className="mb-2 inline-flex rounded-full border border-emerald-400/20 bg-emerald-400/10 px-3 py-1 text-xs font-semibold uppercase tracking-[0.18em] text-emerald-300">
-                      Painel principal
-                    </p>
-                    <h2 className="text-3xl font-black text-white md:text-4xl">
-                      Sua estrutura para vender mais
-                    </h2>
-                    <p className="mt-2 max-w-2xl text-sm text-zinc-300 md:text-base">
-                      Agora seus produtos ficam organizados em uma central própria, sem bagunçar o painel.
-                    </p>
-                  </div>
-                </div>
+                  <div className="flex flex-wrap gap-3">
+                    <Button
+                      className="rounded-2xl bg-gradient-to-r from-emerald-500 to-green-500 font-bold text-black hover:from-emerald-400 hover:to-green-400"
+                      onClick={nextBestAction.onClick}
+                    >
+                      <Rocket className="mr-2 h-4 w-4" />
+                      {nextBestAction.actionLabel}
+                    </Button>
 
-                <div className="rounded-3xl border border-emerald-300/20 bg-emerald-400/90 px-6 py-5 text-black shadow-2xl">
-                  <p className="text-xs font-semibold uppercase tracking-[0.2em] opacity-70">
-                    Potencial de ganhos
-                  </p>
-                  <div className="mt-2 text-4xl font-black">
-                    {estimatedEarnings.toLocaleString('pt-BR', {
-                      style: 'currency',
-                      currency: 'BRL',
-                    })}
+                    <Button
+                      variant="outline"
+                      className="rounded-2xl border-white/10 bg-black/25 text-white hover:bg-white/5"
+                      onClick={handleCopyStoreLink}
+                    >
+                      <Copy className="mr-2 h-4 w-4" />
+                      Copiar link
+                    </Button>
+
+                    <Button
+                      variant="outline"
+                      className="rounded-2xl border-white/10 bg-black/25 text-white hover:bg-white/5"
+                      onClick={() => navigate(`/loja/${store.slug}`)}
+                    >
+                      <ExternalLink className="mr-2 h-4 w-4" />
+                      Ver loja
+                    </Button>
                   </div>
-                  <p className="mt-1 text-sm opacity-80">
-                    Mais produtos + mais cliques = mais chance de comissão
-                  </p>
                 </div>
               </div>
             </div>
-          </div>
-        </Card>
+          </Card>
 
-        <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4">
+          <Card className="border-emerald-500/20 bg-[linear-gradient(180deg,rgba(16,185,129,0.18)_0%,rgba(5,10,8,0.9)_100%)] shadow-[0_20px_60px_rgba(0,0,0,0.35)]">
+            <CardContent className="p-5 md:p-6">
+              <div className="inline-flex rounded-full border border-emerald-300/20 bg-emerald-300/10 px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.18em] text-emerald-200">
+                Próxima melhor ação
+              </div>
+
+              <h3 className="mt-4 text-2xl font-black text-white">{nextBestAction.title}</h3>
+              <p className="mt-3 text-sm leading-6 text-emerald-50/85">{nextBestAction.description}</p>
+
+              <div className="mt-6 rounded-3xl border border-white/10 bg-black/25 p-4">
+                <p className="text-xs font-semibold uppercase tracking-[0.18em] text-emerald-200/80">
+                  Potencial visual
+                </p>
+                <div className="mt-2 text-4xl font-black text-white">
+                  {estimatedEarnings.toLocaleString('pt-BR', {
+                    style: 'currency',
+                    currency: 'BRL',
+                  })}
+                </div>
+                <p className="mt-2 text-sm text-zinc-200/80">
+                  Mais produtos + mais cliques = mais chance de comissão.
+                </p>
+              </div>
+
+              <Button
+                className="mt-5 w-full rounded-2xl bg-gradient-to-r from-emerald-500 to-green-500 font-bold text-black hover:from-emerald-400 hover:to-green-400"
+                onClick={nextBestAction.onClick}
+              >
+                <Target className="mr-2 h-4 w-4" />
+                {nextBestAction.actionLabel}
+              </Button>
+            </CardContent>
+          </Card>
+        </section>
+
+        <section className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
           {stats.map((stat, index) => (
             <Card
               key={index}
               className="border-white/10 bg-white/[0.04] shadow-[0_10px_30px_rgba(0,0,0,0.25)]"
             >
-              <CardHeader className="pb-3">
-                <div
-                  className={`mb-2 flex h-11 w-11 items-center justify-center rounded-2xl bg-gradient-to-br ${stat.color}`}
-                >
-                  <stat.icon className="h-5 w-5 text-black" />
+              <CardContent className="p-5">
+                <div className="flex items-start justify-between gap-4">
+                  <div className="min-w-0">
+                    <p className="text-sm text-zinc-400">{stat.title}</p>
+                    <div className="mt-3 break-words text-3xl font-black text-white">{stat.value}</div>
+                    <p className="mt-2 text-sm text-zinc-500">{stat.helper}</p>
+                  </div>
+
+                  <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-emerald-500 to-green-500">
+                    <stat.icon className="h-5 w-5 text-black" />
+                  </div>
                 </div>
-                <CardDescription className="text-zinc-400">{stat.title}</CardDescription>
-              </CardHeader>
-              <CardContent>
-                <div className="text-3xl font-black text-white">{stat.value}</div>
-                <p className="mt-2 text-sm text-zinc-500">{stat.helper}</p>
               </CardContent>
             </Card>
           ))}
-        </div>
+        </section>
 
-        <div className="mt-8 grid gap-8 xl:grid-cols-[1.15fr_0.85fr]">
-          <div className="space-y-8">
+        <section className="grid grid-cols-1 gap-6 xl:grid-cols-[minmax(0,1.15fr)_minmax(0,0.85fr)]">
+          <div className="space-y-6">
             <Card className="border-white/10 bg-white/[0.04] shadow-[0_10px_30px_rgba(0,0,0,0.25)]">
               <CardHeader>
-                <CardTitle className="text-white">Ações rápidas</CardTitle>
+                <CardTitle className="flex items-center gap-2 text-white">
+                  <LayoutGrid className="h-5 w-5 text-emerald-400" />
+                  Atalhos principais
+                </CardTitle>
                 <CardDescription className="text-zinc-400">
-                  Agora o gerenciamento ficou dividido em páginas mais organizadas.
+                  Tudo que você mais usa, organizado de forma mais prática.
                 </CardDescription>
               </CardHeader>
+
               <CardContent>
                 <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-                  <Button
-                    size="lg"
-                    className="h-auto justify-start rounded-2xl bg-gradient-to-r from-emerald-500 to-green-500 py-6 font-bold text-black hover:from-emerald-400 hover:to-green-400"
-                    onClick={() => navigate('/produtos')}
-                  >
-                    <FolderKanban className="mr-2 h-5 w-5" />
-                    Produtos
-                  </Button>
+                  {quickActions.map((action) => (
+                    <button
+                      key={action.title}
+                      type="button"
+                      onClick={action.onClick}
+                      disabled={action.disabled}
+                      className={`rounded-[24px] border p-5 text-left transition ${
+                        action.primary
+                          ? 'border-emerald-500/20 bg-gradient-to-br from-emerald-500/15 to-emerald-500/5 hover:border-emerald-400/30'
+                          : 'border-white/10 bg-black/20 hover:border-emerald-500/20 hover:bg-white/[0.03]'
+                      } ${action.disabled ? 'cursor-not-allowed opacity-50' : ''}`}
+                    >
+                      <div className="flex items-start justify-between gap-4">
+                        <div className="min-w-0">
+                          <div
+                            className={`mb-4 flex h-12 w-12 items-center justify-center rounded-2xl ${
+                              action.primary
+                                ? 'bg-gradient-to-br from-emerald-500 to-green-500 text-black'
+                                : 'bg-white/5 text-emerald-300'
+                            }`}
+                          >
+                            <action.icon className="h-5 w-5" />
+                          </div>
 
-                  <Button
-                    size="lg"
-                    variant="outline"
-                    className="h-auto justify-start rounded-2xl border-white/10 bg-black/20 py-6 text-white hover:bg-white/5"
-                    onClick={() => navigate('/gerar-conteudo')}
-                    disabled={products.length === 0}
-                  >
-                    <Sparkles className="mr-2 h-5 w-5" />
-                    Gerar conteúdo
-                  </Button>
+                          <h3 className="text-base font-bold text-white">{action.title}</h3>
+                          <p className="mt-2 text-sm leading-6 text-zinc-400">{action.description}</p>
+                        </div>
 
-                  <Button
-                    size="lg"
-                    variant="outline"
-                    className="h-auto justify-start rounded-2xl border-white/10 bg-black/20 py-6 text-white hover:bg-white/5"
-                    onClick={() => navigate('/configuracoes')}
-                  >
-                    <Settings className="mr-2 h-5 w-5" />
-                    Personalizar loja
-                  </Button>
-
-                  <Button
-                    size="lg"
-                    variant="outline"
-                    className="h-auto justify-start rounded-2xl border-white/10 bg-black/20 py-6 text-white hover:bg-white/5"
-                    onClick={() => navigate(`/loja/${store.slug}`)}
-                  >
-                    <ExternalLink className="mr-2 h-5 w-5" />
-                    Ver minha loja
-                  </Button>
+                        <ChevronRight className="mt-1 h-5 w-5 shrink-0 text-zinc-500" />
+                      </div>
+                    </button>
+                  ))}
                 </div>
               </CardContent>
             </Card>
 
             <Card className="border-white/10 bg-white/[0.04] shadow-[0_10px_30px_rgba(0,0,0,0.25)]">
               <CardHeader>
-                <CardTitle className="text-white">Checklist de ativação</CardTitle>
+                <CardTitle className="text-white">Progresso da sua estrutura</CardTitle>
                 <CardDescription className="text-zinc-400">
-                  Faça isso para deixar sua estrutura mais forte.
+                  Quanto mais completo, mais forte fica para vender.
                 </CardDescription>
               </CardHeader>
-              <CardContent className="space-y-3">
-                {checklist.map((item, index) => (
-                  <div
-                    key={index}
-                    className="flex items-start gap-3 rounded-2xl border border-white/10 bg-black/20 p-4"
-                  >
-                    <div
-                      className={`mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full ${
-                        item.done ? 'bg-emerald-500/20 text-emerald-300' : 'bg-white/10 text-zinc-500'
-                      }`}
-                    >
-                      <CheckCircle className="h-4 w-4" />
-                    </div>
-                    <p className={item.done ? 'text-white' : 'text-zinc-400'}>{item.text}</p>
+
+              <CardContent>
+                <div className="mb-5">
+                  <div className="mb-2 flex items-center justify-between gap-3">
+                    <p className="text-sm text-zinc-400">Loja pronta</p>
+                    <p className="text-sm font-bold text-emerald-300">{checklistPercent}%</p>
                   </div>
-                ))}
+                  <div className="h-3 overflow-hidden rounded-full bg-white/5">
+                    <div
+                      className="h-full rounded-full bg-gradient-to-r from-emerald-500 to-green-500 transition-all"
+                      style={{ width: `${checklistPercent}%` }}
+                    />
+                  </div>
+                </div>
+
+                <div className="space-y-3">
+                  {checklist.map((item, index) => (
+                    <div
+                      key={index}
+                      className="flex items-start gap-3 rounded-2xl border border-white/10 bg-black/20 p-4"
+                    >
+                      <div
+                        className={`mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full ${
+                          item.done ? 'bg-emerald-500/20 text-emerald-300' : 'bg-white/10 text-zinc-500'
+                        }`}
+                      >
+                        <CheckCircle className="h-4 w-4" />
+                      </div>
+                      <p className={item.done ? 'text-white' : 'text-zinc-400'}>{item.text}</p>
+                    </div>
+                  ))}
+                </div>
               </CardContent>
             </Card>
           </div>
 
-          <div className="space-y-8">
+          <div className="space-y-6">
             <Card className="border-white/10 bg-white/[0.04] shadow-[0_10px_30px_rgba(0,0,0,0.25)]">
               <CardHeader>
                 <CardTitle className="flex items-center gap-2 text-white">
@@ -802,10 +1009,11 @@ export default function Painel() {
                   Academia AfiliadoPRO
                 </CardTitle>
                 <CardDescription className="text-zinc-400">
-                  Mini aulas rápidas para te ajudar a vender mais.
+                  Dicas rápidas para melhorar sua chance de venda.
                 </CardDescription>
               </CardHeader>
-              <CardContent className="space-y-4">
+
+              <CardContent className="space-y-3">
                 {academyItems.map((item, index) => (
                   <div
                     key={index}
@@ -822,9 +1030,10 @@ export default function Painel() {
               <CardHeader>
                 <CardTitle className="text-white">Link da loja</CardTitle>
                 <CardDescription className="text-zinc-400">
-                  Compartilhe com facilidade.
+                  Compartilhe com facilidade e comece a divulgar agora.
                 </CardDescription>
               </CardHeader>
+
               <CardContent>
                 <div className="rounded-3xl border border-emerald-500/15 bg-emerald-500/10 p-4">
                   <p className="break-all text-sm text-emerald-200">{publicStoreUrl}</p>
@@ -851,7 +1060,7 @@ export default function Painel() {
               </CardContent>
             </Card>
           </div>
-        </div>
+        </section>
       </div>
     </div>
   );
