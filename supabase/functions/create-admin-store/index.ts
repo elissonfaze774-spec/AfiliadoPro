@@ -99,34 +99,55 @@ async function linkAdminToStore(
     adminEmail: string
   },
 ) {
-  const attempts = [
-    {
-      id: params.userId,
-      store_id: params.storeId,
-      email: params.adminEmail,
-    },
-    {
-      user_id: params.userId,
-      store_id: params.storeId,
-      email: params.adminEmail,
-    },
-  ]
+  const { data: existing, error: existingError } = await adminClient
+    .from('admins')
+    .select('id, user_id, store_id')
+    .eq('store_id', params.storeId)
+    .maybeSingle()
 
-  let lastError: unknown = null
-
-  for (const payload of attempts) {
-    const { error } = await adminClient.from('admins').upsert(payload)
-
-    if (!error) return
-
-    lastError = error
+  if (existingError) {
+    throw new StepError(
+      'admin-link-fetch',
+      getErrorMessage(existingError, 'Não foi possível localizar o vínculo do admin.'),
+      500,
+    )
   }
 
-  throw new StepError(
-    'admin-link',
-    getErrorMessage(lastError, 'Não foi possível vincular o admin à estrutura.'),
-    500,
-  )
+  if (existing?.id) {
+    const { error: updateError } = await adminClient
+      .from('admins')
+      .update({
+        user_id: params.userId,
+        email: params.adminEmail,
+        role: 'admin',
+      })
+      .eq('id', existing.id)
+
+    if (updateError) {
+      throw new StepError(
+        'admin-link-update',
+        getErrorMessage(updateError, 'Não foi possível atualizar o vínculo do admin.'),
+        500,
+      )
+    }
+
+    return
+  }
+
+  const { error: insertError } = await adminClient.from('admins').insert({
+    user_id: params.userId,
+    store_id: params.storeId,
+    email: params.adminEmail,
+    role: 'admin',
+  })
+
+  if (insertError) {
+    throw new StepError(
+      'admin-link-insert',
+      getErrorMessage(insertError, 'Não foi possível vincular o admin à estrutura.'),
+      500,
+    )
+  }
 }
 
 serve(async (req: Request) => {

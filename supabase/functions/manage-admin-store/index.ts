@@ -76,29 +76,50 @@ function getErrorMessage(error: unknown, fallback: string) {
 }
 
 async function getAdminByStore(adminClient: any, storeId: string) {
-  const { data, error } = await adminClient
+  const { data: adminData, error: adminError } = await adminClient
     .from('admins')
     .select('id, user_id, store_id, email')
     .eq('store_id', storeId)
     .maybeSingle()
 
-  if (error) {
+  if (adminError) {
     throw new StepError(
       'admin-fetch',
-      getErrorMessage(error, 'Não foi possível localizar o admin da estrutura.'),
+      getErrorMessage(adminError, 'Não foi possível localizar o admin da estrutura.'),
       500,
     )
   }
 
-  const authUserId = cleanText(data?.id) || cleanText(data?.user_id)
+  const { data: storeData, error: storeError } = await adminClient
+    .from('stores')
+    .select('id, owner_user_id')
+    .eq('id', storeId)
+    .maybeSingle()
+
+  if (storeError) {
+    throw new StepError(
+      'store-fetch-owner',
+      getErrorMessage(storeError, 'Não foi possível localizar o dono da estrutura.'),
+      500,
+    )
+  }
+
+  const authUserId =
+    cleanText(adminData?.user_id) ||
+    cleanText(storeData?.owner_user_id) ||
+    cleanText(adminData?.id)
 
   if (!authUserId) {
-    throw new StepError('admin-missing', 'Nenhum admin vinculado a esta estrutura.', 404)
+    throw new StepError(
+      'admin-missing-auth-user',
+      'Nenhum usuário Auth válido foi encontrado para esta estrutura.',
+      404,
+    )
   }
 
   return {
     authUserId,
-    email: cleanText(data?.email),
+    email: cleanText(adminData?.email),
   }
 }
 

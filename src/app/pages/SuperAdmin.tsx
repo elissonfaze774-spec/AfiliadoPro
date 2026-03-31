@@ -24,6 +24,17 @@ import {
   Settings2,
   CalendarClock,
   CalendarPlus2,
+  Activity,
+  Clock3,
+  Sparkles,
+  AlertTriangle,
+  CheckCircle2,
+  TrendingUp,
+  ShieldAlert,
+  Zap,
+  TimerReset,
+  ArrowUpRight,
+  BadgeAlert,
 } from 'lucide-react';
 import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
@@ -65,6 +76,14 @@ type StoreRow = {
   access_expires_at: string | null;
   auto_renew: boolean | null;
   access_granted_days: number | null;
+};
+
+type StoreAccessOverviewRow = {
+  store_id: string | null;
+  admin_last_sign_in_at?: string | null;
+  user_last_sign_in_at?: string | null;
+  last_access_at?: string | null;
+  last_sign_in_at?: string | null;
 };
 
 type AdminRow = {
@@ -115,6 +134,7 @@ type StoreSummary = {
   accessGrantedDays: number;
   active: boolean;
   suspended: boolean;
+  lastAccessAt: string | null;
 };
 
 type FeedbackState = {
@@ -160,6 +180,29 @@ function formatDate(value?: string | null) {
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return '—';
   return date.toLocaleDateString('pt-BR');
+}
+
+function formatDateTime(value?: string | null) {
+  if (!value) return 'Nunca acessou';
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return 'Nunca acessou';
+  return date.toLocaleString('pt-BR');
+}
+
+function getLastAccessLabel(value?: string | null) {
+  if (!value) return 'Sem registro';
+
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return 'Sem registro';
+
+  const diffMs = Date.now() - date.getTime();
+  const diffHours = Math.floor(diffMs / 3600000);
+  const diffDays = Math.floor(diffMs / 86400000);
+
+  if (diffHours < 1) return 'Agora há pouco';
+  if (diffHours < 24) return `Há ${diffHours} hora(s)`;
+  if (diffDays < 30) return `Há ${diffDays} dia(s)`;
+  return formatDateTime(value);
 }
 
 function normalizeText(value?: string | null) {
@@ -267,6 +310,32 @@ function getAccessClasses(expiresAt?: string | null) {
   }
 
   return 'border-emerald-500/30 bg-emerald-500/10 text-emerald-300';
+}
+
+function getOperationPriority(expiresAt?: string | null, status?: string) {
+  const accessStatus = getAccessStatus(expiresAt);
+
+  if (status === 'suspended' || accessStatus === 'expired') {
+    return {
+      label: 'Crítico',
+      classes: 'border-red-500/30 bg-red-500/10 text-red-300',
+      order: 0,
+    };
+  }
+
+  if (accessStatus === 'expires_today' || accessStatus === 'expiring_soon') {
+    return {
+      label: 'Atenção',
+      classes: 'border-amber-500/30 bg-amber-500/10 text-amber-300',
+      order: 1,
+    };
+  }
+
+  return {
+    label: 'Saudável',
+    classes: 'border-emerald-500/30 bg-emerald-500/10 text-emerald-300',
+    order: 2,
+  };
 }
 
 async function getFunctionErrorMessage(error: unknown, fallback: string) {
@@ -380,6 +449,7 @@ export default function SuperAdmin() {
         ordersResponse,
         productsResponse,
         plansResponse,
+        accessOverviewResponse,
       ] = await Promise.all([
         supabase
           .from('stores')
@@ -392,6 +462,9 @@ export default function SuperAdmin() {
         supabase.from('orders').select('id, store_id, total, created_at'),
         supabase.from('products').select('id, store_id, created_at'),
         supabase.from('plans').select('id, name, price, max_products, max_orders'),
+        supabase
+          .from('store_access_overview')
+          .select('store_id, admin_last_sign_in_at, user_last_sign_in_at, last_access_at, last_sign_in_at'),
       ]);
 
       if (storesResponse.error) throw storesResponse.error;
@@ -400,6 +473,9 @@ export default function SuperAdmin() {
       if (ordersResponse.error) throw ordersResponse.error;
       if (productsResponse.error) throw productsResponse.error;
       if (plansResponse.error) throw plansResponse.error;
+      if (accessOverviewResponse.error) {
+        console.warn('store_access_overview indisponível:', accessOverviewResponse.error.message);
+      }
 
       const storeRows = (storesResponse.data ?? []) as StoreRow[];
       const adminRows = (adminsResponse.data ?? []) as AdminRow[];
@@ -407,6 +483,7 @@ export default function SuperAdmin() {
       const orderRows = (ordersResponse.data ?? []) as OrderRow[];
       const productRows = (productsResponse.data ?? []) as ProductRow[];
       const planRows = (plansResponse.data ?? []) as PlanRow[];
+      const accessOverviewRows = ((accessOverviewResponse.data ?? []) as StoreAccessOverviewRow[]);
 
       const nextPlansMap = Object.fromEntries(planRows.map((plan) => [plan.id, plan]));
       setPlansMap(nextPlansMap);
@@ -445,10 +522,17 @@ export default function SuperAdmin() {
         productsByStore.set(key, list);
       });
 
+      const accessOverviewByStore = new Map<string, StoreAccessOverviewRow>();
+      accessOverviewRows.forEach((row) => {
+        const key = normalizeText(row.store_id);
+        if (!key) return;
+        accessOverviewByStore.set(key, row);
+      });
+
       const summaries: StoreSummary[] = storeRows.map((store) => {
         const storeAdmins = adminsByStore.get(store.id) ?? [];
         const mainAdmin = storeAdmins[0];
-        const linkedUserId = normalizeText(mainAdmin?.id) || normalizeText(mainAdmin?.user_id);
+        const linkedUserId = normalizeText(mainAdmin?.user_id) || normalizeText(mainAdmin?.id);
         const mainAdminEmail = normalizeText(mainAdmin?.email).toLowerCase();
         const profile =
           (linkedUserId ? profileById.get(linkedUserId) : undefined) ||
@@ -457,6 +541,13 @@ export default function SuperAdmin() {
         const storeOrders = ordersByStore.get(store.id) ?? [];
         const storeProducts = productsByStore.get(store.id) ?? [];
         const plan = normalizePlan(store.plan);
+        const accessOverview = accessOverviewByStore.get(store.id);
+        const lastAccessAt =
+          accessOverview?.admin_last_sign_in_at ??
+          accessOverview?.last_access_at ??
+          accessOverview?.last_sign_in_at ??
+          accessOverview?.user_last_sign_in_at ??
+          null;
 
         return {
           id: store.id,
@@ -477,6 +568,7 @@ export default function SuperAdmin() {
           accessGrantedDays: Number(store.access_granted_days ?? 0),
           active: Boolean(store.active),
           suspended: Boolean(store.suspended),
+          lastAccessAt,
         };
       });
 
@@ -984,6 +1076,29 @@ export default function SuperAdmin() {
 
   const maxRevenue = Math.max(...sevenDayMetrics.map((item) => item.revenue), 1);
 
+  const priorityStores = useMemo(() => {
+    return [...stores]
+      .sort((a, b) => {
+        const pa = getOperationPriority(a.accessExpiresAt, a.status);
+        const pb = getOperationPriority(b.accessExpiresAt, b.status);
+        if (pa.order !== pb.order) return pa.order - pb.order;
+        return new Date(a.accessExpiresAt ?? 0).getTime() - new Date(b.accessExpiresAt ?? 0).getTime();
+      })
+      .slice(0, 5);
+  }, [stores]);
+
+  const recentStores = useMemo(() => {
+    return [...stores]
+      .sort((a, b) => new Date(b.createdAt ?? 0).getTime() - new Date(a.createdAt ?? 0).getTime())
+      .slice(0, 5);
+  }, [stores]);
+
+  const topRevenueStores = useMemo(() => {
+    return [...stores]
+      .sort((a, b) => b.revenue - a.revenue)
+      .slice(0, 5);
+  }, [stores]);
+
   return (
     <div className="min-h-screen bg-[radial-gradient(circle_at_top_left,_rgba(34,197,94,0.16),_transparent_28%),radial-gradient(circle_at_bottom_right,_rgba(16,185,129,0.12),_transparent_24%),linear-gradient(180deg,_#020202_0%,_#050505_45%,_#07110a_100%)] p-4 text-white md:p-6">
       <div className="mx-auto max-w-7xl">
@@ -1002,6 +1117,21 @@ export default function SuperAdmin() {
               Painel central de operação do AfiliadoPRO com métricas, gestão de admins,
               controle de acesso e ações rápidas.
             </p>
+
+            <div className="mt-4 flex flex-wrap gap-2">
+              <span className="inline-flex items-center gap-2 rounded-full border border-emerald-500/20 bg-emerald-500/10 px-3 py-1.5 text-[11px] font-semibold uppercase tracking-[0.18em] text-emerald-300">
+                <ArrowUpRight className="h-3.5 w-3.5" />
+                Operação premium
+              </span>
+              <span className="inline-flex items-center gap-2 rounded-full border border-cyan-500/20 bg-cyan-500/10 px-3 py-1.5 text-[11px] font-semibold uppercase tracking-[0.18em] text-cyan-300">
+                <TimerReset className="h-3.5 w-3.5" />
+                Gestão de acesso
+              </span>
+              <span className="inline-flex items-center gap-2 rounded-full border border-amber-500/20 bg-amber-500/10 px-3 py-1.5 text-[11px] font-semibold uppercase tracking-[0.18em] text-amber-300">
+                <BadgeAlert className="h-3.5 w-3.5" />
+                Prioridades visíveis
+              </span>
+            </div>
           </div>
 
           <div className="flex flex-wrap gap-3">
@@ -1038,7 +1168,7 @@ export default function SuperAdmin() {
           </div>
         ) : null}
 
-        <div className="mb-6 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+        <div className="mb-4 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
           <Card className="border border-emerald-500/10 bg-black/55 backdrop-blur-xl">
             <CardContent className="p-5">
               <div className="mb-4 flex h-12 w-12 items-center justify-center rounded-2xl bg-emerald-500/10 text-emerald-400">
@@ -1092,12 +1222,205 @@ export default function SuperAdmin() {
           </Card>
         </div>
 
+        <div className="mb-6 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+          <Card className="border border-emerald-500/10 bg-black/55 backdrop-blur-xl">
+            <CardContent className="p-5">
+              <div className="mb-4 flex h-12 w-12 items-center justify-center rounded-2xl bg-cyan-500/10 text-cyan-400">
+                <Activity className="h-5 w-5" />
+              </div>
+              <p className="text-sm text-zinc-400">Lojas com acesso ativo</p>
+              <h3 className="mt-1 text-3xl font-black text-white">{stores.filter((store) => getAccessStatus(store.accessExpiresAt) === 'active').length}</h3>
+              <p className="mt-2 text-xs text-zinc-500">Operação saudável no momento</p>
+            </CardContent>
+          </Card>
+
+          <Card className="border border-emerald-500/10 bg-black/55 backdrop-blur-xl">
+            <CardContent className="p-5">
+              <div className="mb-4 flex h-12 w-12 items-center justify-center rounded-2xl bg-yellow-500/10 text-yellow-300">
+                <AlertTriangle className="h-5 w-5" />
+              </div>
+              <p className="text-sm text-zinc-400">Vencendo em breve</p>
+              <h3 className="mt-1 text-3xl font-black text-white">{stores.filter((store) => ['expires_today', 'expiring_soon'].includes(getAccessStatus(store.accessExpiresAt))).length}</h3>
+              <p className="mt-2 text-xs text-zinc-500">Bom ponto para ação preventiva</p>
+            </CardContent>
+          </Card>
+
+          <Card className="border border-emerald-500/10 bg-black/55 backdrop-blur-xl">
+            <CardContent className="p-5">
+              <div className="mb-4 flex h-12 w-12 items-center justify-center rounded-2xl bg-violet-500/10 text-violet-300">
+                <Sparkles className="h-5 w-5" />
+              </div>
+              <p className="text-sm text-zinc-400">Produtos cadastrados</p>
+              <h3 className="mt-1 text-3xl font-black text-white">{stores.reduce((sum, store) => sum + store.productsCount, 0)}</h3>
+              <p className="mt-2 text-xs text-zinc-500">Volume total da operação</p>
+            </CardContent>
+          </Card>
+
+          <Card className="border border-emerald-500/10 bg-black/55 backdrop-blur-xl">
+            <CardContent className="p-5">
+              <div className="mb-4 flex h-12 w-12 items-center justify-center rounded-2xl bg-emerald-500/10 text-emerald-400">
+                <CheckCircle2 className="h-5 w-5" />
+              </div>
+              <p className="text-sm text-zinc-400">Renovação automática</p>
+              <h3 className="mt-1 text-3xl font-black text-white">{stores.filter((store) => store.autoRenew).length}</h3>
+              <p className="mt-2 text-xs text-zinc-500">Estruturas protegidas por renovação</p>
+            </CardContent>
+          </Card>
+        </div>
+
+        <div className="mb-6 grid gap-6 xl:grid-cols-[1.1fr_0.9fr_0.9fr]">
+          <Card className="border border-emerald-500/10 bg-black/55 backdrop-blur-xl">
+            <CardHeader className="border-b border-white/5">
+              <CardTitle className="flex items-center gap-2 text-white">
+                <ShieldAlert className="h-5 w-5 text-emerald-400" />
+                Radar operacional
+              </CardTitle>
+            </CardHeader>
+
+            <CardContent className="p-5">
+              <div className="space-y-3">
+                {priorityStores.length === 0 ? (
+                  <div className="rounded-3xl border border-white/10 bg-white/[0.03] p-5 text-sm text-zinc-400">
+                    Nenhuma estrutura para monitorar agora.
+                  </div>
+                ) : (
+                  priorityStores.map((store) => {
+                    const priority = getOperationPriority(store.accessExpiresAt, store.status);
+
+                    return (
+                      <div
+                        key={store.id}
+                        className="flex flex-col gap-3 rounded-3xl border border-white/10 bg-white/[0.03] p-4 md:flex-row md:items-center md:justify-between"
+                      >
+                        <div>
+                          <div className="flex flex-wrap items-center gap-2">
+                            <p className="text-base font-black text-white">{store.name}</p>
+                            <span className={`inline-flex rounded-full border px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.2em] ${priority.classes}`}>
+                              {priority.label}
+                            </span>
+                          </div>
+                          <p className="mt-1 text-sm text-zinc-400">{store.adminEmail}</p>
+                          <p className="mt-2 text-xs text-zinc-500">
+                            {getAccessLabel(store.accessExpiresAt, store.autoRenew)}
+                          </p>
+                        </div>
+
+                        <div className="flex flex-wrap gap-2">
+                          <Button
+                            variant="outline"
+                            className="h-10 rounded-2xl border-white/10 bg-white/5 text-white hover:bg-white/10"
+                            onClick={() => openCredentialsModal(store)}
+                          >
+                            <Settings2 className="mr-2 h-4 w-4" />
+                            Gerenciar
+                          </Button>
+
+                          <Button
+                            variant="outline"
+                            className="h-10 rounded-2xl border-white/10 bg-white/5 text-white hover:bg-white/10"
+                            onClick={() =>
+                              void handleUpdateStoreField(
+                                store.id,
+                                {
+                                  status: store.status === 'suspended' ? 'active' : 'suspended',
+                                },
+                                store.status === 'suspended'
+                                  ? `Estrutura "${store.name}" ativada.`
+                                  : `Estrutura "${store.name}" suspensa.`,
+                              )
+                            }
+                          >
+                            <Power className="mr-2 h-4 w-4" />
+                            {store.status === 'suspended' ? 'Ativar' : 'Suspender'}
+                          </Button>
+                        </div>
+                      </div>
+                    );
+                  })
+                )}
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card className="border border-emerald-500/10 bg-black/55 backdrop-blur-xl">
+            <CardHeader className="border-b border-white/5">
+              <CardTitle className="flex items-center gap-2 text-white">
+                <TrendingUp className="h-5 w-5 text-emerald-400" />
+                Top faturamento
+              </CardTitle>
+            </CardHeader>
+
+            <CardContent className="p-5">
+              <div className="space-y-3">
+                {topRevenueStores.map((store, index) => (
+                  <div
+                    key={store.id}
+                    className="flex items-center justify-between rounded-3xl border border-white/10 bg-white/[0.03] p-4"
+                  >
+                    <div className="min-w-0">
+                      <div className="flex items-center gap-3">
+                        <div className="flex h-9 w-9 items-center justify-center rounded-2xl bg-emerald-500/10 text-sm font-black text-emerald-300">
+                          {index + 1}
+                        </div>
+                        <div className="min-w-0">
+                          <p className="truncate font-bold text-white">{store.name}</p>
+                          <p className="truncate text-xs text-zinc-500">{store.adminEmail}</p>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="pl-3 text-right">
+                      <p className="font-black text-emerald-400">{formatMoney(store.revenue)}</p>
+                      <p className="text-xs text-zinc-500">{store.ordersCount} pedidos</p>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card className="border border-emerald-500/10 bg-black/55 backdrop-blur-xl">
+            <CardHeader className="border-b border-white/5">
+              <CardTitle className="flex items-center gap-2 text-white">
+                <Zap className="h-5 w-5 text-emerald-400" />
+                Novas estruturas
+              </CardTitle>
+            </CardHeader>
+
+            <CardContent className="p-5">
+              <div className="space-y-3">
+                {recentStores.map((store) => (
+                  <div
+                    key={store.id}
+                    className="rounded-3xl border border-white/10 bg-white/[0.03] p-4"
+                  >
+                    <div className="flex items-center justify-between gap-3">
+                      <div className="min-w-0">
+                        <p className="truncate font-bold text-white">{store.name}</p>
+                        <p className="truncate text-xs text-zinc-500">{store.slug}</p>
+                      </div>
+                      <span className="rounded-full border border-cyan-500/20 bg-cyan-500/10 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.2em] text-cyan-300">
+                        {getPlanLabel(store.plan)}
+                      </span>
+                    </div>
+
+                    <div className="mt-3 flex items-center justify-between text-xs text-zinc-400">
+                      <span>Criada em {formatDate(store.createdAt)}</span>
+                      <span>{store.adminEmail}</span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+
         <div className="mb-6 grid gap-6 xl:grid-cols-[1fr_1fr]">
           <Card className="border border-emerald-500/10 bg-black/55 backdrop-blur-xl">
             <CardHeader className="border-b border-white/5">
               <CardTitle className="flex items-center gap-2 text-white">
                 <Plus className="h-5 w-5 text-emerald-400" />
-                Criar admin + estrutura
+                Criar admin + estrutura premium
               </CardTitle>
             </CardHeader>
 
@@ -1351,9 +1674,15 @@ export default function SuperAdmin() {
                             >
                               {getAccessLabel(store.accessExpiresAt, store.autoRenew)}
                             </span>
+
+                            <span
+                              className={`inline-flex rounded-full border px-3 py-1 text-xs font-semibold ${getOperationPriority(store.accessExpiresAt, store.status).classes}`}
+                            >
+                              Operação {getOperationPriority(store.accessExpiresAt, store.status).label}
+                            </span>
                           </div>
 
-                          <div className="mb-5 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+                          <div className="mb-5 grid gap-4 md:grid-cols-2 xl:grid-cols-5">
                             <div className="rounded-3xl border border-white/10 bg-black/35 p-5">
                               <p className="text-[11px] uppercase tracking-[0.25em] text-zinc-500">
                                 Admin
@@ -1393,6 +1722,18 @@ export default function SuperAdmin() {
                               </p>
                               <p className="mt-1 text-sm text-zinc-400">
                                 {store.autoRenew ? 'Renovação automática ativa' : 'Renovação manual'}
+                              </p>
+                            </div>
+
+                            <div className="rounded-3xl border border-white/10 bg-black/35 p-5">
+                              <p className="text-[11px] uppercase tracking-[0.25em] text-zinc-500">
+                                Último acesso
+                              </p>
+                              <p className="mt-3 text-lg font-black text-white">
+                                {getLastAccessLabel(store.lastAccessAt)}
+                              </p>
+                              <p className="mt-1 text-sm text-zinc-400">
+                                {formatDateTime(store.lastAccessAt)}
                               </p>
                             </div>
                           </div>
@@ -1487,7 +1828,7 @@ export default function SuperAdmin() {
               </Button>
             </div>
 
-            <div className="mb-5 grid gap-4 md:grid-cols-2">
+            <div className="mb-5 grid gap-4 md:grid-cols-3">
               <div className="rounded-3xl border border-white/10 bg-white/[0.03] p-4">
                 <p className="text-xs uppercase tracking-[0.25em] text-zinc-500">Status</p>
                 <p className={`mt-2 text-sm font-semibold ${getAccessClasses(credentialsModal.store.accessExpiresAt).split(' ').pop()}`}>
@@ -1499,6 +1840,16 @@ export default function SuperAdmin() {
                 <p className="text-xs uppercase tracking-[0.25em] text-zinc-500">Vencimento</p>
                 <p className="mt-2 text-sm font-semibold text-white">
                   {formatDate(credentialsModal.store.accessExpiresAt)}
+                </p>
+              </div>
+
+              <div className="rounded-3xl border border-white/10 bg-white/[0.03] p-4">
+                <p className="text-xs uppercase tracking-[0.25em] text-zinc-500">Último acesso</p>
+                <p className="mt-2 text-sm font-semibold text-white">
+                  {getLastAccessLabel(credentialsModal.store.lastAccessAt)}
+                </p>
+                <p className="mt-1 text-xs text-zinc-500">
+                  {formatDateTime(credentialsModal.store.lastAccessAt)}
                 </p>
               </div>
             </div>

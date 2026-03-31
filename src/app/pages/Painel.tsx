@@ -156,6 +156,8 @@ export default function Painel() {
   const [refreshing, setRefreshing] = useState(false);
   const [showNotifications, setShowNotifications] = useState(false);
 
+  const notificationsRef = useRef<HTMLDivElement | null>(null);
+  const notificationsButtonRef = useRef<HTMLButtonElement | null>(null);
   const storeChannelRef = useRef<ReturnType<typeof supabase.channel> | null>(null);
   const lastStoreIdRef = useRef<string | null>(null);
 
@@ -241,7 +243,10 @@ export default function Painel() {
         title: 'Adicione mais produtos',
         description: 'Quanto mais produtos bons você tiver, maior a chance de gerar cliques e comissão.',
         actionLabel: 'Ir para Produtos',
-        onClick: () => navigate('/produtos'),
+        onClick: () => {
+        setShowNotifications(false);
+        navigate('/produtos');
+      },
       };
     }
 
@@ -250,7 +255,10 @@ export default function Painel() {
         title: 'Deixe sua loja com cara profissional',
         description: 'Envie logo e banner para passar mais confiança e vender melhor.',
         actionLabel: 'Ir para Configurações',
-        onClick: () => navigate('/configuracoes'),
+        onClick: () => {
+        setShowNotifications(false);
+        navigate('/configuracoes');
+      },
       };
     }
 
@@ -259,7 +267,10 @@ export default function Painel() {
         title: 'Gere seu primeiro conteúdo',
         description: 'Use a geração de conteúdo para divulgar mais rápido e sem travar.',
         actionLabel: 'Gerar conteúdo',
-        onClick: () => navigate('/gerar-conteudo'),
+        onClick: () => {
+        setShowNotifications(false);
+        navigate('/gerar-conteudo');
+      },
       };
     }
 
@@ -319,7 +330,10 @@ export default function Painel() {
       title: 'Produtos',
       description: 'Adicione, edite e organize seus produtos.',
       icon: FolderKanban,
-      onClick: () => navigate('/produtos'),
+      onClick: () => {
+        setShowNotifications(false);
+        navigate('/produtos');
+      },
       primary: true,
     },
     {
@@ -339,7 +353,10 @@ export default function Painel() {
       title: 'Configurações',
       description: 'Personalize sua loja e deixe tudo mais profissional.',
       icon: Settings,
-      onClick: () => navigate('/configuracoes'),
+      onClick: () => {
+        setShowNotifications(false);
+        navigate('/configuracoes');
+      },
     },
   ];
 
@@ -509,6 +526,33 @@ export default function Painel() {
   useEffect(() => {
     void loadStore();
   }, [loadStore]);
+
+  useEffect(() => {
+    if (!showNotifications) return;
+
+    const handleClickOutside = (event: MouseEvent) => {
+      const target = event.target as Node | null;
+
+      if (notificationsRef.current?.contains(target)) return;
+      if (notificationsButtonRef.current?.contains(target)) return;
+
+      setShowNotifications(false);
+    };
+
+    const handleEscape = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        setShowNotifications(false);
+      }
+    };
+
+    document.addEventListener('mousedown', handleClickOutside);
+    document.addEventListener('keydown', handleEscape);
+
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+      document.removeEventListener('keydown', handleEscape);
+    };
+  }, [showNotifications]);
 
   useEffect(() => {
     const currentStoreId = store?.id ?? null;
@@ -713,6 +757,7 @@ export default function Painel() {
             <div className="flex flex-wrap items-center gap-3">
               <div className="relative">
                 <Button
+                  ref={notificationsButtonRef}
                   variant="outline"
                   className="border-white/10 bg-black/30 text-white hover:bg-white/5"
                   onClick={() => setShowNotifications((prev) => !prev)}
@@ -725,7 +770,10 @@ export default function Painel() {
                 </Button>
 
                 {showNotifications ? (
-                  <div className="absolute right-0 top-[calc(100%+10px)] z-50 w-[320px] max-w-[calc(100vw-32px)] rounded-3xl border border-white/10 bg-[#07110c]/95 p-3 shadow-[0_20px_60px_rgba(0,0,0,0.45)] backdrop-blur-xl">
+                  <div
+                    ref={notificationsRef}
+                    className="absolute right-0 top-full z-[70] mt-3 w-[320px] max-w-[calc(100vw-32px)] rounded-3xl border border-white/10 bg-[#07110c]/95 p-3 shadow-[0_20px_60px_rgba(0,0,0,0.45)] backdrop-blur-xl"
+                  >
                     <div className="mb-2 px-2 py-1">
                       <p className="text-sm font-bold text-white">Central de avisos</p>
                       <p className="text-xs text-zinc-400">Motivação, dicas e lembretes leves.</p>
