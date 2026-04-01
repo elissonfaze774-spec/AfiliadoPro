@@ -58,18 +58,15 @@ function resolveBrandLogo(slug: string, name: string, logoUrl: string) {
   const nameKey = normalizeKey(name);
 
   if (EMBEDDED_LOGOS[slugKey]) return EMBEDDED_LOGOS[slugKey];
-  if (slugKey.includes('mercado') || nameKey.includes('mercado-livre') || nameKey.includes('mercado-livre')) {
+  if (slugKey.includes('shopee') || nameKey.includes('shopee')) return EMBEDDED_LOGOS.shopee;
+  if (
+    slugKey.includes('mercado-livre') ||
+    slugKey.includes('mercadolivre') ||
+    (nameKey.includes('mercado') && nameKey.includes('livre'))
+  ) {
     return EMBEDDED_LOGOS['mercado-livre'];
   }
-  if (nameKey.includes('mercado') && nameKey.includes('livre')) {
-    return EMBEDDED_LOGOS['mercado-livre'];
-  }
-  if (slugKey.includes('shopee') || nameKey.includes('shopee')) {
-    return EMBEDDED_LOGOS.shopee;
-  }
-  if (slugKey.includes('amazon') || nameKey.includes('amazon')) {
-    return EMBEDDED_LOGOS.amazon;
-  }
+  if (slugKey.includes('amazon') || nameKey.includes('amazon')) return EMBEDDED_LOGOS.amazon;
 
   return '';
 }
@@ -95,7 +92,7 @@ function getInitials(name: string) {
     .join('');
 }
 
-function LogoBox({
+function BrandHero({
   logoUrl,
   name,
   slug,
@@ -109,9 +106,7 @@ function LogoBox({
 
   if (!resolvedLogo || error) {
     return (
-      <div
-        className={`flex h-40 items-center justify-center bg-gradient-to-br ${getFallbackGradient(slug)} p-5`}
-      >
+      <div className={`flex h-44 items-center justify-center bg-gradient-to-br ${getFallbackGradient(slug)}`}>
         <div className="flex h-24 w-24 items-center justify-center rounded-[28px] border border-white/10 bg-black/30 text-3xl font-black text-white backdrop-blur-xl">
           {getInitials(name)}
         </div>
@@ -120,18 +115,17 @@ function LogoBox({
   }
 
   return (
-    <div className={`flex h-40 items-center justify-center bg-gradient-to-br ${getFallbackGradient(slug)} p-5`}>
-      <div className="flex h-full w-full items-center justify-center rounded-[28px] border border-white/10 bg-white p-4 shadow-[0_20px_40px_rgba(0,0,0,0.22)]">
-        <img
-          src={resolvedLogo}
-          alt={name}
-          className="max-h-full max-w-full object-contain"
-          loading="lazy"
-          decoding="async"
-          onError={() => setError(true)}
-          draggable={false}
-        />
-      </div>
+    <div className="relative h-44 overflow-hidden">
+      <img
+        src={resolvedLogo}
+        alt={name}
+        className="h-full w-full object-cover"
+        loading="lazy"
+        decoding="async"
+        onError={() => setError(true)}
+        draggable={false}
+      />
+      <div className="absolute inset-0 bg-gradient-to-t from-black/20 via-transparent to-transparent" />
     </div>
   );
 }
@@ -266,7 +260,7 @@ export default function AfilieSe() {
                   key={network.id}
                   className="overflow-hidden border border-white/10 bg-black/30 shadow-[0_16px_48px_rgba(0,0,0,0.28)]"
                 >
-                  <LogoBox logoUrl={network.logoUrl} name={network.name} slug={network.slug} />
+                  <BrandHero logoUrl={network.logoUrl} name={network.name} slug={network.slug} />
 
                   <CardHeader className="pb-3">
                     <CardTitle className="text-2xl">{network.name}</CardTitle>
