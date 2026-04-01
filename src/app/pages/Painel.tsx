@@ -207,7 +207,7 @@ export default function Painel() {
         text: 'Ter pelo menos 1 link de afiliado configurado',
         done: products.some((product) => Boolean(product.affiliateLink)),
       },
-      { text: 'Gerar seu primeiro conteúdo automático', done: contents.length > 0 },
+      { text: 'Gerar seu primeiro conteúdo', done: contents.length > 0 },
     ],
     [products, contents.length, store],
   );
@@ -254,7 +254,7 @@ export default function Painel() {
 
     if (contents.length === 0) {
       return {
-        title: 'Gere um conteúdo prêmium!',
+        title: 'Gere um conteúdo prêmium',
         description: 'Use a geração de conteúdos para converter o máximo em vendas.',
         actionLabel: 'Gerar conteúdo',
         onClick: () => navigate('/gerar-conteudo'),
@@ -262,7 +262,7 @@ export default function Painel() {
     }
 
     return {
-      title: 'Sua loja pronto para divulgação!',
+      title: 'Sua loja pronto para divulgação',
       description: 'Clique em copiar link e comece agora.',
       actionLabel: 'Copiar link',
       onClick: () => handleCopyStoreLink(),
@@ -273,7 +273,7 @@ export default function Painel() {
     const items: NotificationItem[] = [
       {
         id: 'motivation-1',
-        title: 'Vamos pra cima',
+        title: 'Vamos pra cima!',
         description: 'Uma pequena ação agora pode trazer sua próxima comissão.',
         highlight: true,
       },
@@ -825,7 +825,7 @@ export default function Painel() {
 
                     <div className="min-w-0">
                       <p className="mb-2 inline-flex rounded-full border border-emerald-400/20 bg-emerald-400/10 px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.18em] text-emerald-300 md:text-xs">
-                        Bem Vindo
+                        
                       </p>
                       <h2 className="text-2xl font-black text-white drop-shadow-[0_3px_14px_rgba(0,0,0,0.55)] md:text-4xl">Painel completo</h2>
                       <p className="mt-2 max-w-2xl text-sm text-zinc-200 drop-shadow-[0_2px_10px_rgba(0,0,0,0.55)] md:text-base">
