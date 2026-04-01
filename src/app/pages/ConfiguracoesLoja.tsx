@@ -1139,7 +1139,7 @@ export default function ConfiguracoesLoja() {
                         value={form.whatsappButtonText}
                         onChange={(e) => handleChange('whatsappButtonText', e.target.value)}
                         className="h-12 w-full min-w-0 rounded-2xl border border-white/10 bg-black/30 px-4 text-white outline-none transition focus:border-emerald-500"
-                        placeholder="Falar no WhatsApp"
+                        placeholder="Grupo de Ofertas"
                       />
                     </div>
                   </div>
