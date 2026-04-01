@@ -825,7 +825,7 @@ export default function Painel() {
                       </p>
                       <h2 className="text-2xl font-black text-white md:text-4xl">Painel completo</h2>
                       <p className="mt-2 max-w-2xl text-sm text-zinc-300 md:text-base">
-                        Clique em configurações, personalize sua loja, adicione produtos e comece a divulgar para vender muito mais.
+                        Clique em configurações, personalize sua loja, adicione produtos e comece a divulgar para vender. 
                       </p>
                     </div>
                   </div>
