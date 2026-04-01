@@ -243,10 +243,7 @@ export default function Painel() {
         title: 'Adicione mais produtos',
         description: 'Quanto mais produtos bons você tiver, maior a chance de gerar cliques e comissão.',
         actionLabel: 'Ir para Produtos',
-        onClick: () => {
-        setShowNotifications(false);
-        navigate('/produtos');
-      },
+        onClick: () => navigate('/produtos'),
       };
     }
 
@@ -255,28 +252,22 @@ export default function Painel() {
         title: 'Deixe sua loja com cara profissional',
         description: 'Envie logo e banner para passar mais confiança e vender melhor.',
         actionLabel: 'Ir para Configurações',
-        onClick: () => {
-        setShowNotifications(false);
-        navigate('/configuracoes');
-      },
+        onClick: () => navigate('/configuracoes'),
       };
     }
 
     if (contents.length === 0) {
       return {
-        title: 'Gere seu primeiro conteúdo',
+        title: 'Gere um conteúdo prêmium!',
         description: 'Use a geração de conteúdo para divulgar mais rápido e sem travar.',
         actionLabel: 'Gerar conteúdo',
-        onClick: () => {
-        setShowNotifications(false);
-        navigate('/gerar-conteudo');
-      },
+        onClick: () => navigate('/gerar-conteudo'),
       };
     }
 
     return {
-      title: 'Sua loja já está forte, agora divulgue',
-      description: 'Copie seu link e comece a espalhar suas ofertas para gerar cliques.',
+      title: 'Sua loja está pronta para divulgação!',
+      description: 'Copie seu link e comece agora.',
       actionLabel: 'Copiar link',
       onClick: () => handleCopyStoreLink(),
     };
@@ -286,7 +277,7 @@ export default function Painel() {
     const items: NotificationItem[] = [
       {
         id: 'motivation-1',
-        title: 'Vamos pra cima',
+        title: 'Vamos pra cima!',
         description: 'Uma pequena ação agora pode trazer sua próxima comissão.',
         highlight: true,
       },
@@ -330,10 +321,7 @@ export default function Painel() {
       title: 'Produtos',
       description: 'Adicione, edite e organize seus produtos.',
       icon: FolderKanban,
-      onClick: () => {
-        setShowNotifications(false);
-        navigate('/produtos');
-      },
+      onClick: () => navigate('/produtos'),
       primary: true,
     },
     {
@@ -353,10 +341,7 @@ export default function Painel() {
       title: 'Configurações',
       description: 'Personalize sua loja e deixe tudo mais profissional.',
       icon: Settings,
-      onClick: () => {
-        setShowNotifications(false);
-        navigate('/configuracoes');
-      },
+      onClick: () => navigate('/configuracoes'),
     },
   ];
 
@@ -772,7 +757,7 @@ export default function Painel() {
                 {showNotifications ? (
                   <div
                     ref={notificationsRef}
-                    className="fixed right-4 top-24 z-[999] w-[340px] max-w-[calc(100vw-32px)] rounded-3xl border border-white/10 bg-[#07110c]/95 p-3 shadow-[0_24px_80px_rgba(0,0,0,0.55)] backdrop-blur-xl md:right-6 md:top-28"
+                    className="absolute left-0 top-[calc(100%+12px)] z-[120] w-[340px] max-w-[calc(100vw-32px)] rounded-3xl border border-white/10 bg-[#07110c]/95 p-3 shadow-[0_20px_60px_rgba(0,0,0,0.45)] backdrop-blur-xl"
                   >
                     <div className="mb-2 px-2 py-1">
                       <p className="text-sm font-bold text-white">Central de avisos</p>
