@@ -3,8 +3,6 @@ import { useNavigate, useParams } from 'react-router-dom';
 import {
   ArrowLeft,
   ArrowUpDown,
-  ChevronLeft,
-  ChevronRight,
   ExternalLink,
   ImageOff,
   MessageCircle,
@@ -24,14 +22,11 @@ type StoreData = {
   name: string;
   username: string;
   whatsapp: string;
-  whatsappGroupLink: string;
   niche: string;
   logoUrl: string;
   bannerUrl: string;
   description: string;
   slogan: string;
-  publicTitle: string;
-  publicSubtitle: string;
   primaryColor: string;
   secondaryColor: string;
   accentColor: string;
@@ -49,13 +44,6 @@ type StoreData = {
   accessExpiresAt: string | null;
 };
 
-type ProductCategory = {
-  id: string;
-  name: string;
-  sortOrder: number;
-  featured: boolean;
-};
-
 type Product = {
   id: string;
   name: string;
@@ -63,16 +51,9 @@ type Product = {
   image: string;
   affiliateLink: string;
   priceValue: number;
-  categoryId: string | null;
-  sortOrder: number;
-  isFeatured: boolean;
-  isOffer: boolean;
-  isPromotion: boolean;
-  createdAt: string | null;
 };
 
 type SortType = 'recentes' | 'mais-caros' | 'mais-baratos' | 'nome';
-type ShowcaseType = 'todos' | 'em-alta' | 'ofertas' | 'promocoes';
 
 const MONEY_GREEN_DARK = '#052e16';
 
@@ -106,43 +87,6 @@ function isStoreExpired(value?: string | null) {
   return date.getTime() < Date.now();
 }
 
-function buildDeviceHash() {
-  try {
-    const storageKey = 'afiliadopro-public-device-id';
-    const existing = localStorage.getItem(storageKey);
-
-    if (existing) return existing;
-
-    const created =
-      globalThis.crypto?.randomUUID?.() ??
-      `${Date.now()}-${Math.random().toString(36).slice(2)}`;
-
-    localStorage.setItem(storageKey, created);
-    return created;
-  } catch {
-    return `${Date.now()}-${Math.random().toString(36).slice(2)}`;
-  }
-}
-
-function buildFingerprint() {
-  const nav = globalThis.navigator;
-  const screenData = globalThis.screen
-    ? `${globalThis.screen.width}x${globalThis.screen.height}`
-    : '0x0';
-
-  return [
-    buildDeviceHash(),
-    nav?.userAgent ?? '',
-    nav?.language ?? '',
-    Intl.DateTimeFormat().resolvedOptions().timeZone ?? '',
-    screenData,
-  ].join('::');
-}
-
-function getTodayKey() {
-  return new Date().toISOString().slice(0, 10);
-}
-
 function normalizeStore(row: any): StoreData | null {
   if (!row?.id) return null;
 
@@ -151,14 +95,11 @@ function normalizeStore(row: any): StoreData | null {
     name: row.store_name ?? row.name ?? 'Loja',
     username: row.slug ?? row.username ?? '',
     whatsapp: row.whatsapp_number ?? row.whatsapp ?? '',
-    whatsappGroupLink: row.whatsapp_group_link ?? '',
     niche: row.niche ?? '',
     logoUrl: row.logo_url ?? '',
     bannerUrl: row.banner_url ?? '',
     description: row.description ?? '',
     slogan: row.slogan ?? '',
-    publicTitle: row.public_title ?? '',
-    publicSubtitle: row.public_subtitle ?? '',
     primaryColor: row.primary_color ?? '#052e16',
     secondaryColor: row.secondary_color ?? '#071b11',
     accentColor: row.accent_color ?? '#10b981',
@@ -169,20 +110,11 @@ function normalizeStore(row: any): StoreData | null {
     mutedTextColor: row.muted_text_color ?? '#a1a1aa',
     headerBgColor: row.header_bg_color ?? 'rgba(0,0,0,0.35)',
     primaryButtonText: row.primary_button_text ?? 'Ver produtos',
-    whatsappButtonText: row.whatsapp_button_text ?? 'Grupo no WhatsApp',
+    whatsappButtonText: row.whatsapp_button_text ?? 'Falar no WhatsApp',
     themeMode: row.theme_mode ?? 'dark',
     active: Boolean(row.active),
     suspended: Boolean(row.suspended),
     accessExpiresAt: row.access_expires_at ?? null,
-  };
-}
-
-function normalizeCategory(row: any): ProductCategory {
-  return {
-    id: String(row?.id ?? ''),
-    name: String(row?.name ?? row?.title ?? 'Categoria'),
-    sortOrder: Number(row?.sort_order ?? row?.order ?? 0),
-    featured: Boolean(row?.is_featured),
   };
 }
 
@@ -201,12 +133,6 @@ function normalizeProduct(row: any): Product {
     image: row?.image ?? '',
     affiliateLink: row?.affiliate_link ?? row?.affiliateLink ?? '',
     priceValue: Number.isFinite(priceValue) ? priceValue : 0,
-    categoryId: row?.category_id ?? null,
-    sortOrder: Number(row?.sort_order ?? 0),
-    isFeatured: Boolean(row?.is_featured),
-    isOffer: Boolean(row?.is_offer),
-    isPromotion: Boolean(row?.is_promotion),
-    createdAt: row?.created_at ?? null,
   };
 }
 
@@ -284,18 +210,14 @@ export default function LojaPublica() {
   const { user } = useAuth();
 
   const [store, setStore] = useState<StoreData | null>(null);
-  const [categories, setCategories] = useState<ProductCategory[]>([]);
   const [products, setProducts] = useState<Product[]>([]);
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [sort, setSort] = useState<SortType>('recentes');
-  const [showcase, setShowcase] = useState<ShowcaseType>('todos');
 
   const storeChannelRef = useRef<ReturnType<typeof supabase.channel> | null>(null);
   const productChannelRef = useRef<ReturnType<typeof supabase.channel> | null>(null);
-  const categoryChannelRef = useRef<ReturnType<typeof supabase.channel> | null>(null);
-  const rowRefs = useRef<Record<string, HTMLDivElement | null>>({});
 
   const isAdminViewing = user?.role === 'admin' || user?.role === 'super-admin';
 
@@ -304,7 +226,6 @@ export default function LojaPublica() {
 
     if (!slug) {
       setStore(null);
-      setCategories([]);
       setProducts([]);
       setLoading(false);
       return;
@@ -325,48 +246,29 @@ export default function LojaPublica() {
 
       if (!normalizedStore) {
         setStore(null);
-        setCategories([]);
         setProducts([]);
         return;
       }
 
       setStore(normalizedStore);
 
-      if (
-        !normalizedStore.active ||
-        normalizedStore.suspended ||
-        isStoreExpired(normalizedStore.accessExpiresAt)
-      ) {
-        setCategories([]);
+      if (!normalizedStore.active || normalizedStore.suspended || isStoreExpired(normalizedStore.accessExpiresAt)) {
         setProducts([]);
         return;
       }
 
-      const [{ data: categoryRows, error: categoryError }, { data: productRows, error: productsError }] =
-        await Promise.all([
-          supabase
-            .from('categories')
-            .select('*')
-            .eq('store_id', normalizedStore.id)
-            .order('sort_order', { ascending: true })
-            .order('created_at', { ascending: true }),
-          supabase
-            .from('products')
-            .select('*')
-            .eq('store_id', normalizedStore.id)
-            .order('sort_order', { ascending: true })
-            .order('created_at', { ascending: false }),
-        ]);
+      const { data: productRows, error: productsError } = await supabase
+        .from('products')
+        .select('*')
+        .eq('store_id', normalizedStore.id)
+        .order('created_at', { ascending: false });
 
-      if (categoryError) throw categoryError;
       if (productsError) throw productsError;
 
-      setCategories((categoryRows ?? []).map(normalizeCategory));
       setProducts((productRows ?? []).map(normalizeProduct));
     } catch (error) {
       console.error('Erro ao carregar loja pública:', error);
       setStore(null);
-      setCategories([]);
       setProducts([]);
     } finally {
       setLoading(false);
@@ -389,11 +291,6 @@ export default function LojaPublica() {
     if (productChannelRef.current) {
       void supabase.removeChannel(productChannelRef.current);
       productChannelRef.current = null;
-    }
-
-    if (categoryChannelRef.current) {
-      void supabase.removeChannel(categoryChannelRef.current);
-      categoryChannelRef.current = null;
     }
 
     if (!storeId || !storeUsername) return;
@@ -430,22 +327,6 @@ export default function LojaPublica() {
       )
       .subscribe();
 
-    categoryChannelRef.current = supabase
-      .channel(`public-categories-${storeId}`)
-      .on(
-        'postgres_changes',
-        {
-          event: '*',
-          schema: 'public',
-          table: 'categories',
-          filter: `store_id=eq.${storeId}`,
-        },
-        async () => {
-          await loadStoreAndProducts(storeUsername);
-        },
-      )
-      .subscribe();
-
     return () => {
       if (storeChannelRef.current) {
         void supabase.removeChannel(storeChannelRef.current);
@@ -455,11 +336,6 @@ export default function LojaPublica() {
       if (productChannelRef.current) {
         void supabase.removeChannel(productChannelRef.current);
         productChannelRef.current = null;
-      }
-
-      if (categoryChannelRef.current) {
-        void supabase.removeChannel(categoryChannelRef.current);
-        categoryChannelRef.current = null;
       }
     };
   }, [store?.id, store?.username]);
@@ -504,114 +380,18 @@ export default function LojaPublica() {
       });
     }
 
-    if (showcase === 'em-alta') {
-      list = list.filter((product) => product.isFeatured);
-    } else if (showcase === 'ofertas') {
-      list = list.filter((product) => product.isOffer);
-    } else if (showcase === 'promocoes') {
-      list = list.filter((product) => product.isPromotion);
-    }
-
     if (sort === 'mais-caros') {
       list.sort((a, b) => b.priceValue - a.priceValue);
     } else if (sort === 'mais-baratos') {
       list.sort((a, b) => a.priceValue - b.priceValue);
     } else if (sort === 'nome') {
       list.sort((a, b) => a.name.localeCompare(b.name, 'pt-BR'));
-    } else {
-      list.sort((a, b) => {
-        const aTime = new Date(a.createdAt ?? 0).getTime();
-        const bTime = new Date(b.createdAt ?? 0).getTime();
-        return bTime - aTime;
-      });
     }
 
     return list;
-  }, [products, search, sort, showcase]);
+  }, [products, search, sort]);
 
-  const groupedRows = useMemo(() => {
-    const map = new Map<string, Product[]>();
-
-    categories.forEach((category) => {
-      map.set(category.id, []);
-    });
-
-    filteredProducts.forEach((product) => {
-      const key = product.categoryId || '__sem_categoria__';
-      const list = map.get(key) ?? [];
-      list.push(product);
-      map.set(key, list);
-    });
-
-    const rows: Array<{ id: string; title: string; products: Product[] }> = [];
-
-    const featured = filteredProducts.filter((item) => item.isFeatured);
-    if (showcase === 'todos' && featured.length > 0) {
-      rows.push({ id: '__em_alta__', title: 'Em alta', products: featured });
-    }
-
-    categories
-      .sort((a, b) => a.sortOrder - b.sortOrder || a.name.localeCompare(b.name, 'pt-BR'))
-      .forEach((category) => {
-        const categoryProducts = (map.get(category.id) ?? []).sort(
-          (a, b) => (a.sortOrder ?? 0) - (b.sortOrder ?? 0),
-        );
-
-        if (categoryProducts.length > 0) {
-          rows.push({
-            id: category.id,
-            title: category.name,
-            products: categoryProducts,
-          });
-        }
-      });
-
-    const withoutCategory = map.get('__sem_categoria__') ?? [];
-    if (withoutCategory.length > 0 && rows.length === 0) {
-      rows.push({
-        id: '__geral__',
-        title: store?.niche || 'Produtos',
-        products: withoutCategory,
-      });
-    }
-
-    return rows;
-  }, [categories, filteredProducts, showcase, store?.niche]);
-
-  const openProductAction = async (product: Product) => {
-    if (store?.id && product.id) {
-      const today = getTodayKey();
-      const deviceHash = buildDeviceHash();
-      const fingerprint = buildFingerprint();
-      const userAgent = navigator.userAgent;
-
-      const { data: existing } = await supabase
-        .from('click_tracking')
-        .select('id')
-        .eq('store_id', store.id)
-        .eq('product_id', product.id)
-        .eq('click_date', today)
-        .eq('device_hash', deviceHash)
-        .eq('fingerprint', fingerprint)
-        .maybeSingle();
-
-      if (!existing?.id) {
-        await supabase.from('click_tracking').insert({
-          store_id: store.id,
-          product_id: product.id,
-          device_hash: deviceHash,
-          fingerprint,
-          user_agent: userAgent,
-          click_date: today,
-        });
-      } else {
-        await supabase
-          .from('click_tracking')
-          .update({ last_clicked_at: new Date().toISOString() })
-          .eq('id', existing.id);
-      }
-    }
-
+  const openProductAction = (product: Product) => {
     const affiliateUrl = ensureUrl(product.affiliateLink);
 
     if (affiliateUrl) {
@@ -622,38 +402,20 @@ export default function LojaPublica() {
     toast.error('Este produto ainda não possui link de afiliado configurado.');
   };
 
-  const handleGroupWhatsApp = () => {
-    const groupUrl = ensureUrl(store?.whatsappGroupLink ?? '');
-
-    if (groupUrl) {
-      window.open(groupUrl, '_blank', 'noopener,noreferrer');
-      return;
-    }
-
+  const handleWhatsApp = () => {
     if (!store?.whatsapp) {
-      toast.error('Grupo do WhatsApp não configurado.');
+      toast.error('WhatsApp da loja não configurado.');
       return;
     }
 
     const phone = String(store.whatsapp ?? '').replace(/\D/g, '');
-    const message = `Olá! Vim pela loja ${store.name} e quero entrar no grupo.`;
+    const message = `Olá! Vim pela loja ${store.name} e quero mais informações.`;
 
     window.open(
       `https://wa.me/${phone}?text=${encodeURIComponent(message)}`,
       '_blank',
       'noopener,noreferrer',
     );
-  };
-
-  const scrollRow = (rowId: string, direction: 'left' | 'right') => {
-    const element = rowRefs.current[rowId];
-    if (!element) return;
-
-    const amount = Math.max(element.clientWidth * 0.85, 280);
-    element.scrollBy({
-      left: direction === 'right' ? amount : -amount,
-      behavior: 'smooth',
-    });
   };
 
   if (loading) {
@@ -795,15 +557,14 @@ export default function LojaPublica() {
                       className="break-words text-3xl font-black leading-none md:text-5xl"
                       style={{ color: currentStore.textColor }}
                     >
-                      {currentStore.publicTitle || currentStore.name}
+                      {currentStore.name}
                     </h1>
 
                     <p
                       className="mt-3 max-w-2xl text-sm leading-7 md:text-base"
                       style={{ color: currentStore.mutedTextColor }}
                     >
-                      {currentStore.publicSubtitle ||
-                        currentStore.description ||
+                      {currentStore.description ||
                         'Explore os produtos disponíveis desta loja e encontre a melhor oferta para você.'}
                     </p>
                   </div>
@@ -828,10 +589,10 @@ export default function LojaPublica() {
                   <Button
                     variant="outline"
                     className="w-full rounded-2xl border-white/10 bg-black/20 text-white hover:bg-white/5 sm:w-auto"
-                    onClick={handleGroupWhatsApp}
+                    onClick={handleWhatsApp}
                   >
                     <MessageCircle className="mr-2 h-4 w-4" />
-                    {currentStore.whatsappButtonText || 'Grupo no WhatsApp'}
+                    {currentStore.whatsappButtonText || 'Falar no WhatsApp'}
                   </Button>
                 </div>
               </div>
@@ -846,14 +607,14 @@ export default function LojaPublica() {
                     className="text-2xl font-black md:text-3xl"
                     style={{ color: currentStore.textColor }}
                   >
-                    Vitrine organizada para vender melhor
+                    Encontre o produto ideal
                   </h2>
 
                   <p
                     className="mt-3 max-w-3xl text-base leading-7"
                     style={{ color: currentStore.mutedTextColor }}
                   >
-                    Navegue por categorias, deslize as fileiras e encontre o produto certo mais rápido.
+                    Navegue pela vitrine, filtre mais rápido e abra o produto que mais combina com você.
                   </p>
 
                   <div className="relative mt-5">
@@ -864,31 +625,6 @@ export default function LojaPublica() {
                       className="h-12 w-full rounded-2xl border border-white/10 bg-black/30 pl-11 pr-4 text-white outline-none transition focus:border-emerald-500"
                       placeholder="Buscar produtos..."
                     />
-                  </div>
-
-                  <div className="mt-5 flex flex-wrap gap-3">
-                    {[
-                      { value: 'todos', label: 'Todos' },
-                      { value: 'em-alta', label: 'Em alta' },
-                      { value: 'ofertas', label: 'Ofertas' },
-                      { value: 'promocoes', label: 'Promoções' },
-                    ].map((chip) => {
-                      const active = showcase === chip.value;
-                      return (
-                        <button
-                          key={chip.value}
-                          type="button"
-                          onClick={() => setShowcase(chip.value as ShowcaseType)}
-                          className={`rounded-full border px-4 py-2 text-sm font-semibold transition ${
-                            active
-                              ? 'border-emerald-500/20 bg-emerald-500 text-black'
-                              : 'border-white/10 bg-white/[0.03] text-zinc-300 hover:bg-white/[0.06]'
-                          }`}
-                        >
-                          {chip.label}
-                        </button>
-                      );
-                    })}
                   </div>
                 </div>
 
@@ -914,19 +650,21 @@ export default function LojaPublica() {
           </section>
 
           <section id="produtos" className="scroll-mt-28">
-            <div className="mb-6">
-              <h2
-                className="text-2xl font-black md:text-3xl"
-                style={{ color: currentStore.textColor }}
-              >
-                Produtos da loja
-              </h2>
-              <p className="mt-2" style={{ color: currentStore.mutedTextColor }}>
-                Escolha um produto, veja os detalhes e avance para a oferta.
-              </p>
+            <div className="mb-6 flex items-center justify-between gap-4">
+              <div>
+                <h2
+                  className="text-2xl font-black md:text-3xl"
+                  style={{ color: currentStore.textColor }}
+                >
+                  Produtos da loja
+                </h2>
+                <p className="mt-2" style={{ color: currentStore.mutedTextColor }}>
+                  Escolha um produto, veja os detalhes e avance para a oferta.
+                </p>
+              </div>
             </div>
 
-            {groupedRows.length === 0 ? (
+            {filteredProducts.length === 0 ? (
               <div
                 className="rounded-[32px] border border-white/10 p-10 text-center"
                 style={cardStyle}
@@ -940,110 +678,71 @@ export default function LojaPublica() {
                 </p>
               </div>
             ) : (
-              <div className="space-y-8">
-                {groupedRows.map((row) => (
-                  <div key={row.id}>
-                    <div className="mb-4 flex items-center justify-between gap-3">
-                      <div>
-                        <h3 className="text-xl font-black text-white md:text-2xl">{row.title}</h3>
-                        <p className="mt-1 text-sm text-zinc-400">
-                          {row.products.length} produto(s) nesta fileira
-                        </p>
-                      </div>
+              <div className="grid grid-cols-1 gap-6 md:grid-cols-2 xl:grid-cols-3">
+                {filteredProducts.map((product) => (
+                  <div
+                    key={product.id}
+                    className="group overflow-hidden rounded-[32px] border border-white/10 shadow-[0_14px_40px_rgba(0,0,0,0.28)] transition duration-300 hover:-translate-y-1 hover:border-emerald-500/30"
+                    style={cardStyle}
+                  >
+                    <div className="relative h-64 overflow-hidden bg-black/20">
+                      <ProductImage
+                        src={ensureUrl(product.image)}
+                        alt={product.name}
+                        className="h-full w-full object-cover transition duration-500 group-hover:scale-[1.04]"
+                      />
 
-                      <div className="hidden gap-2 md:flex">
-                        <Button
-                          type="button"
-                          variant="outline"
-                          className="rounded-2xl border-white/10 bg-black/20 text-white hover:bg-white/5"
-                          onClick={() => scrollRow(row.id, 'left')}
+                      <div className="absolute inset-0 bg-gradient-to-t from-black/25 via-transparent to-transparent" />
+
+                      <div className="absolute right-4 top-4">
+                        <span
+                          className="inline-flex items-center rounded-full border px-4 py-2 text-base font-black shadow-[0_10px_30px_rgba(34,197,94,0.28)]"
+                          style={{
+                            color: MONEY_GREEN_DARK,
+                            borderColor: 'rgba(255,255,255,0.18)',
+                            background:
+                              'linear-gradient(135deg, rgba(34,197,94,0.96) 0%, rgba(74,222,128,0.96) 100%)',
+                            backdropFilter: 'blur(16px)',
+                          }}
                         >
-                          <ChevronLeft className="h-4 w-4" />
-                        </Button>
-                        <Button
-                          type="button"
-                          variant="outline"
-                          className="rounded-2xl border-white/10 bg-black/20 text-white hover:bg-white/5"
-                          onClick={() => scrollRow(row.id, 'right')}
-                        >
-                          <ChevronRight className="h-4 w-4" />
-                        </Button>
+                          {formatMoney(product.priceValue)}
+                        </span>
                       </div>
                     </div>
 
-                    <div
-                      ref={(node) => {
-                        rowRefs.current[row.id] = node;
-                      }}
-                      className="flex gap-4 overflow-x-auto pb-2 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
-                    >
-                      {row.products.map((product) => (
-                        <div
-                          key={product.id}
-                          className="group w-[260px] shrink-0 overflow-hidden rounded-[28px] border border-white/10 shadow-[0_14px_40px_rgba(0,0,0,0.28)] transition duration-300 hover:-translate-y-1 hover:border-emerald-500/30"
-                          style={cardStyle}
+                    <div className="p-5">
+                      <h3 className="text-xl font-black" style={{ color: currentStore.textColor }}>
+                        {product.name}
+                      </h3>
+
+                      <p
+                        className="mt-3 line-clamp-3 text-sm leading-6"
+                        style={{ color: currentStore.mutedTextColor }}
+                      >
+                        {product.description || 'Sem descrição disponível para este produto.'}
+                      </p>
+
+                      <div className="mt-5 flex flex-col gap-3 sm:flex-row">
+                        <Button
+                          className="flex-1 rounded-2xl font-bold"
+                          style={{
+                            backgroundColor: currentStore.buttonBgColor,
+                            color: currentStore.buttonTextColor,
+                          }}
+                          onClick={() => openProductAction(product)}
                         >
-                          <div className="relative h-56 overflow-hidden bg-black/20">
-                            <ProductImage
-                              src={ensureUrl(product.image)}
-                              alt={product.name}
-                              className="h-full w-full object-cover transition duration-500 group-hover:scale-[1.04]"
-                            />
+                          <ExternalLink className="mr-2 h-4 w-4" />
+                          Comprar agora
+                        </Button>
 
-                            <div className="absolute inset-0 bg-gradient-to-t from-black/25 via-transparent to-transparent" />
-
-                            <div className="absolute right-4 top-4">
-                              <span
-                                className="inline-flex items-center rounded-full border px-4 py-2 text-base font-black shadow-[0_10px_30px_rgba(34,197,94,0.28)]"
-                                style={{
-                                  color: MONEY_GREEN_DARK,
-                                  borderColor: 'rgba(255,255,255,0.18)',
-                                  background:
-                                    'linear-gradient(135deg, rgba(34,197,94,0.96) 0%, rgba(74,222,128,0.96) 100%)',
-                                  backdropFilter: 'blur(16px)',
-                                }}
-                              >
-                                {formatMoney(product.priceValue)}
-                              </span>
-                            </div>
-                          </div>
-
-                          <div className="p-5">
-                            <h3 className="text-lg font-black" style={{ color: currentStore.textColor }}>
-                              {product.name}
-                            </h3>
-
-                            <p
-                              className="mt-3 line-clamp-3 text-sm leading-6"
-                              style={{ color: currentStore.mutedTextColor }}
-                            >
-                              {product.description || 'Sem descrição disponível para este produto.'}
-                            </p>
-
-                            <div className="mt-5 flex flex-col gap-3">
-                              <Button
-                                className="w-full rounded-2xl font-bold"
-                                style={{
-                                  backgroundColor: currentStore.buttonBgColor,
-                                  color: currentStore.buttonTextColor,
-                                }}
-                                onClick={() => void openProductAction(product)}
-                              >
-                                <ExternalLink className="mr-2 h-4 w-4" />
-                                Comprar agora
-                              </Button>
-
-                              <Button
-                                variant="outline"
-                                className="w-full rounded-2xl border-white/10 bg-black/20 text-white hover:bg-white/5"
-                                onClick={() => setSelectedProduct(product)}
-                              >
-                                Ver detalhes
-                              </Button>
-                            </div>
-                          </div>
-                        </div>
-                      ))}
+                        <Button
+                          variant="outline"
+                          className="rounded-2xl border-white/10 bg-black/20 text-white hover:bg-white/5"
+                          onClick={() => setSelectedProduct(product)}
+                        >
+                          Ver detalhes
+                        </Button>
+                      </div>
                     </div>
                   </div>
                 ))}
@@ -1101,7 +800,7 @@ export default function LojaPublica() {
                       backgroundColor: currentStore.buttonBgColor,
                       color: currentStore.buttonTextColor,
                     }}
-                    onClick={() => void openProductAction(selectedProduct)}
+                    onClick={() => openProductAction(selectedProduct)}
                   >
                     <ExternalLink className="mr-2 h-4 w-4" />
                     Comprar agora

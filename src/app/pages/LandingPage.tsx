@@ -536,7 +536,7 @@ export default function LandingPage() {
                 {
                   icon: Target,
                   title: 'Foco em resultado',
-                  desc: 'Ferramentas para ajudar você a divulgar melhor',
+                  desc: 'Ferramentas para ajudar você a ganhar dinheiro',
                 },
               ].map((item, index) => (
                 <div key={index} className="rounded-2xl border border-white/10 bg-white/[0.03] p-4">

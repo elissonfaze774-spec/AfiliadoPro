@@ -1,117 +1,74 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { useNavigate, useParams } from 'react-router-dom';
 import {
-  Package,
-  MousePointerClick,
-  FileText,
-  DollarSign,
-  FolderKanban,
-  Sparkles,
+  ArrowLeft,
+  ArrowUpDown,
   ExternalLink,
-  CheckCircle,
-  LogOut,
-  Crown,
-  RefreshCw,
+  ImageOff,
+  MessageCircle,
+  Package,
+  Search,
+  ShoppingBag,
   Store as StoreIcon,
-  Settings,
-  Copy,
-  GraduationCap,
-  ShieldCheck,
-  CalendarClock,
-  Bell,
-  ChevronRight,
-  Target,
-  Rocket,
-  LayoutGrid,
+  X,
 } from 'lucide-react';
-import { supabase } from '../../lib/supabase';
-import { useAuth } from '../context/AuthTemp';
-import { useApp } from '../context/AppContext';
-import { Button } from '../components/ui/button';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../components/ui/card';
 import { toast } from 'sonner';
+import { supabase } from '../../lib/supabase';
+import { Button } from '../components/ui/button';
+import { useAuth } from '../context/AuthTemp';
 
 type StoreData = {
   id: string;
   name: string;
-  slug: string;
-  niche: string | null;
+  username: string;
   whatsapp: string;
-  whatsappGroupLink?: string;
+  niche: string;
   logoUrl: string;
   bannerUrl: string;
+  description: string;
+  slogan: string;
+  primaryColor: string;
+  secondaryColor: string;
+  accentColor: string;
+  buttonBgColor: string;
+  buttonTextColor: string;
+  cardBgColor: string;
+  textColor: string;
+  mutedTextColor: string;
+  headerBgColor: string;
+  primaryButtonText: string;
+  whatsappButtonText: string;
+  themeMode: string;
   active: boolean;
   suspended: boolean;
   accessExpiresAt: string | null;
-  autoRenew: boolean;
-  accessGrantedDays: number;
 };
 
-type AuthUserLike = {
-  id?: string;
-  email?: string | null;
-  role?: string | null;
-  storeId?: string | null;
-  access?: {
-    status?: 'active' | 'expires_today' | 'expiring_soon' | 'expired';
-    label?: string;
-    expiresAt?: string | null;
-    autoRenew?: boolean;
-    daysLeft?: number;
-    isExpired?: boolean;
-  } | null;
-};
-
-type QuickAction = {
-  title: string;
-  description: string;
-  icon: any;
-  onClick: () => void;
-  primary?: boolean;
-  disabled?: boolean;
-};
-
-type NotificationItem = {
+type Product = {
   id: string;
-  title: string;
+  name: string;
   description: string;
-  highlight?: boolean;
+  image: string;
+  affiliateLink: string;
+  priceValue: number;
 };
 
-function normalizeStore(raw: any): StoreData | null {
-  if (!raw) return null;
+type SortType = 'recentes' | 'mais-caros' | 'mais-baratos' | 'nome';
 
-  const id = raw.id ?? '';
-  const name = raw.store_name ?? raw.name ?? '';
-  const slug = raw.slug ?? '';
-  const niche = raw.niche ?? null;
-  const whatsapp = raw.whatsapp_number ?? raw.whatsapp ?? '';
-  const whatsappGroupLink = raw.whatsapp_group_link ?? '';
-  const logoUrl = raw.logo_url ?? '';
-  const bannerUrl = raw.banner_url ?? '';
-  const active = Boolean(raw.active);
-  const suspended = Boolean(raw.suspended);
-  const accessExpiresAt = raw.access_expires_at ?? null;
-  const autoRenew = Boolean(raw.auto_renew);
-  const accessGrantedDays = Number(raw.access_granted_days ?? 0);
+const MONEY_GREEN_DARK = '#052e16';
 
-  if (!id || !name || !slug) return null;
+function ensureUrl(value: string) {
+  const trimmed = String(value ?? '').trim();
+  if (!trimmed) return '';
+  if (/^https?:\/\//i.test(trimmed)) return trimmed;
+  return `https://${trimmed}`;
+}
 
-  return {
-    id,
-    name,
-    slug,
-    niche,
-    whatsapp,
-    whatsappGroupLink,
-    logoUrl,
-    bannerUrl,
-    active,
-    suspended,
-    accessExpiresAt,
-    autoRenew,
-    accessGrantedDays,
-  };
+function formatMoney(value: number) {
+  return Number(value || 0).toLocaleString('pt-BR', {
+    style: 'currency',
+    currency: 'BRL',
+  });
 }
 
 function getInitials(name: string) {
@@ -123,1045 +80,767 @@ function getInitials(name: string) {
     .join('');
 }
 
-function formatDate(value?: string | null) {
-  if (!value) return '—';
+function isStoreExpired(value?: string | null) {
+  if (!value) return true;
   const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return '—';
-  return date.toLocaleDateString('pt-BR');
+  if (Number.isNaN(date.getTime())) return true;
+  return date.getTime() < Date.now();
 }
 
-function getBadgeClasses(status?: string | null) {
-  if (status === 'expired') return 'border-red-500/20 bg-red-500/10 text-red-300';
-  if (status === 'expires_today') return 'border-amber-500/20 bg-amber-500/10 text-amber-300';
-  if (status === 'expiring_soon') return 'border-yellow-500/20 bg-yellow-500/10 text-yellow-300';
-  return 'border-emerald-500/20 bg-emerald-500/10 text-emerald-300';
+function normalizeStore(row: any): StoreData | null {
+  if (!row?.id) return null;
+
+  return {
+    id: String(row.id),
+    name: row.store_name ?? row.name ?? 'Loja',
+    username: row.slug ?? row.username ?? '',
+    whatsapp: row.whatsapp_number ?? row.whatsapp ?? '',
+    niche: row.niche ?? '',
+    logoUrl: row.logo_url ?? '',
+    bannerUrl: row.banner_url ?? '',
+    description: row.description ?? '',
+    slogan: row.slogan ?? '',
+    primaryColor: row.primary_color ?? '#052e16',
+    secondaryColor: row.secondary_color ?? '#071b11',
+    accentColor: row.accent_color ?? '#10b981',
+    buttonBgColor: row.button_bg_color ?? '#10b981',
+    buttonTextColor: row.button_text_color ?? '#03120c',
+    cardBgColor: row.card_bg_color ?? 'rgba(255,255,255,0.04)',
+    textColor: row.text_color ?? '#ffffff',
+    mutedTextColor: row.muted_text_color ?? '#a1a1aa',
+    headerBgColor: row.header_bg_color ?? 'rgba(0,0,0,0.35)',
+    primaryButtonText: row.primary_button_text ?? 'Ver produtos',
+    whatsappButtonText: row.whatsapp_button_text ?? 'Grupo de Ofertas',
+    themeMode: row.theme_mode ?? 'dark',
+    active: Boolean(row.active),
+    suspended: Boolean(row.suspended),
+    accessExpiresAt: row.access_expires_at ?? null,
+  };
 }
 
-export default function Painel() {
-  const navigate = useNavigate();
-  const { user, authLoading, logout } = useAuth();
-  const { products, clicks, contents, refreshAppData, store: appStore } = useApp();
+function normalizeProduct(row: any): Product {
+  const priceValue =
+    typeof row?.price === 'number'
+      ? row.price
+      : typeof row?.price === 'string'
+        ? Number(row.price)
+        : 0;
 
-  const [store, setStore] = useState<StoreData | null>(null);
-  const [loadingStore, setLoadingStore] = useState(true);
-  const [refreshing, setRefreshing] = useState(false);
-  const [showNotifications, setShowNotifications] = useState(false);
-
-  const storeChannelRef = useRef<ReturnType<typeof supabase.channel> | null>(null);
-  const lastStoreIdRef = useRef<string | null>(null);
-  const notificationsDesktopRef = useRef<HTMLDivElement | null>(null);
-  const notificationsDesktopButtonRef = useRef<HTMLButtonElement | null>(null);
-  const notificationsMobileRef = useRef<HTMLDivElement | null>(null);
-  const notificationsMobileButtonRef = useRef<HTMLButtonElement | null>(null);
-
-  const publicStoreUrl = useMemo(() => {
-    if (!store?.slug) return '';
-    return `${window.location.origin}/loja/${store.slug}`;
-  }, [store?.slug]);
-
-  const estimatedEarnings = useMemo(() => {
-    return products.length * 50 + clicks * 2.5;
-  }, [products.length, clicks]);
-
-  const stats = useMemo(
-    () => [
-      {
-        icon: Package,
-        title: 'Total de produtos',
-        value: products.length,
-        helper: products.length === 1 ? '1 produto na loja' : `${products.length} produtos na loja`,
-      },
-      {
-        icon: MousePointerClick,
-        title: 'Cliques',
-        value: clicks,
-        helper: 'Interesse gerado pelos seus links',
-      },
-      {
-        icon: FileText,
-        title: 'Conteúdos',
-        value: contents.length,
-        helper: 'Textos gerados para vender mais',
-      },
-      {
-        icon: DollarSign,
-        title: ' Valor total dos produtos',
-        value: estimatedEarnings.toLocaleString('pt-BR', {
-          style: 'currency',
-          currency: 'BRL',
-        }),
-        helper: 'Estimativa visual do painel',
-      },
-    ],
-    [products.length, clicks, contents.length, estimatedEarnings],
-  );
-
-  const checklist = useMemo(
-    () => [
-      { text: 'Adicionar pelo menos 3 produtos', done: products.length >= 3 },
-      {
-        text: 'Configurar nome, banner e logo da loja',
-        done: Boolean(store?.name && store?.bannerUrl && store?.logoUrl),
-      },
-      {
-        text: 'Ter pelo menos 1 link de afiliado configurado',
-        done: products.some((product) => Boolean(product.affiliateLink)),
-      },
-      { text: 'Gerar seu primeiro conteúdo', done: contents.length > 0 },
-    ],
-    [products, contents.length, store],
-  );
-
-  const academyItems = [
-    {
-      title: 'O que vender primeiro',
-      description: 'Comece por produtos mais visuais, simples e fáceis de explicar.',
-    },
-    {
-      title: 'Como passar confiança',
-      description: 'Banner bonito, foto da loja e descrição forte ajudam muito na conversão.',
-    },
-    {
-      title: 'Como ter mais cliques',
-      description: 'Divulgue em grupos, status, reels e conversas privadas todos os dias.',
-    },
-  ];
-
-  const completedChecklist = useMemo(() => checklist.filter((item) => item.done).length, [checklist]);
-  const checklistPercent = useMemo(
-    () => Math.round((completedChecklist / checklist.length) * 100),
-    [completedChecklist, checklist.length],
-  );
-
-  const nextBestAction = useMemo(() => {
-    if (products.length < 3) {
-      return {
-        title: 'Adicione mais produtos',
-        description: 'Quanto mais produtos bons você tiver, maior a chance de gerar cliques e comissão.',
-        actionLabel: 'Ir para Produtos',
-        onClick: () => navigate('/produtos'),
-      };
-    }
-
-    if (!store?.bannerUrl || !store?.logoUrl) {
-      return {
-        title: 'Deixe sua loja com cara profissional',
-        description: 'Envie logo e banner para passar mais confiança e vender melhor.',
-        actionLabel: 'Ir para Configurações',
-        onClick: () => navigate('/configuracoes'),
-      };
-    }
-
-    if (contents.length === 0) {
-      return {
-        title: 'Gere um conteúdo prêmium',
-        description: 'Use a geração de conteúdos para converter o máximo em vendas.',
-        actionLabel: 'Gerar conteúdo',
-        onClick: () => navigate('/gerar-conteudo'),
-      };
-    }
-
-    return {
-      title: 'Sua loja pronto para divulgação',
-      description: 'Clique em copiar link e comece agora.',
-      actionLabel: 'Copiar link',
-      onClick: () => handleCopyStoreLink(),
-    };
-  }, [products.length, store?.bannerUrl, store?.logoUrl, contents.length, navigate]);
-
-  const notifications = useMemo<NotificationItem[]>(() => {
-    const items: NotificationItem[] = [
-      {
-        id: 'motivation-1',
-        title: 'Vamos pra cima!',
-        description: 'Uma pequena ação agora pode trazer sua próxima comissão.',
-        highlight: true,
-      },
-    ];
-
-    if (products.length < 3) {
-      items.push({
-        id: 'products-warning',
-        title: 'Adicione mais produtos',
-        description: 'Sua loja fica mais forte quando tem mais opções para o cliente',
-      });
-    }
-
-    if (!store?.bannerUrl || !store?.logoUrl) {
-      items.push({
-        id: 'visual-warning',
-        title: 'Sua loja pode ficar mais profissional',
-        description: 'Envie foto e banner com muita qualidade',
-      });
-    }
-
-    if (contents.length === 0) {
-      items.push({
-        id: 'content-warning',
-        title: 'Você ainda não gerou conteúdo',
-        description: 'Use o gerador para acelerar sua divulgação.',
-      });
-    }
-
-    items.push({
-      id: 'motivation-2',
-      title: 'Já vendeu hoje?',
-      description: 'Se ainda não divulgou, esse é um ótimo momento para começar.',
-    });
-
-    return items.slice(0, 4);
-  }, [products.length, store?.bannerUrl, store?.logoUrl, contents.length]);
-
-  const quickActions: QuickAction[] = [
-    {
-      title: 'Produtos',
-      description: 'Adicione, edite e organize seus produtos.',
-      icon: FolderKanban,
-      onClick: () => navigate('/produtos'),
-      primary: true,
-    },
-    {
-      title: 'Gerar conteúdo',
-      description: 'Crie textos prontos para divulgar mais rápido.',
-      icon: Sparkles,
-      onClick: () => navigate('/gerar-conteudo'),
-      disabled: products.length === 0,
-    },
-    {
-      title: 'Afilie-se',
-      description: 'Veja plataformas para ampliar suas oportunidades.',
-      icon: Rocket,
-      onClick: () => navigate('/afilie-se'),
-    },
-    {
-      title: 'Ver loja',
-      description: 'Abra sua loja pública e veja como ficou.',
-      icon: ExternalLink,
-      onClick: () => navigate(`/loja/${store?.slug}`),
-    },
-    {
-      title: 'Configurações',
-      description: 'Personalize sua loja e deixe tudo mais profissional.',
-      icon: Settings,
-      onClick: () => navigate('/configuracoes'),
-    },
-  ];
-
-  const resolveStoreForAdmin = useCallback(
-    async (authUser: AuthUserLike): Promise<StoreData | null> => {
-      const authUserId = authUser?.id ?? null;
-      const authEmail = authUser?.email?.trim().toLowerCase() ?? null;
-      const directStoreId = authUser?.storeId ?? null;
-
-      if (directStoreId) {
-        const { data, error } = await supabase.from('stores').select('*').eq('id', directStoreId).maybeSingle();
-        if (!error) {
-          const normalized = normalizeStore(data);
-          if (normalized) return normalized;
-        }
-      }
-
-      if (appStore?.id) {
-        return normalizeStore({
-          id: appStore.id,
-          store_name: appStore.name,
-          slug: appStore.username,
-          whatsapp: appStore.whatsapp,
-          whatsapp_group_link: appStore.whatsappGroupLink,
-          niche: appStore.niche,
-          logo_url: appStore.logoUrl,
-          banner_url: appStore.bannerUrl,
-        });
-      }
-
-      if (authEmail) {
-        const { data: adminByEmail, error: adminEmailError } = await supabase
-          .from('admins')
-          .select('store_id')
-          .eq('email', authEmail)
-          .maybeSingle();
-
-        if (!adminEmailError && adminByEmail?.store_id) {
-          const { data: storeByAdminEmail, error: storeByAdminEmailError } = await supabase
-            .from('stores')
-            .select('*')
-            .eq('id', adminByEmail.store_id)
-            .maybeSingle();
-
-          if (!storeByAdminEmailError) {
-            const normalized = normalizeStore(storeByAdminEmail);
-            if (normalized) return normalized;
-          }
-        }
-      }
-
-      if (authUserId) {
-        const { data: storeByOwner, error: storeByOwnerError } = await supabase
-          .from('stores')
-          .select('*')
-          .eq('owner_user_id', authUserId)
-          .order('created_at', { ascending: false })
-          .limit(1)
-          .maybeSingle();
-
-        if (!storeByOwnerError) {
-          const normalized = normalizeStore(storeByOwner);
-          if (normalized) return normalized;
-        }
-      }
-
-      if (authUserId) {
-        const { data: profile, error: profileError } = await supabase
-          .from('profiles')
-          .select('id, email')
-          .eq('id', authUserId)
-          .maybeSingle();
-
-        if (!profileError && profile?.email) {
-          const profileEmail = String(profile.email).trim().toLowerCase();
-
-          const { data: adminByProfileEmail, error: adminByProfileEmailError } = await supabase
-            .from('admins')
-            .select('store_id')
-            .eq('email', profileEmail)
-            .maybeSingle();
-
-          if (!adminByProfileEmailError && adminByProfileEmail?.store_id) {
-            const { data: storeByProfileEmail, error: storeByProfileEmailError } = await supabase
-              .from('stores')
-              .select('*')
-              .eq('id', adminByProfileEmail.store_id)
-              .maybeSingle();
-
-            if (!storeByProfileEmailError) {
-              const normalized = normalizeStore(storeByProfileEmail);
-              if (normalized) return normalized;
-            }
-          }
-        }
-      }
-
-      return null;
-    },
-    [appStore],
-  );
-
-  const loadStore = useCallback(
-    async (options?: { silent?: boolean }) => {
-      const silent = options?.silent ?? false;
-
-      if (authLoading) return null;
-
-      const localUser = user as AuthUserLike | null;
-
-      if (!localUser) {
-        navigate('/login', { replace: true });
-        return null;
-      }
-
-      if (localUser.role === 'super-admin') {
-        navigate('/super-admin', { replace: true });
-        return null;
-      }
-
-      try {
-        if (!silent && !store) {
-          setLoadingStore(true);
-        } else {
-          setRefreshing(true);
-        }
-
-        const {
-          data: { user: sessionUser },
-        } = await supabase.auth.getUser();
-
-        const mergedUser: AuthUserLike = {
-          ...localUser,
-          id: localUser.id ?? sessionUser?.id,
-          email: localUser.email ?? sessionUser?.email ?? null,
-        };
-
-        const resolvedStore = await resolveStoreForAdmin(mergedUser);
-
-        if (resolvedStore) {
-          setStore((current) => {
-            if (
-              current?.id === resolvedStore.id &&
-              current?.name === resolvedStore.name &&
-              current?.slug === resolvedStore.slug &&
-              current?.niche === resolvedStore.niche &&
-              current?.whatsapp === resolvedStore.whatsapp &&
-              current?.logoUrl === resolvedStore.logoUrl &&
-              current?.bannerUrl === resolvedStore.bannerUrl &&
-              current?.accessExpiresAt === resolvedStore.accessExpiresAt &&
-              current?.autoRenew === resolvedStore.autoRenew &&
-              current?.active === resolvedStore.active &&
-              current?.suspended === resolvedStore.suspended
-            ) {
-              return current;
-            }
-            return resolvedStore;
-          });
-
-          return resolvedStore;
-        }
-
-        setStore(null);
-        return null;
-      } catch (error) {
-        console.error('Erro ao carregar loja do admin:', error);
-        toast.error('Não foi possível carregar sua loja agora.');
-        return null;
-      } finally {
-        setLoadingStore(false);
-        setRefreshing(false);
-      }
-    },
-    [authLoading, navigate, resolveStoreForAdmin, store, user],
-  );
-
-  useEffect(() => {
-    void loadStore();
-  }, [loadStore]);
-
-  useEffect(() => {
-    const currentStoreId = store?.id ?? null;
-    const lastStoreId = lastStoreIdRef.current;
-
-    if (lastStoreId === currentStoreId) return;
-
-    if (storeChannelRef.current) {
-      void supabase.removeChannel(storeChannelRef.current);
-      storeChannelRef.current = null;
-    }
-
-    lastStoreIdRef.current = currentStoreId;
-    if (!currentStoreId) return;
-
-    const channel = supabase
-      .channel(`painel-store-${currentStoreId}`)
-      .on(
-        'postgres_changes',
-        { event: '*', schema: 'public', table: 'stores', filter: `id=eq.${currentStoreId}` },
-        async () => {
-          await loadStore({ silent: true });
-        },
-      )
-      .subscribe();
-
-    storeChannelRef.current = channel;
-
-    return () => {
-      if (storeChannelRef.current) {
-        void supabase.removeChannel(storeChannelRef.current);
-        storeChannelRef.current = null;
-      }
-    };
-  }, [store?.id, loadStore]);
-
-  useEffect(() => {
-    if (!showNotifications) return;
-
-    const handleClickOutside = (event: MouseEvent) => {
-      const target = event.target as Node | null;
-      if (notificationsDesktopRef.current?.contains(target)) return;
-      if (notificationsDesktopButtonRef.current?.contains(target)) return;
-      if (notificationsMobileRef.current?.contains(target)) return;
-      if (notificationsMobileButtonRef.current?.contains(target)) return;
-      setShowNotifications(false);
-    };
-
-    const handleEscape = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') setShowNotifications(false);
-    };
-
-    document.addEventListener('mousedown', handleClickOutside);
-    document.addEventListener('keydown', handleEscape);
-    return () => {
-      document.removeEventListener('mousedown', handleClickOutside);
-      document.removeEventListener('keydown', handleEscape);
-    };
-  }, [showNotifications]);
-
-  const handleLogout = async () => {
-    try {
-      await logout();
-      navigate('/login', { replace: true });
-    } catch (error) {
-      console.error('Erro ao sair:', error);
-      toast.error('Erro ao sair.');
-    }
+  return {
+    id: String(row?.id ?? ''),
+    name: row?.name ?? '',
+    description: row?.description ?? '',
+    image: row?.image ?? '',
+    affiliateLink: row?.affiliate_link ?? row?.affiliateLink ?? '',
+    priceValue: Number.isFinite(priceValue) ? priceValue : 0,
   };
+}
 
-  const handleRefresh = async () => {
-    await loadStore({ silent: true });
-    await refreshAppData();
-    toast.success('Painel atualizado.');
-  };
+function ProductImage({
+  src,
+  alt,
+  className = 'h-full w-full object-cover',
+  eager = false,
+}: {
+  src: string;
+  alt: string;
+  className?: string;
+  eager?: boolean;
+}) {
+  const [error, setError] = useState(false);
 
-  const handleCopyStoreLink = async () => {
-    if (!publicStoreUrl) return;
-    try {
-      await navigator.clipboard.writeText(publicStoreUrl);
-      toast.success('Link da loja copiado.');
-    } catch {
-      toast.error('Não foi possível copiar o link agora.');
-    }
-  };
-
-  if ((authLoading || loadingStore) && !store) return null;
-
-  if (!store) {
+  if (!src || error) {
     return (
-      <div className="min-h-screen bg-[radial-gradient(circle_at_top_left,_rgba(16,185,129,0.12),_transparent_25%),radial-gradient(circle_at_bottom_right,_rgba(34,197,94,0.08),_transparent_20%),linear-gradient(180deg,_#020202_0%,_#050505_50%,_#08120d_100%)] text-white">
-        <div className="mx-auto flex min-h-screen max-w-3xl flex-col items-center justify-center px-6 text-center">
-          <div className="mb-6 flex h-20 w-20 items-center justify-center rounded-3xl border border-emerald-500/20 bg-emerald-500/10 text-emerald-400">
-            <StoreIcon className="h-10 w-10" />
-          </div>
-          <h1 className="text-3xl font-black">Sua loja ainda não está pronta</h1>
-          <p className="mt-3 max-w-xl text-zinc-400">Não encontramos uma loja vinculada a este admin.</p>
-          <div className="mt-6 flex flex-wrap items-center justify-center gap-3">
-            <Button
-              variant="outline"
-              className="rounded-2xl border-white/10 bg-black/20 text-white hover:bg-white/5"
-              onClick={handleRefresh}
-              disabled={refreshing}
-            >
-              <RefreshCw className={`mr-2 h-4 w-4 ${refreshing ? 'animate-spin' : ''}`} />
-              Tentar novamente
-            </Button>
-          </div>
-        </div>
-      </div>
-    );
-  }
-
-  const access = user?.access;
-  const blocked = Boolean(access?.isExpired);
-
-  if (blocked) {
-    return (
-      <div className="min-h-screen bg-[radial-gradient(circle_at_top_left,_rgba(16,185,129,0.14),_transparent_25%),radial-gradient(circle_at_bottom_right,_rgba(34,197,94,0.08),_transparent_20%),linear-gradient(180deg,_#020202_0%,_#050505_50%,_#08120d_100%)] text-white">
-        <div className="mx-auto max-w-7xl px-4 py-8">
-          <header className="mb-8 border-b border-white/10 bg-black/40 backdrop-blur-sm">
-            <div className="mx-auto max-w-7xl px-4 py-4">
-              <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
-                <div className="min-w-0">
-                  <h1 className="truncate text-2xl font-black text-white">{store.name}</h1>
-                  <div className="mt-1 flex flex-wrap items-center gap-3 text-sm">
-                    <span className="text-zinc-400">@{store.slug}</span>
-                    <span className="text-zinc-700">•</span>
-                    <span className="capitalize text-zinc-400">{store.niche || 'Sem nicho'}</span>
-                  </div>
-                </div>
-                <Button variant="ghost" className="text-zinc-400 hover:bg-white/5 hover:text-white" onClick={handleLogout}>
-                  <LogOut className="mr-2 h-4 w-4" />
-                  Sair
-                </Button>
-              </div>
-            </div>
-          </header>
-
-          <div className="mx-auto max-w-3xl">
-            <Card className="border-amber-500/20 bg-black/40 shadow-[0_20px_60px_rgba(0,0,0,0.35)]">
-              <CardContent className="p-8 text-center">
-                <div className="mx-auto mb-6 flex h-20 w-20 items-center justify-center rounded-3xl border border-amber-500/20 bg-amber-500/10 text-amber-300">
-                  <CalendarClock className="h-10 w-10" />
-                </div>
-                <h2 className="text-3xl font-black text-white">Acesso temporariamente indisponível</h2>
-                <p className="mt-3 text-zinc-400">
-                  Sua estrutura continua preservada. Assim que a renovação for concluída, tudo volta ao normal.
-                </p>
-
-                <div className="mt-6 flex flex-wrap items-center justify-center gap-3">
-                  <span className={`inline-flex items-center gap-2 rounded-full border px-4 py-2 text-sm font-semibold ${getBadgeClasses(access?.status)}`}>
-                    <ShieldCheck className="h-4 w-4" />
-                    {access?.label || 'Expirado'}
-                  </span>
-
-                  <span className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/5 px-4 py-2 text-sm text-zinc-300">
-                    <CalendarClock className="h-4 w-4" />
-                    Vencimento: {formatDate(access?.expiresAt)}
-                  </span>
-                </div>
-              </CardContent>
-            </Card>
-          </div>
+      <div className="flex h-full w-full items-center justify-center bg-black/20">
+        <div className="text-center">
+          <ImageOff className="mx-auto mb-2 h-8 w-8 text-zinc-500" />
+          <p className="text-sm text-zinc-500">Imagem indisponível</p>
         </div>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen overflow-x-hidden bg-[radial-gradient(circle_at_top_left,_rgba(16,185,129,0.14),_transparent_25%),radial-gradient(circle_at_bottom_right,_rgba(34,197,94,0.08),_transparent_20%),linear-gradient(180deg,_#020202_0%,_#050505_50%,_#08120d_100%)]">
-      <header className="relative z-[90] border-b border-white/10 bg-black/40 backdrop-blur-sm">
-        <div className="mx-auto max-w-7xl px-4 py-4">
-          <div className="grid gap-4 xl:grid-cols-[1fr_auto] xl:items-start">
-            <div className="min-w-0">
-              <div className="flex flex-wrap items-center gap-2">
-                <h1 className="truncate text-2xl font-black text-white">{store.name}</h1>
-                <span className="inline-flex items-center gap-1 rounded-full border border-emerald-500/20 bg-emerald-500/10 px-2.5 py-1 text-xs text-emerald-300">
-                  <Crown className="h-3.5 w-3.5" />
-                  Admin
-                </span>
-              </div>
+    <img
+      src={src}
+      alt={alt}
+      loading={eager ? 'eager' : 'lazy'}
+      fetchPriority={eager ? 'high' : 'auto'}
+      decoding="async"
+      className={className}
+      onError={() => setError(true)}
+      draggable={false}
+    />
+  );
+}
 
-              <div className="mt-2 flex flex-wrap items-center gap-3 text-sm">
-                <span className="text-zinc-400">@{store.slug}</span>
-                <span className="text-zinc-700">•</span>
-                <span className="capitalize text-zinc-400">{store.niche || 'Sem nicho'}</span>
-              </div>
-            </div>
+function StoreUnavailable({ onBack }: { onBack: () => void }) {
+  return (
+    <div className="min-h-screen bg-black">
+      <div className="mx-auto flex min-h-screen max-w-3xl items-center justify-center px-4">
+        <div className="w-full rounded-[32px] border border-white/10 bg-white/[0.04] p-8 text-center">
+          <div className="mx-auto mb-5 flex h-20 w-20 items-center justify-center rounded-3xl border border-white/10 bg-black/20">
+            <StoreIcon className="h-10 w-10 text-zinc-500" />
+          </div>
 
-            <div className="relative hidden flex-wrap items-center gap-3 md:flex">
-              <div className="relative">
-                <Button
-                  ref={notificationsDesktopButtonRef}
-                  variant="outline"
-                  className="border-white/10 bg-black/30 text-white hover:bg-white/5"
-                  onClick={() => setShowNotifications((prev) => !prev)}
-                >
-                  <Bell className="mr-2 h-4 w-4" />
-                  Avisos
-                  <span className="ml-2 inline-flex h-5 min-w-[20px] items-center justify-center rounded-full bg-emerald-500 px-1.5 text-[10px] font-bold text-black">
-                    {notifications.length}
-                  </span>
-                </Button>
+          <h1 className="text-3xl font-black text-white">Loja temporariamente indisponível</h1>
+          <p className="mt-3 text-zinc-400">
+            Esta loja está temporariamente indisponível no momento. Tente novamente mais tarde.
+          </p>
 
-                {showNotifications ? (
-                  <div
-                    ref={notificationsDesktopRef}
-                    className="absolute left-0 top-[calc(100%+12px)] z-[160] w-[min(360px,calc(100vw-32px))] rounded-3xl border border-white/10 bg-[#07110c]/95 p-3 shadow-[0_20px_60px_rgba(0,0,0,0.45)] backdrop-blur-xl"
-                  >
-                    <div className="mb-2 px-2 py-1">
-                      <p className="text-sm font-bold text-white">Central de avisos</p>
-                      <p className="text-xs text-zinc-400">Motivação, dicas e lembretes leves.</p>
-                    </div>
-
-                    <div className="space-y-2">
-                      {notifications.map((item) => (
-                        <div
-                          key={item.id}
-                          className={`rounded-2xl border p-3 ${
-                            item.highlight
-                              ? 'border-emerald-500/20 bg-emerald-500/10'
-                              : 'border-white/10 bg-black/20'
-                          }`}
-                        >
-                          <p className="text-sm font-semibold text-white">{item.title}</p>
-                          <p className="mt-1 text-xs leading-5 text-zinc-400">{item.description}</p>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                ) : null}
-              </div>
-
-              <Button
-                variant="outline"
-                className="border-white/10 bg-black/30 text-white hover:bg-white/5"
-                onClick={handleRefresh}
-                disabled={refreshing}
-              >
-                <RefreshCw className={`mr-2 h-4 w-4 ${refreshing ? 'animate-spin' : ''}`} />
-                Atualizar
-              </Button>
-
-              <Button
-                variant="ghost"
-                className="text-zinc-400 hover:bg-white/5 hover:text-white"
-                onClick={handleLogout}
-              >
-                <LogOut className="mr-2 h-4 w-4" />
-                Sair
-              </Button>
-            </div>
-
-            {access ? (
-              <div className="hidden flex-wrap items-center gap-3 md:flex xl:col-span-2">
-                <span
-                  className={`inline-flex items-center gap-2 rounded-full border px-4 py-2 text-xs font-semibold ${getBadgeClasses(access.status)}`}
-                >
-                  <ShieldCheck className="h-4 w-4" />
-                  {access.label}
-                </span>
-
-                <span className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/5 px-4 py-2 text-xs text-zinc-300">
-                  <CalendarClock className="h-4 w-4" />
-                  Vencimento: {formatDate(access.expiresAt)}
-                </span>
-              </div>
-            ) : null}
+          <div className="mt-6">
+            <Button
+              variant="outline"
+              className="rounded-2xl border-white/10 bg-black/20 text-white hover:bg-white/5"
+              onClick={onBack}
+            >
+              <ArrowLeft className="mr-2 h-4 w-4" />
+              Voltar
+            </Button>
           </div>
         </div>
-      </header>
+      </div>
+    </div>
+  );
+}
 
-      <main className="relative z-10 mx-auto flex max-w-7xl flex-col gap-6 px-4 py-6">
-        <section className="grid grid-cols-1 gap-5 xl:grid-cols-[minmax(0,1.55fr)_minmax(0,0.95fr)] xl:items-stretch">
-          <Card className="h-full overflow-hidden border-emerald-500/20 bg-white/[0.04] shadow-[0_20px_60px_rgba(0,0,0,0.35)]">
-            <div className="relative h-full min-h-[240px] overflow-hidden md:min-h-[320px]">
-              <div className="absolute inset-0 overflow-hidden bg-[linear-gradient(135deg,rgba(2,8,5,0.92)_0%,rgba(4,22,15,0.80)_45%,rgba(6,38,26,0.62)_100%)]">
-                {store.bannerUrl ? (
-                  <img
-                    src={store.bannerUrl}
-                    alt={store.name}
-                    className="h-full w-full object-cover opacity-40 saturate-[0.9]"
-                  />
-                ) : null}
-              </div>
+export default function LojaPublica() {
+  const { username } = useParams();
+  const navigate = useNavigate();
+  const { user } = useAuth();
 
-              <div className="absolute inset-0 bg-[linear-gradient(180deg,rgba(0,0,0,0.12)_0%,rgba(0,0,0,0.42)_42%,rgba(0,0,0,0.84)_100%)]" />
+  const [store, setStore] = useState<StoreData | null>(null);
+  const [products, setProducts] = useState<Product[]>([]);
+  const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [search, setSearch] = useState('');
+  const [sort, setSort] = useState<SortType>('recentes');
 
-              <div className="absolute inset-x-0 bottom-0 p-4 md:p-6">
-                <div className="flex flex-col gap-5">
-                  <div className="flex items-end gap-4">
-                    <div className="flex h-20 w-20 shrink-0 items-center justify-center overflow-hidden rounded-3xl border border-white/15 bg-black/40 text-2xl font-black text-white shadow-xl">
-                      {store.logoUrl ? (
-                        <img src={store.logoUrl} alt={store.name} className="h-full w-full object-cover" />
-                      ) : (
-                        <span>{getInitials(store.name || 'A')}</span>
-                      )}
-                    </div>
+  const storeChannelRef = useRef<ReturnType<typeof supabase.channel> | null>(null);
+  const productChannelRef = useRef<ReturnType<typeof supabase.channel> | null>(null);
 
-                    <div className="min-w-0">
-                      <p className="mb-2 inline-flex rounded-full border border-emerald-400/20 bg-emerald-400/10 px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.18em] text-emerald-300 md:text-xs">
-                        
-                      </p>
-                      <h2 className="text-2xl font-black text-white drop-shadow-[0_3px_14px_rgba(0,0,0,0.55)] md:text-4xl">Painel completo</h2>
-                      <p className="mt-2 max-w-2xl text-sm text-zinc-200 drop-shadow-[0_2px_10px_rgba(0,0,0,0.55)] md:text-base">
-                        Clique em configurações, personalize sua loja, adicione produtos e comece a divulgar para vender. 
-                      </p>
-                    </div>
-                  </div>
+  const isAdminViewing = user?.role === 'admin' || user?.role === 'super-admin';
 
-                  <div className="flex flex-wrap gap-3">
-                    <Button
-                      className="rounded-2xl bg-gradient-to-r from-emerald-500 to-green-500 font-bold text-black hover:from-emerald-400 hover:to-green-400"
-                      onClick={() => navigate('/configuracoes')}
-                    >
-                      <Settings className="mr-2 h-4 w-4" />
-                      Configurações
-                    </Button>
+  const loadStoreAndProducts = async (slugParam?: string) => {
+    const slug = String(slugParam ?? username ?? '').trim();
 
-                    <Button
-                      variant="outline"
-                      className="rounded-2xl border-white/10 bg-black/25 text-white hover:bg-white/5"
-                      onClick={handleCopyStoreLink}
-                    >
-                      <Copy className="mr-2 h-4 w-4" />
-                      Copiar link
-                    </Button>
+    if (!slug) {
+      setStore(null);
+      setProducts([]);
+      setLoading(false);
+      return;
+    }
 
-                    <Button
-                      variant="outline"
-                      className="rounded-2xl border-white/10 bg-black/25 text-white hover:bg-white/5"
-                      onClick={() => navigate(`/loja/${store.slug}`)}
-                    >
-                      <ExternalLink className="mr-2 h-4 w-4" />
-                      Ver loja
-                    </Button>
-                  </div>
-                </div>
-              </div>
+    try {
+      setLoading(true);
+
+      const { data: storeRow, error: storeError } = await supabase
+        .from('stores')
+        .select('*')
+        .eq('slug', slug)
+        .maybeSingle();
+
+      if (storeError) throw storeError;
+
+      const normalizedStore = normalizeStore(storeRow);
+
+      if (!normalizedStore) {
+        setStore(null);
+        setProducts([]);
+        return;
+      }
+
+      setStore(normalizedStore);
+
+      if (!normalizedStore.active || normalizedStore.suspended || isStoreExpired(normalizedStore.accessExpiresAt)) {
+        setProducts([]);
+        return;
+      }
+
+      const { data: productRows, error: productsError } = await supabase
+        .from('products')
+        .select('*')
+        .eq('store_id', normalizedStore.id)
+        .order('created_at', { ascending: false });
+
+      if (productsError) throw productsError;
+
+      setProducts((productRows ?? []).map(normalizeProduct));
+    } catch (error) {
+      console.error('Erro ao carregar loja pública:', error);
+      setStore(null);
+      setProducts([]);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    void loadStoreAndProducts();
+  }, [username]);
+
+  useEffect(() => {
+    const storeId = store?.id ?? null;
+    const storeUsername = store?.username ?? null;
+
+    if (storeChannelRef.current) {
+      void supabase.removeChannel(storeChannelRef.current);
+      storeChannelRef.current = null;
+    }
+
+    if (productChannelRef.current) {
+      void supabase.removeChannel(productChannelRef.current);
+      productChannelRef.current = null;
+    }
+
+    if (!storeId || !storeUsername) return;
+
+    storeChannelRef.current = supabase
+      .channel(`public-store-${storeId}`)
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'stores',
+          filter: `id=eq.${storeId}`,
+        },
+        async () => {
+          await loadStoreAndProducts(storeUsername);
+        },
+      )
+      .subscribe();
+
+    productChannelRef.current = supabase
+      .channel(`public-products-${storeId}`)
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'products',
+          filter: `store_id=eq.${storeId}`,
+        },
+        async () => {
+          await loadStoreAndProducts(storeUsername);
+        },
+      )
+      .subscribe();
+
+    return () => {
+      if (storeChannelRef.current) {
+        void supabase.removeChannel(storeChannelRef.current);
+        storeChannelRef.current = null;
+      }
+
+      if (productChannelRef.current) {
+        void supabase.removeChannel(productChannelRef.current);
+        productChannelRef.current = null;
+      }
+    };
+  }, [store?.id, store?.username]);
+
+  const pageStyle = useMemo(() => {
+    if (!store) return {};
+
+    return {
+      background: `radial-gradient(circle at top left, ${store.accentColor}20, transparent 25%), linear-gradient(180deg, ${store.primaryColor} 0%, ${store.secondaryColor} 100%)`,
+    };
+  }, [store]);
+
+  const cardStyle = useMemo(() => {
+    if (!store) return {};
+
+    return {
+      background: store.cardBgColor || 'rgba(255,255,255,0.04)',
+      border: `1px solid ${store.accentColor}22`,
+    };
+  }, [store]);
+
+  const headerStyle = useMemo(() => {
+    if (!store) return {};
+
+    return {
+      background: store.headerBgColor || 'rgba(0,0,0,0.35)',
+      backdropFilter: 'blur(12px)',
+    };
+  }, [store]);
+
+  const filteredProducts = useMemo(() => {
+    const term = search.trim().toLowerCase();
+
+    let list = [...products];
+
+    if (term) {
+      list = list.filter((product) => {
+        return (
+          product.name.toLowerCase().includes(term) ||
+          product.description.toLowerCase().includes(term)
+        );
+      });
+    }
+
+    if (sort === 'mais-caros') {
+      list.sort((a, b) => b.priceValue - a.priceValue);
+    } else if (sort === 'mais-baratos') {
+      list.sort((a, b) => a.priceValue - b.priceValue);
+    } else if (sort === 'nome') {
+      list.sort((a, b) => a.name.localeCompare(b.name, 'pt-BR'));
+    }
+
+    return list;
+  }, [products, search, sort]);
+
+  const openProductAction = (product: Product) => {
+    const affiliateUrl = ensureUrl(product.affiliateLink);
+
+    if (affiliateUrl) {
+      window.open(affiliateUrl, '_blank', 'noopener,noreferrer');
+      return;
+    }
+
+    toast.error('Este produto ainda não possui link de afiliado configurado.');
+  };
+
+  const handleOffersGroup = async () => {
+    const rawGroupLink = ensureUrl(store?.whatsappGroupLink ?? '');
+
+    if (!rawGroupLink) {
+      toast.error('Grupo de ofertas não configurado.');
+      return;
+    }
+
+    const message = `Olá! Vim pela loja ${store?.name ?? 'AfiliadoPRO'} e quero participar do grupo de ofertas.`;
+
+    try {
+      const url = new URL(rawGroupLink);
+      const host = url.hostname.toLowerCase();
+
+      const supportsPrefilledMessage =
+        host.includes('wa.me') ||
+        host.includes('whatsapp.com') ||
+        host.includes('api.whatsapp.com');
+
+      if (supportsPrefilledMessage) {
+        url.searchParams.set('text', message);
+        window.open(url.toString(), '_blank', 'noopener,noreferrer');
+        return;
+      }
+
+      await navigator.clipboard.writeText(message);
+      window.open(url.toString(), '_blank', 'noopener,noreferrer');
+      toast.success('Link do grupo aberto. A mensagem pronta foi copiada.');
+    } catch {
+      try {
+        await navigator.clipboard.writeText(message);
+      } catch {}
+
+      window.open(rawGroupLink, '_blank', 'noopener,noreferrer');
+      toast.success('Link do grupo aberto. A mensagem pronta foi copiada.');
+    }
+  };
+
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-black">
+        <div className="mx-auto flex min-h-screen max-w-7xl items-center justify-center px-4">
+          <div className="text-center">
+            <div className="mx-auto mb-4 h-12 w-12 animate-spin rounded-full border-2 border-emerald-500 border-t-transparent" />
+            <p className="text-zinc-400">Carregando loja...</p>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  if (!store) {
+    return (
+      <div className="min-h-screen bg-black">
+        <div className="mx-auto flex min-h-screen max-w-3xl items-center justify-center px-4">
+          <div className="w-full rounded-[32px] border border-white/10 bg-white/[0.04] p-8 text-center">
+            <div className="mx-auto mb-5 flex h-20 w-20 items-center justify-center rounded-3xl border border-white/10 bg-black/20">
+              <StoreIcon className="h-10 w-10 text-zinc-500" />
             </div>
-          </Card>
 
-          <div className="flex flex-col gap-3 md:hidden">
-            <div className="relative flex flex-wrap items-center gap-3">
-              <div className="relative">
-                <Button
-                  ref={notificationsMobileButtonRef}
-                  variant="outline"
-                  className="border-white/10 bg-black/30 text-white hover:bg-white/5"
-                  onClick={() => setShowNotifications((prev) => !prev)}
-                >
-                  <Bell className="mr-2 h-4 w-4" />
-                  Avisos
-                  <span className="ml-2 inline-flex h-5 min-w-[20px] items-center justify-center rounded-full bg-emerald-500 px-1.5 text-[10px] font-bold text-black">
-                    {notifications.length}
-                  </span>
-                </Button>
+            <h1 className="text-3xl font-black text-white">Loja não encontrada</h1>
+            <p className="mt-3 text-zinc-400">
+              Esse link não existe ou a loja ainda não foi configurada.
+            </p>
 
-                {showNotifications ? (
-                  <div
-                    ref={notificationsMobileRef}
-                    className="absolute left-0 top-[calc(100%+12px)] z-[220] w-[min(360px,calc(100vw-32px))] rounded-3xl border border-white/10 bg-[#07110c]/98 p-3 shadow-[0_24px_70px_rgba(0,0,0,0.55)] backdrop-blur-xl"
-                  >
-                    <div className="mb-2 px-2 py-1">
-                      <p className="text-sm font-bold text-white">Central de avisos</p>
-                      <p className="text-xs text-zinc-400">Motivação, dicas e lembretes leves.</p>
-                    </div>
-
-                    <div className="space-y-2">
-                      {notifications.map((item) => (
-                        <div
-                          key={item.id}
-                          className={`rounded-2xl border p-3 ${
-                            item.highlight
-                              ? 'border-emerald-500/20 bg-emerald-500/10'
-                              : 'border-white/10 bg-black/20'
-                          }`}
-                        >
-                          <p className="text-sm font-semibold text-white">{item.title}</p>
-                          <p className="mt-1 text-xs leading-5 text-zinc-400">{item.description}</p>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                ) : null}
-              </div>
-
+            <div className="mt-6">
               <Button
                 variant="outline"
-                className="border-white/10 bg-black/30 text-white hover:bg-white/5"
-                onClick={handleRefresh}
-                disabled={refreshing}
+                className="rounded-2xl border-white/10 bg-black/20 text-white hover:bg-white/5"
+                onClick={() => navigate('/')}
               >
-                <RefreshCw className={`mr-2 h-4 w-4 ${refreshing ? 'animate-spin' : ''}`} />
-                Atualizar
-              </Button>
-
-              <Button
-                variant="ghost"
-                className="text-zinc-400 hover:bg-white/5 hover:text-white"
-                onClick={handleLogout}
-              >
-                <LogOut className="mr-2 h-4 w-4" />
-                Sair
+                <ArrowLeft className="mr-2 h-4 w-4" />
+                Voltar
               </Button>
             </div>
-
-            {access ? (
-              <div className="flex flex-wrap items-center gap-3">
-                <span
-                  className={`inline-flex items-center gap-2 rounded-full border px-4 py-2 text-xs font-semibold ${getBadgeClasses(access.status)}`}
-                >
-                  <ShieldCheck className="h-4 w-4" />
-                  {access.label}
-                </span>
-
-                <span className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/5 px-4 py-2 text-xs text-zinc-300">
-                  <CalendarClock className="h-4 w-4" />
-                  Vencimento: {formatDate(access.expiresAt)}
-                </span>
-              </div>
-            ) : null}
           </div>
+        </div>
+      </div>
+    );
+  }
 
-          <Card className="h-full border-emerald-500/20 bg-[linear-gradient(180deg,rgba(16,185,129,0.18)_0%,rgba(5,10,8,0.9)_100%)] shadow-[0_20px_60px_rgba(0,0,0,0.35)]">
-            <CardContent className="p-5 md:p-6">
-              <div className="inline-flex rounded-full border border-emerald-300/20 bg-emerald-300/10 px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.18em] text-emerald-200">
-                Novidade!
-              </div>
+  if (!store.active || store.suspended || isStoreExpired(store.accessExpiresAt)) {
+    return <StoreUnavailable onBack={() => navigate('/')} />;
+  }
 
-              <h3 className="mt-4 text-2xl font-black text-white">{nextBestAction.title}</h3>
-              <p className="mt-3 text-sm leading-6 text-emerald-50/85">{nextBestAction.description}</p>
+  const currentStore = store;
 
-              <div className="mt-6 rounded-3xl border border-white/10 bg-black/25 p-4">
-                <p className="text-xs font-semibold uppercase tracking-[0.18em] text-emerald-200/80">Potencial visual</p>
-                <div className="mt-2 text-4xl font-black text-white">
-                  {estimatedEarnings.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+  return (
+    <>
+      <div className="min-h-screen pb-16" style={pageStyle}>
+        <header className="sticky top-0 z-30 border-b border-white/10" style={headerStyle}>
+          <div className="mx-auto flex max-w-7xl items-center justify-between gap-3 px-4 py-4">
+            <div className="flex min-w-0 items-center gap-3">
+              {isAdminViewing ? (
+                <Button
+                  variant="ghost"
+                  className="rounded-2xl text-zinc-300 hover:bg-white/5 hover:text-white"
+                  onClick={() => navigate('/painel')}
+                >
+                  <ArrowLeft className="mr-2 h-4 w-4" />
+                  Voltar ao painel
+                </Button>
+              ) : (
+                <div className="min-w-0">
+                  <p className="truncate text-sm font-semibold text-white">{currentStore.name}</p>
+                  <p className="truncate text-xs text-zinc-400">@{currentStore.username}</p>
                 </div>
-                <p className="mt-2 text-sm text-zinc-200/80">
-                  Mais produtos + mais cliques = mais chance de comissão.
-                </p>
-              </div>
+              )}
+            </div>
+          </div>
+        </header>
 
-              <Button
-                className="mt-5 w-full rounded-2xl bg-gradient-to-r from-emerald-500 to-green-500 font-bold text-black hover:from-emerald-400 hover:to-green-400"
-                onClick={nextBestAction.onClick}
-              >
-                <Rocket className="mr-2 h-4 w-4" />
-                {nextBestAction.actionLabel}
-              </Button>
-            </CardContent>
-          </Card>
-        </section>
+        <div className="mx-auto max-w-7xl space-y-6 px-4 py-6 md:space-y-8 md:py-10">
+          <section className="overflow-hidden rounded-[36px] border border-white/10 shadow-[0_20px_60px_rgba(0,0,0,0.35)]">
+            <div className="relative h-[120px] sm:h-[150px] md:h-[190px] lg:h-[220px]">
+              {currentStore.bannerUrl ? (
+                <ProductImage
+                  src={ensureUrl(currentStore.bannerUrl)}
+                  alt={currentStore.name}
+                  eager
+                  className="h-full w-full object-cover"
+                />
+              ) : (
+                <div className="h-full w-full bg-gradient-to-r from-black via-zinc-900 to-black" />
+              )}
 
-        <section className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
-          {stats.map((stat, index) => (
-            <Card key={index} className="border-white/10 bg-white/[0.04] shadow-[0_10px_30px_rgba(0,0,0,0.25)]">
-              <CardContent className="p-5">
-                <div className="flex items-start justify-between gap-4">
-                  <div className="min-w-0">
-                    <p className="text-sm text-zinc-400">{stat.title}</p>
-                    <div className="mt-3 break-words text-3xl font-black text-white">{stat.value}</div>
-                    <p className="mt-2 text-sm text-zinc-500">{stat.helper}</p>
-                  </div>
+              <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/30 to-transparent" />
+            </div>
 
-                  <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-emerald-500 to-green-500">
-                    <stat.icon className="h-5 w-5 text-black" />
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-          ))}
-        </section>
-
-        <section className="grid grid-cols-1 gap-6 xl:grid-cols-[minmax(0,1.15fr)_minmax(0,0.85fr)]">
-          <div className="space-y-6">
-            <Card className="border-white/10 bg-white/[0.04] shadow-[0_10px_30px_rgba(0,0,0,0.25)]">
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2 text-white">
-                  <LayoutGrid className="h-5 w-5 text-emerald-400" />
-                  Menu Principal
-                </CardTitle>
-                <CardDescription className="text-zinc-400">
-                  Tudo que você precisa, para melhor experiência!
-                </CardDescription>
-              </CardHeader>
-
-              <CardContent>
-                <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-                  {quickActions.map((action) => (
-                    <button
-                      key={action.title}
-                      type="button"
-                      onClick={action.onClick}
-                      disabled={action.disabled}
-                      className={`rounded-[24px] border p-5 text-left transition ${
-                        action.primary
-                          ? 'border-emerald-500/20 bg-gradient-to-br from-emerald-500/15 to-emerald-500/5 hover:border-emerald-400/30'
-                          : 'border-white/10 bg-black/20 hover:border-emerald-500/20 hover:bg-white/[0.03]'
-                      } ${action.disabled ? 'cursor-not-allowed opacity-50' : ''}`}
+            <div className="border-t border-white/10 bg-[linear-gradient(180deg,rgba(3,10,24,0.92)_0%,rgba(4,18,38,0.96)_100%)] px-4 py-4 md:px-6 md:py-5">
+              <div className="max-w-4xl">
+                <div className="mb-3 flex flex-wrap gap-2">
+                  {currentStore.slogan ? (
+                    <span
+                      className="inline-flex rounded-full px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.16em]"
+                      style={{
+                        backgroundColor: `${currentStore.accentColor}22`,
+                        color: currentStore.accentColor,
+                        border: `1px solid ${currentStore.accentColor}33`,
+                      }}
                     >
-                      <div className="flex items-start justify-between gap-4">
-                        <div className="min-w-0">
-                          <div
-                            className={`mb-4 flex h-12 w-12 items-center justify-center rounded-2xl ${
-                              action.primary
-                                ? 'bg-gradient-to-br from-emerald-500 to-green-500 text-black'
-                                : 'bg-white/5 text-emerald-300'
-                            }`}
-                          >
-                            <action.icon className="h-5 w-5" />
-                          </div>
+                      {currentStore.slogan}
+                    </span>
+                  ) : null}
 
-                          <h3 className="text-base font-bold text-white">{action.title}</h3>
-                          <p className="mt-2 text-sm leading-6 text-zinc-400">{action.description}</p>
-                        </div>
+                  {!!currentStore.username && (
+                    <span className="inline-flex rounded-full border border-white/10 bg-white/5 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.14em] text-zinc-300">
+                      @{currentStore.username}
+                    </span>
+                  )}
 
-                        <ChevronRight className="mt-1 h-5 w-5 shrink-0 text-zinc-500" />
-                      </div>
-                    </button>
-                  ))}
+                  {!!currentStore.niche && (
+                    <span className="inline-flex rounded-full border border-white/10 bg-white/5 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.14em] text-zinc-300">
+                      {currentStore.niche}
+                    </span>
+                  )}
                 </div>
-              </CardContent>
-            </Card>
 
-            <Card className="border-white/10 bg-white/[0.04] shadow-[0_10px_30px_rgba(0,0,0,0.25)]">
-              <CardHeader>
-                <CardTitle className="text-white">Progresso da sua estrutura</CardTitle>
-                <CardDescription className="text-zinc-400">
-                  Quanto mais completo, mais forte fica para vender.
-                </CardDescription>
-              </CardHeader>
-
-              <CardContent>
-                <div className="mb-5">
-                  <div className="mb-2 flex items-center justify-between gap-3">
-                    <p className="text-sm text-zinc-400">Loja pronta</p>
-                    <p className="text-sm font-bold text-emerald-300">{checklistPercent}%</p>
+                <div className="flex items-start gap-4">
+                  <div className="flex h-20 w-20 shrink-0 items-center justify-center overflow-hidden rounded-[24px] border border-white/15 bg-black/30 text-xl font-black text-white shadow-2xl md:h-24 md:w-24 md:rounded-[28px]">
+                    {currentStore.logoUrl ? (
+                      <ProductImage
+                        src={ensureUrl(currentStore.logoUrl)}
+                        alt={currentStore.name}
+                        eager
+                        className="h-full w-full object-cover"
+                      />
+                    ) : (
+                      <span>{getInitials(currentStore.name || 'L')}</span>
+                    )}
                   </div>
-                  <div className="h-3 overflow-hidden rounded-full bg-white/5">
-                    <div
-                      className="h-full rounded-full bg-gradient-to-r from-emerald-500 to-green-500 transition-all"
-                      style={{ width: `${checklistPercent}%` }}
+
+                  <div className="min-w-0 flex-1 pt-1">
+                    <h1
+                      className="break-words text-3xl font-black leading-none md:text-5xl"
+                      style={{ color: currentStore.textColor }}
+                    >
+                      {currentStore.name}
+                    </h1>
+
+                    <p
+                      className="mt-3 max-w-2xl text-sm leading-7 md:text-base"
+                      style={{ color: currentStore.mutedTextColor }}
+                    >
+                      {currentStore.description ||
+                        'Explore os produtos disponíveis desta loja e encontre a melhor oferta para você.'}
+                    </p>
+                  </div>
+                </div>
+
+                <div className="mt-5 flex flex-col gap-3 sm:flex-row">
+                  <Button
+                    className="w-full rounded-2xl px-6 font-bold sm:w-auto"
+                    style={{
+                      backgroundColor: currentStore.buttonBgColor,
+                      color: currentStore.buttonTextColor,
+                    }}
+                    onClick={() => {
+                      const section = document.getElementById('produtos');
+                      section?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                    }}
+                  >
+                    <ShoppingBag className="mr-2 h-4 w-4" />
+                    {currentStore.primaryButtonText || 'Ver produtos'}
+                  </Button>
+
+                  <Button
+                    variant="outline"
+                    className="w-full rounded-2xl border-white/10 bg-black/20 text-white hover:bg-white/5 sm:w-auto"
+                    onClick={() => void handleOffersGroup()}
+                  >
+                    <MessageCircle className="mr-2 h-4 w-4" />
+                    {currentStore.whatsappButtonText || 'Grupo de Ofertas'}
+                  </Button>
+                </div>
+              </div>
+            </div>
+          </section>
+
+          <section className="mb-6">
+            <div className="rounded-[32px] border border-white/10 p-6 md:p-7" style={cardStyle}>
+              <div className="grid gap-6 xl:grid-cols-[1fr_280px] xl:items-end">
+                <div>
+                  <h2
+                    className="text-2xl font-black md:text-3xl"
+                    style={{ color: currentStore.textColor }}
+                  >
+                    Encontre o produto ideal
+                  </h2>
+
+                  <p
+                    className="mt-3 max-w-3xl text-base leading-7"
+                    style={{ color: currentStore.mutedTextColor }}
+                  >
+                    Navegue pela vitrine, filtre mais rápido e abra o produto que mais combina com você.
+                  </p>
+
+                  <div className="relative mt-5">
+                    <Search className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-zinc-500" />
+                    <input
+                      value={search}
+                      onChange={(e) => setSearch(e.target.value)}
+                      className="h-12 w-full rounded-2xl border border-white/10 bg-black/30 pl-11 pr-4 text-white outline-none transition focus:border-emerald-500"
+                      placeholder="Buscar produtos..."
                     />
                   </div>
                 </div>
 
-                <div className="space-y-3">
-                  {checklist.map((item) => (
-                    <div
-                      key={item.text}
-                      className={`flex items-start gap-3 rounded-2xl border p-4 ${
-                        item.done
-                          ? 'border-emerald-500/15 bg-emerald-500/10'
-                          : 'border-white/10 bg-black/20'
-                      }`}
-                    >
-                      <div
-                        className={`mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-xl ${
-                          item.done ? 'bg-emerald-500 text-black' : 'bg-white/5 text-zinc-500'
-                        }`}
-                      >
-                        <CheckCircle className="h-4 w-4" />
-                      </div>
-                      <div className="min-w-0">
-                        <p className="text-sm text-white">{item.text}</p>
-                        <p className="mt-1 text-xs text-zinc-500">
-                          {item.done ? 'Concluído' : 'Ainda falta concluir'}
-                        </p>
+                <div>
+                  <label className="mb-2 flex items-center gap-2 text-sm font-medium text-white">
+                    <ArrowUpDown className="h-4 w-4 text-emerald-400" />
+                    Ordenar por
+                  </label>
+
+                  <select
+                    value={sort}
+                    onChange={(e) => setSort(e.target.value as SortType)}
+                    className="h-12 w-full rounded-2xl border border-white/10 bg-black/30 px-4 text-white outline-none transition focus:border-emerald-500"
+                  >
+                    <option value="recentes">Mais recentes</option>
+                    <option value="mais-caros">Mais caros</option>
+                    <option value="mais-baratos">Mais baratos</option>
+                    <option value="nome">Nome</option>
+                  </select>
+                </div>
+              </div>
+            </div>
+          </section>
+
+          <section id="produtos" className="scroll-mt-28">
+            <div className="mb-6 flex items-center justify-between gap-4">
+              <div>
+                <h2
+                  className="text-2xl font-black md:text-3xl"
+                  style={{ color: currentStore.textColor }}
+                >
+                  Produtos da loja
+                </h2>
+                <p className="mt-2" style={{ color: currentStore.mutedTextColor }}>
+                  Escolha um produto, veja os detalhes e avance para a oferta.
+                </p>
+              </div>
+            </div>
+
+            {filteredProducts.length === 0 ? (
+              <div
+                className="rounded-[32px] border border-white/10 p-10 text-center"
+                style={cardStyle}
+              >
+                <Package className="mx-auto mb-4 h-14 w-14 text-zinc-600" />
+                <h3 className="text-xl font-bold" style={{ color: currentStore.textColor }}>
+                  Nenhum produto encontrado
+                </h3>
+                <p className="mt-2" style={{ color: currentStore.mutedTextColor }}>
+                  Tente buscar por outro nome ou volte mais tarde.
+                </p>
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 gap-6 md:grid-cols-2 xl:grid-cols-3">
+                {filteredProducts.map((product) => (
+                  <div
+                    key={product.id}
+                    className="group overflow-hidden rounded-[32px] border border-white/10 shadow-[0_14px_40px_rgba(0,0,0,0.28)] transition duration-300 hover:-translate-y-1 hover:border-emerald-500/30"
+                    style={cardStyle}
+                  >
+                    <div className="relative h-64 overflow-hidden bg-black/20">
+                      <ProductImage
+                        src={ensureUrl(product.image)}
+                        alt={product.name}
+                        className="h-full w-full object-cover transition duration-500 group-hover:scale-[1.04]"
+                      />
+
+                      <div className="absolute inset-0 bg-gradient-to-t from-black/25 via-transparent to-transparent" />
+
+                      <div className="absolute right-4 top-4">
+                        <span
+                          className="inline-flex items-center rounded-full border px-4 py-2 text-base font-black shadow-[0_10px_30px_rgba(34,197,94,0.28)]"
+                          style={{
+                            color: MONEY_GREEN_DARK,
+                            borderColor: 'rgba(255,255,255,0.18)',
+                            background:
+                              'linear-gradient(135deg, rgba(34,197,94,0.96) 0%, rgba(74,222,128,0.96) 100%)',
+                            backdropFilter: 'blur(16px)',
+                          }}
+                        >
+                          {formatMoney(product.priceValue)}
+                        </span>
                       </div>
                     </div>
-                  ))}
-                </div>
-              </CardContent>
-            </Card>
-          </div>
 
-          <div className="space-y-6">
-            <Card className="border-white/10 bg-white/[0.04] shadow-[0_10px_30px_rgba(0,0,0,0.25)]">
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2 text-white">
-                  <GraduationCap className="h-5 w-5 text-emerald-400" />
-                  Academia AfiliadoPRO
-                </CardTitle>
-                <CardDescription className="text-zinc-400">
-                  Dicas rápidas para melhorar sua chance de venda.
-                </CardDescription>
-              </CardHeader>
+                    <div className="p-5">
+                      <h3 className="text-xl font-black" style={{ color: currentStore.textColor }}>
+                        {product.name}
+                      </h3>
 
-              <CardContent className="space-y-3">
-                {academyItems.map((item) => (
-                  <div key={item.title} className="rounded-[22px] border border-white/10 bg-black/20 p-4">
-                    <p className="font-semibold text-white">{item.title}</p>
-                    <p className="mt-2 text-sm leading-6 text-zinc-400">{item.description}</p>
+                      <p
+                        className="mt-3 line-clamp-3 text-sm leading-6"
+                        style={{ color: currentStore.mutedTextColor }}
+                      >
+                        {product.description || 'Sem descrição disponível para este produto.'}
+                      </p>
+
+                      <div className="mt-5 flex flex-col gap-3 sm:flex-row">
+                        <Button
+                          className="flex-1 rounded-2xl font-bold"
+                          style={{
+                            backgroundColor: currentStore.buttonBgColor,
+                            color: currentStore.buttonTextColor,
+                          }}
+                          onClick={() => openProductAction(product)}
+                        >
+                          <ExternalLink className="mr-2 h-4 w-4" />
+                          Comprar agora
+                        </Button>
+
+                        <Button
+                          variant="outline"
+                          className="rounded-2xl border-white/10 bg-black/20 text-white hover:bg-white/5"
+                          onClick={() => setSelectedProduct(product)}
+                        >
+                          Ver detalhes
+                        </Button>
+                      </div>
+                    </div>
                   </div>
                 ))}
-              </CardContent>
-            </Card>
+              </div>
+            )}
+          </section>
+        </div>
+      </div>
 
-            <Card className="border-white/10 bg-white/[0.04] shadow-[0_10px_30px_rgba(0,0,0,0.25)]">
-              <CardHeader>
-                <CardTitle className="text-white">Centro de divulgação</CardTitle>
-                <CardDescription className="text-zinc-400">
-                  Ações rápidas para divulgação e relacionamento.
-                </CardDescription>
-              </CardHeader>
+      {selectedProduct ? (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4 backdrop-blur-sm"
+          onClick={() => setSelectedProduct(null)}
+        >
+          <div
+            className="max-h-[90vh] w-full max-w-5xl overflow-hidden rounded-[32px] border border-white/10 bg-[#050505] shadow-2xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="grid max-h-[90vh] overflow-auto md:grid-cols-2">
+              <div className="h-[320px] bg-black/20 md:h-full">
+                <ProductImage
+                  src={ensureUrl(selectedProduct.image)}
+                  alt={selectedProduct.name}
+                  eager
+                  className="h-full w-full object-cover"
+                />
+              </div>
 
-              <CardContent className="space-y-3">
-                <Button
-                  className="h-12 w-full rounded-2xl bg-gradient-to-r from-emerald-500 to-green-500 font-bold text-black hover:from-emerald-400 hover:to-green-400"
-                  onClick={handleCopyStoreLink}
-                >
-                  <Copy className="mr-2 h-4 w-4" />
-                  Copiar link da loja
-                </Button>
+              <div className="p-6 md:p-8">
+                <div className="mb-6 flex items-start justify-between gap-4">
+                  <div>
+                    <h3 className="text-2xl font-black text-white">{selectedProduct.name}</h3>
+                    <p className="mt-2 text-2xl font-black text-emerald-400">
+                      {formatMoney(selectedProduct.priceValue)}
+                    </p>
+                  </div>
 
-                <Button
-                  variant="outline"
-                  className="h-12 w-full rounded-2xl border-white/10 bg-black/20 text-white hover:bg-white/5"
-                  onClick={() => navigate('/gerar-conteudo')}
-                >
-                  <Sparkles className="mr-2 h-4 w-4" />
-                  Abrir central de conteúdo
-                </Button>
+                  <Button
+                    variant="ghost"
+                    className="shrink-0 rounded-2xl text-zinc-400 hover:bg-white/5 hover:text-white"
+                    onClick={() => setSelectedProduct(null)}
+                  >
+                    <X className="h-5 w-5" />
+                  </Button>
+                </div>
 
-                <Button
-                  variant="outline"
-                  className="h-12 w-full rounded-2xl border-white/10 bg-black/20 text-white hover:bg-white/5"
-                  onClick={() => navigate('/afilie-se')}
-                >
-                  <Rocket className="mr-2 h-4 w-4" />
-                  Ver plataformas para se afiliar
-                </Button>
-              </CardContent>
-            </Card>
+                <p className="text-sm leading-7 text-zinc-400">
+                  {selectedProduct.description || 'Sem descrição disponível para este produto.'}
+                </p>
+
+                <div className="mt-8 flex flex-col gap-3 sm:flex-row">
+                  <Button
+                    className="flex-1 rounded-2xl font-bold"
+                    style={{
+                      backgroundColor: currentStore.buttonBgColor,
+                      color: currentStore.buttonTextColor,
+                    }}
+                    onClick={() => openProductAction(selectedProduct)}
+                  >
+                    <ExternalLink className="mr-2 h-4 w-4" />
+                    Comprar agora
+                  </Button>
+
+                  <Button
+                    variant="outline"
+                    className="rounded-2xl border-white/10 bg-black/20 text-white hover:bg-white/5"
+                    onClick={() => setSelectedProduct(null)}
+                  >
+                    Fechar
+                  </Button>
+                </div>
+              </div>
+            </div>
           </div>
-        </section>
-      </main>
-    </div>
+        </div>
+      ) : null}
+    </>
   );
 }

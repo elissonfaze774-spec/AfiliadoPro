@@ -15,9 +15,21 @@ import {
 } from 'lucide-react';
 import { Button } from '../components/ui/button';
 import { Label } from '../components/ui/label';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../components/ui/select';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '../components/ui/select';
 import { useApp } from '../context/AppContext';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../components/ui/card';
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from '../components/ui/card';
 import { Input } from '../components/ui/input';
 
 type GeneratedPack = {
@@ -29,6 +41,11 @@ type GeneratedPack = {
   approach: string;
   dailyStrategy: string;
 };
+
+const selectContentClass =
+  'border-white/10 bg-[#07110c] text-white shadow-[0_20px_60px_rgba(0,0,0,0.45)]';
+const selectItemClass =
+  'text-white focus:bg-emerald-500/15 focus:text-emerald-300 data-[highlighted]:bg-emerald-500/15 data-[highlighted]:text-emerald-300';
 
 export default function GerarConteudo() {
   const navigate = useNavigate();
@@ -262,9 +279,9 @@ Finalize com um convite claro para clicar, entrar no grupo ou pedir o link.`;
                   <SelectTrigger className="h-12 rounded-2xl border-white/10 bg-black/20 text-white">
                     <SelectValue placeholder="Escolha o produto" />
                   </SelectTrigger>
-                  <SelectContent>
+                  <SelectContent className={selectContentClass}>
                     {products.map((product) => (
-                      <SelectItem key={product.id} value={product.id}>
+                      <SelectItem key={product.id} value={product.id} className={selectItemClass}>
                         {product.name}
                       </SelectItem>
                     ))}
@@ -282,11 +299,11 @@ Finalize com um convite claro para clicar, entrar no grupo ou pedir o link.`;
                     <SelectTrigger className="h-12 rounded-2xl border-white/10 bg-black/20 text-white">
                       <SelectValue placeholder="Escolha a plataforma" />
                     </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="instagram">Instagram</SelectItem>
-                      <SelectItem value="tiktok">TikTok</SelectItem>
-                      <SelectItem value="whatsapp">WhatsApp</SelectItem>
-                      <SelectItem value="facebook">Facebook</SelectItem>
+                    <SelectContent className={selectContentClass}>
+                      <SelectItem value="instagram" className={selectItemClass}>Instagram</SelectItem>
+                      <SelectItem value="tiktok" className={selectItemClass}>TikTok</SelectItem>
+                      <SelectItem value="whatsapp" className={selectItemClass}>WhatsApp</SelectItem>
+                      <SelectItem value="facebook" className={selectItemClass}>Facebook</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
@@ -300,11 +317,11 @@ Finalize com um convite claro para clicar, entrar no grupo ou pedir o link.`;
                     <SelectTrigger className="h-12 rounded-2xl border-white/10 bg-black/20 text-white">
                       <SelectValue placeholder="Escolha o estilo" />
                     </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="agressivo">Agressivo</SelectItem>
-                      <SelectItem value="simples">Simples</SelectItem>
-                      <SelectItem value="premium">Premium</SelectItem>
-                      <SelectItem value="viral">Viral</SelectItem>
+                    <SelectContent className={selectContentClass}>
+                      <SelectItem value="agressivo" className={selectItemClass}>Agressivo</SelectItem>
+                      <SelectItem value="simples" className={selectItemClass}>Simples</SelectItem>
+                      <SelectItem value="premium" className={selectItemClass}>Premium</SelectItem>
+                      <SelectItem value="viral" className={selectItemClass}>Viral</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
@@ -320,11 +337,11 @@ Finalize com um convite claro para clicar, entrar no grupo ou pedir o link.`;
                     <SelectTrigger className="h-12 rounded-2xl border-white/10 bg-black/20 text-white">
                       <SelectValue placeholder="Escolha o objetivo" />
                     </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="clique">Gerar clique</SelectItem>
-                      <SelectItem value="grupo">Levar para o grupo</SelectItem>
-                      <SelectItem value="venda">Acelerar compra</SelectItem>
-                      <SelectItem value="relacionamento">Abrir conversa</SelectItem>
+                    <SelectContent className={selectContentClass}>
+                      <SelectItem value="clique" className={selectItemClass}>Gerar clique</SelectItem>
+                      <SelectItem value="grupo" className={selectItemClass}>Levar para o grupo</SelectItem>
+                      <SelectItem value="venda" className={selectItemClass}>Acelerar compra</SelectItem>
+                      <SelectItem value="relacionamento" className={selectItemClass}>Abrir conversa</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
@@ -338,10 +355,10 @@ Finalize com um convite claro para clicar, entrar no grupo ou pedir o link.`;
                     <SelectTrigger className="h-12 rounded-2xl border-white/10 bg-black/20 text-white">
                       <SelectValue placeholder="Escolha o nível" />
                     </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="frio">Público frio</SelectItem>
-                      <SelectItem value="morno">Público morno</SelectItem>
-                      <SelectItem value="quente">Público quente</SelectItem>
+                    <SelectContent className={selectContentClass}>
+                      <SelectItem value="frio" className={selectItemClass}>Público frio</SelectItem>
+                      <SelectItem value="morno" className={selectItemClass}>Público morno</SelectItem>
+                      <SelectItem value="quente" className={selectItemClass}>Público quente</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
@@ -353,7 +370,7 @@ Finalize com um convite claro para clicar, entrar no grupo ou pedir o link.`;
                   value={customAudience}
                   onChange={(e) => setCustomAudience(e.target.value)}
                   placeholder="Ex: mulheres que gostam de utilidades para casa"
-                  className="h-12 rounded-2xl border-white/10 bg-black/20 text-white"
+                  className="h-12 rounded-2xl border-white/10 bg-black/20 text-white placeholder:text-zinc-500"
                 />
               </div>
 
@@ -363,7 +380,7 @@ Finalize com um convite claro para clicar, entrar no grupo ou pedir o link.`;
                   value={formData.angle}
                   onChange={(e) => setFormData((prev) => ({ ...prev, angle: e.target.value }))}
                   placeholder="Ex: custo-benefício, presente, praticidade, estética..."
-                  className="h-12 rounded-2xl border-white/10 bg-black/20 text-white"
+                  className="h-12 rounded-2xl border-white/10 bg-black/20 text-white placeholder:text-zinc-500"
                 />
               </div>
 

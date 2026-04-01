@@ -131,7 +131,7 @@ const DEFAULTS: Omit<
   mutedTextColor: '#a1a1aa',
   headerBgColor: 'rgba(0,0,0,0.35)',
   primaryButtonText: 'Ver produtos',
-  whatsappButtonText: 'Grupo no WhatsApp',
+  whatsappButtonText: 'Grupo de Ofertas',
   themeMode: 'dark',
 };
 
@@ -1009,14 +1009,17 @@ export default function ConfiguracoesLoja() {
                   <div className="min-w-0">
                     <label className="mb-2 flex items-center gap-2 text-sm font-medium text-white">
                       <LinkIcon className="h-4 w-4 text-emerald-400" />
-                      Grupo do WhatsApp: link
+                      Link do grupo de ofertas
                     </label>
                     <input
                       value={form.whatsappGroupLink}
                       onChange={(e) => handleChange('whatsappGroupLink', e.target.value)}
                       className="h-12 w-full min-w-0 rounded-2xl border border-white/10 bg-black/30 px-4 text-white outline-none transition focus:border-emerald-500"
-                      placeholder="https://chat.whatsapp.com/..."
+                      placeholder="https://chat.whatsapp.com/... ou link do Telegram/Facebook"
                     />
+                    <p className="mt-2 text-xs leading-5 text-zinc-500">
+                      Pode ser link de grupo do WhatsApp, Telegram, Facebook ou qualquer outra plataforma.
+                    </p>
                   </div>
 
                   <NicheDropdown
@@ -1133,7 +1136,7 @@ export default function ConfiguracoesLoja() {
                     <div className="min-w-0">
                       <label className="mb-2 flex items-center gap-2 text-sm font-medium text-white">
                         <MessageCircle className="h-4 w-4 text-emerald-400" />
-                        Texto do botão WhatsApp
+                        Texto do botão do grupo
                       </label>
                       <input
                         value={form.whatsappButtonText}
@@ -1337,7 +1340,7 @@ export default function ConfiguracoesLoja() {
                         className="w-full rounded-2xl border border-white/10 bg-black/20 px-4 py-4 text-base font-bold transition"
                         style={{ color: form.textColor }}
                       >
-                        {form.whatsappButtonText || 'Grupo no WhatsApp'}
+                        {form.whatsappButtonText || 'Grupo de Ofertas'}
                       </button>
 
                       <div className="space-y-3 pt-2">
