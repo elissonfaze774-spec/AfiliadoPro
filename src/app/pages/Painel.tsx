@@ -155,6 +155,11 @@ export default function Painel() {
   const [loadingStore, setLoadingStore] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [showNotifications, setShowNotifications] = useState(false);
+  const [notificationsPosition, setNotificationsPosition] = useState({
+    top: 0,
+    left: 16,
+    width: 340,
+  });
 
   const notificationsRef = useRef<HTMLDivElement | null>(null);
   const notificationsButtonRef = useRef<HTMLButtonElement | null>(null);
@@ -258,7 +263,7 @@ export default function Painel() {
 
     if (contents.length === 0) {
       return {
-        title: 'Gere um conteúdo prêmium!',
+        title: 'Gere seu primeiro conteúdo',
         description: 'Use a geração de conteúdo para divulgar mais rápido e sem travar.',
         actionLabel: 'Gerar conteúdo',
         onClick: () => navigate('/gerar-conteudo'),
@@ -266,8 +271,8 @@ export default function Painel() {
     }
 
     return {
-      title: 'Sua loja está pronta para divulgação!',
-      description: 'Copie seu link e comece agora.',
+      title: 'Sua loja já está forte, agora divulgue',
+      description: 'Copie seu link e comece a espalhar suas ofertas para gerar cliques.',
       actionLabel: 'Copiar link',
       onClick: () => handleCopyStoreLink(),
     };
@@ -277,7 +282,7 @@ export default function Painel() {
     const items: NotificationItem[] = [
       {
         id: 'motivation-1',
-        title: 'Vamos pra cima!',
+        title: 'Vamos pra cima',
         description: 'Uma pequena ação agora pode trazer sua próxima comissão.',
         highlight: true,
       },
@@ -513,33 +518,6 @@ export default function Painel() {
   }, [loadStore]);
 
   useEffect(() => {
-    if (!showNotifications) return;
-
-    const handleClickOutside = (event: MouseEvent) => {
-      const target = event.target as Node | null;
-
-      if (notificationsRef.current?.contains(target)) return;
-      if (notificationsButtonRef.current?.contains(target)) return;
-
-      setShowNotifications(false);
-    };
-
-    const handleEscape = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') {
-        setShowNotifications(false);
-      }
-    };
-
-    document.addEventListener('mousedown', handleClickOutside);
-    document.addEventListener('keydown', handleEscape);
-
-    return () => {
-      document.removeEventListener('mousedown', handleClickOutside);
-      document.removeEventListener('keydown', handleEscape);
-    };
-  }, [showNotifications]);
-
-  useEffect(() => {
     const currentStoreId = store?.id ?? null;
     const lastStoreId = lastStoreIdRef.current;
 
@@ -579,6 +557,63 @@ export default function Painel() {
       }
     };
   }, [store?.id, loadStore]);
+
+  const updateNotificationsPosition = useCallback(() => {
+    const button = notificationsButtonRef.current;
+
+    if (!button) return;
+
+    const rect = button.getBoundingClientRect();
+    const viewportWidth = window.innerWidth;
+    const desiredWidth = Math.min(340, Math.max(280, viewportWidth - 32));
+    const safeLeft = Math.min(Math.max(16, rect.left), Math.max(16, viewportWidth - desiredWidth - 16));
+
+    setNotificationsPosition({
+      top: rect.bottom + 12,
+      left: safeLeft,
+      width: desiredWidth,
+    });
+  }, []);
+
+  useEffect(() => {
+    if (!showNotifications) return;
+
+    updateNotificationsPosition();
+
+    const handleResizeOrScroll = () => {
+      updateNotificationsPosition();
+    };
+
+    const handlePointerDown = (event: MouseEvent | TouchEvent) => {
+      const target = event.target as Node | null;
+
+      if (notificationsRef.current?.contains(target)) return;
+      if (notificationsButtonRef.current?.contains(target)) return;
+
+      setShowNotifications(false);
+    };
+
+    const handleEscape = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        setShowNotifications(false);
+      }
+    };
+
+    window.addEventListener('resize', handleResizeOrScroll);
+    window.addEventListener('scroll', handleResizeOrScroll, true);
+    document.addEventListener('mousedown', handlePointerDown);
+    document.addEventListener('touchstart', handlePointerDown);
+    document.addEventListener('keydown', handleEscape);
+
+    return () => {
+      window.removeEventListener('resize', handleResizeOrScroll);
+      window.removeEventListener('scroll', handleResizeOrScroll, true);
+      document.removeEventListener('mousedown', handlePointerDown);
+      document.removeEventListener('touchstart', handlePointerDown);
+      document.removeEventListener('keydown', handleEscape);
+    };
+  }, [showNotifications, updateNotificationsPosition]);
+
 
   const handleLogout = async () => {
     try {
@@ -706,7 +741,7 @@ export default function Painel() {
     <div className="min-h-screen overflow-x-hidden bg-[radial-gradient(circle_at_top_left,_rgba(16,185,129,0.14),_transparent_25%),radial-gradient(circle_at_bottom_right,_rgba(34,197,94,0.08),_transparent_20%),linear-gradient(180deg,_#020202_0%,_#050505_50%,_#08120d_100%)]">
       <header className="border-b border-white/10 bg-black/40 backdrop-blur-sm">
         <div className="mx-auto max-w-7xl px-4 py-4">
-          <div className="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
+          <div className="flex flex-col gap-4">
             <div className="min-w-0">
               <div className="flex flex-wrap items-center gap-2">
                 <h1 className="truncate text-2xl font-black text-white">{store.name}</h1>
@@ -721,22 +756,6 @@ export default function Painel() {
                 <span className="text-zinc-700">•</span>
                 <span className="capitalize text-zinc-400">{store.niche || 'Sem nicho'}</span>
               </div>
-
-              {access ? (
-                <div className="mt-3 flex flex-wrap items-center gap-3">
-                  <span
-                    className={`inline-flex items-center gap-2 rounded-full border px-4 py-2 text-xs font-semibold ${getBadgeClasses(access.status)}`}
-                  >
-                    <ShieldCheck className="h-4 w-4" />
-                    {access.label}
-                  </span>
-
-                  <span className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/5 px-4 py-2 text-xs text-zinc-300">
-                    <CalendarClock className="h-4 w-4" />
-                    Vencimento: {formatDate(access.expiresAt)}
-                  </span>
-                </div>
-              ) : null}
             </div>
 
             <div className="flex flex-wrap items-center gap-3">
@@ -757,7 +776,12 @@ export default function Painel() {
                 {showNotifications ? (
                   <div
                     ref={notificationsRef}
-                    className="absolute left-0 top-[calc(100%+12px)] z-[120] w-[340px] max-w-[calc(100vw-32px)] rounded-3xl border border-white/10 bg-[#07110c]/95 p-3 shadow-[0_20px_60px_rgba(0,0,0,0.45)] backdrop-blur-xl"
+                    className="fixed z-[140] rounded-3xl border border-white/10 bg-[#07110c]/95 p-3 shadow-[0_20px_60px_rgba(0,0,0,0.45)] backdrop-blur-xl"
+                    style={{
+                      top: notificationsPosition.top,
+                      left: notificationsPosition.left,
+                      width: notificationsPosition.width,
+                    }}
                   >
                     <div className="mb-2 px-2 py-1">
                       <p className="text-sm font-bold text-white">Central de avisos</p>
@@ -802,6 +826,22 @@ export default function Painel() {
                 Sair
               </Button>
             </div>
+
+            {access ? (
+              <div className="flex flex-wrap items-center gap-3">
+                <span
+                  className={`inline-flex items-center gap-2 rounded-full border px-4 py-2 text-xs font-semibold ${getBadgeClasses(access.status)}`}
+                >
+                  <ShieldCheck className="h-4 w-4" />
+                  {access.label}
+                </span>
+
+                <span className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/5 px-4 py-2 text-xs text-zinc-300">
+                  <CalendarClock className="h-4 w-4" />
+                  Vencimento: {formatDate(access.expiresAt)}
+                </span>
+              </div>
+            ) : null}
           </div>
         </div>
       </header>
