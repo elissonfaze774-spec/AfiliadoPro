@@ -959,12 +959,12 @@ export default function Painel() {
               <p className="mt-3 text-sm leading-6 text-emerald-50/85">{nextBestAction.description}</p>
 
               <div className="mt-6 rounded-3xl border border-white/10 bg-black/25 p-4">
-                <p className="text-xs font-semibold uppercase tracking-[0.18em] text-emerald-200/80">Potencial visual</p>
+                <p className="text-xs font-semibold uppercase tracking-[0.18em] text-emerald-200/80">Valor total dos produtos</p>
                 <div className="mt-2 text-4xl font-black text-white">
                   {estimatedEarnings.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
                 </div>
                 <p className="mt-2 text-sm text-zinc-200/80">
-                  Mais produtos + mais cliques = mais chance de comissão.
+                  Mais produtos + mais cliques = mais chance de vender e ganhar dinheiro.
                 </p>
               </div>
 
