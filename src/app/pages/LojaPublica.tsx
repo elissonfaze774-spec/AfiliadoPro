@@ -65,6 +65,24 @@ function ensureUrl(value: string) {
   return `https://${trimmed}`;
 }
 
+function normalizeGroupButtonText(value?: string | null) {
+  const trimmed = String(value ?? '').trim();
+
+  if (!trimmed) return 'Grupo de Ofertas';
+
+  const normalized = trimmed.toLowerCase();
+
+  if (
+    normalized === 'falar no whatsapp' ||
+    normalized === 'grupo no whatsapp' ||
+    normalized === 'whatsapp'
+  ) {
+    return 'Grupo de Ofertas';
+  }
+
+  return trimmed;
+}
+
 function formatMoney(value: number) {
   return Number(value || 0).toLocaleString('pt-BR', {
     style: 'currency',
@@ -96,8 +114,8 @@ function normalizeStore(row: any): StoreData | null {
     name: row.store_name ?? row.name ?? 'Loja',
     username: row.slug ?? row.username ?? '',
     whatsapp: row.whatsapp_number ?? row.whatsapp ?? '',
-    niche: row.niche ?? '',
     whatsappGroupLink: row.whatsapp_group_link ?? '',
+    niche: row.niche ?? '',
     logoUrl: row.logo_url ?? '',
     bannerUrl: row.banner_url ?? '',
     description: row.description ?? '',
@@ -112,7 +130,7 @@ function normalizeStore(row: any): StoreData | null {
     mutedTextColor: row.muted_text_color ?? '#a1a1aa',
     headerBgColor: row.header_bg_color ?? 'rgba(0,0,0,0.35)',
     primaryButtonText: row.primary_button_text ?? 'Ver produtos',
-    whatsappButtonText: row.whatsapp_button_text ?? 'Grupo de Ofertas',
+    whatsappButtonText: normalizeGroupButtonText(row.whatsapp_button_text),
     themeMode: row.theme_mode ?? 'dark',
     active: Boolean(row.active),
     suspended: Boolean(row.suspended),
@@ -627,7 +645,7 @@ export default function LojaPublica() {
                     onClick={() => void handleOffersGroup()}
                   >
                     <MessageCircle className="mr-2 h-4 w-4" />
-                    {currentStore.whatsappButtonText || 'Grupo de Ofertas'}
+                    {normalizeGroupButtonText(currentStore.whatsappButtonText)}
                   </Button>
                 </div>
               </div>
