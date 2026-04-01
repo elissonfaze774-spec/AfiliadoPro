@@ -1000,10 +1000,10 @@ export default function Painel() {
               <CardHeader>
                 <CardTitle className="flex items-center gap-2 text-white">
                   <LayoutGrid className="h-5 w-5 text-emerald-400" />
-                  Atalhos principais
+                  Menu Principal
                 </CardTitle>
                 <CardDescription className="text-zinc-400">
-                  Tudo que você mais usa, organizado de forma mais prática.
+                  Tudo que você precisa, para melhor experiência!
                 </CardDescription>
               </CardHeader>
 
