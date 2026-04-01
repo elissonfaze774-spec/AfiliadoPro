@@ -22,6 +22,7 @@ type StoreData = {
   name: string;
   username: string;
   whatsapp: string;
+  whatsappGroupLink?: string;
   niche: string;
   logoUrl: string;
   bannerUrl: string;
@@ -96,6 +97,7 @@ function normalizeStore(row: any): StoreData | null {
     username: row.slug ?? row.username ?? '',
     whatsapp: row.whatsapp_number ?? row.whatsapp ?? '',
     niche: row.niche ?? '',
+    whatsappGroupLink: row.whatsapp_group_link ?? '',
     logoUrl: row.logo_url ?? '',
     bannerUrl: row.banner_url ?? '',
     description: row.description ?? '',
@@ -110,7 +112,7 @@ function normalizeStore(row: any): StoreData | null {
     mutedTextColor: row.muted_text_color ?? '#a1a1aa',
     headerBgColor: row.header_bg_color ?? 'rgba(0,0,0,0.35)',
     primaryButtonText: row.primary_button_text ?? 'Ver produtos',
-    whatsappButtonText: row.whatsapp_button_text ?? 'Falar no WhatsApp',
+    whatsappButtonText: row.whatsapp_button_text ?? 'Grupo de Ofertas',
     themeMode: row.theme_mode ?? 'dark',
     active: Boolean(row.active),
     suspended: Boolean(row.suspended),
@@ -402,17 +404,50 @@ export default function LojaPublica() {
     toast.error('Este produto ainda não possui link de afiliado configurado.');
   };
 
-  const handleWhatsApp = () => {
+  const handleOffersGroup = async () => {
+    const rawGroupLink = ensureUrl(store?.whatsappGroupLink ?? '');
+    const elegantMessage = `Olá! Vim pela loja ${store?.name ?? 'AfiliadoPRO'} e quero participar do grupo de ofertas.`;
+
+    if (rawGroupLink) {
+      try {
+        const url = new URL(rawGroupLink);
+        const host = url.hostname.toLowerCase();
+
+        const supportsPrefilledMessage =
+          host.includes('wa.me') ||
+          host.includes('whatsapp.com') ||
+          host.includes('api.whatsapp.com');
+
+        if (supportsPrefilledMessage) {
+          url.searchParams.set('text', elegantMessage);
+          window.open(url.toString(), '_blank', 'noopener,noreferrer');
+          return;
+        }
+
+        await navigator.clipboard.writeText(elegantMessage);
+        window.open(url.toString(), '_blank', 'noopener,noreferrer');
+        toast.success('Grupo aberto. A mensagem pronta foi copiada.');
+        return;
+      } catch {
+        try {
+          await navigator.clipboard.writeText(elegantMessage);
+        } catch {}
+
+        window.open(rawGroupLink, '_blank', 'noopener,noreferrer');
+        toast.success('Grupo aberto. A mensagem pronta foi copiada.');
+        return;
+      }
+    }
+
     if (!store?.whatsapp) {
-      toast.error('WhatsApp da loja não configurado.');
+      toast.error('Grupo de ofertas não configurado.');
       return;
     }
 
     const phone = String(store.whatsapp ?? '').replace(/\D/g, '');
-    const message = `Olá! Vim pela loja ${store.name} e quero mais informações.`;
 
     window.open(
-      `https://wa.me/${phone}?text=${encodeURIComponent(message)}`,
+      `https://wa.me/${phone}?text=${encodeURIComponent(elegantMessage)}`,
       '_blank',
       'noopener,noreferrer',
     );
@@ -589,10 +624,10 @@ export default function LojaPublica() {
                   <Button
                     variant="outline"
                     className="w-full rounded-2xl border-white/10 bg-black/20 text-white hover:bg-white/5 sm:w-auto"
-                    onClick={handleWhatsApp}
+                    onClick={() => void handleOffersGroup()}
                   >
                     <MessageCircle className="mr-2 h-4 w-4" />
-                    {currentStore.whatsappButtonText || 'Falar no WhatsApp'}
+                    {currentStore.whatsappButtonText || 'Grupo de Ofertas'}
                   </Button>
                 </div>
               </div>
