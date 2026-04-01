@@ -826,7 +826,7 @@ export default function Painel() {
 
                     <div className="min-w-0">
                       <p className="mb-2 inline-flex rounded-full border border-emerald-300/20 bg-black/30 px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.18em] text-emerald-200 backdrop-blur-sm md:text-xs">
-                        Bem Vindo
+                      
                       </p>
                       <h2 className="text-2xl font-black text-white drop-shadow-[0_3px_14px_rgba(0,0,0,0.55)] md:text-4xl">Painel completo</h2>
                       <p className="mt-2 max-w-2xl text-sm text-zinc-200 drop-shadow-[0_2px_10px_rgba(0,0,0,0.55)] md:text-base">
