@@ -254,7 +254,7 @@ export default function Painel() {
 
     if (contents.length === 0) {
       return {
-        title: 'Gere um conteúdo prêmium',
+        title: 'Gere um conteúdo prêmium!',
         description: 'Use a geração de conteúdos para converter o máximo em vendas.',
         actionLabel: 'Gerar conteúdo',
         onClick: () => navigate('/gerar-conteudo'),
@@ -262,7 +262,7 @@ export default function Painel() {
     }
 
     return {
-      title: 'Sua loja pronto para divulgação',
+      title: 'Sua loja pronto para divulgação!',
       description: 'Clique em copiar link e comece agora.',
       actionLabel: 'Copiar link',
       onClick: () => handleCopyStoreLink(),
@@ -800,23 +800,22 @@ export default function Painel() {
         <section className="grid grid-cols-1 gap-5 xl:grid-cols-[minmax(0,1.55fr)_minmax(0,0.95fr)]">
           <Card className="overflow-hidden border-emerald-500/20 bg-white/[0.04] shadow-[0_20px_60px_rgba(0,0,0,0.35)]">
             <div className="relative min-h-[240px] overflow-hidden md:min-h-[320px]">
-              <div className="absolute inset-0 bg-[linear-gradient(135deg,rgba(2,6,4,0.92)_0%,rgba(4,22,15,0.78)_42%,rgba(6,38,26,0.58)_100%)] md:h-52">
+              <div className="absolute inset-0 overflow-hidden bg-[linear-gradient(135deg,rgba(2,8,5,0.92)_0%,rgba(4,22,15,0.80)_45%,rgba(6,38,26,0.62)_100%)]">
                 {store.bannerUrl ? (
                   <img
                     src={store.bannerUrl}
                     alt={store.name}
-                    className="h-full w-full object-cover opacity-38 saturate-[0.9]"
+                    className="h-full w-full object-cover opacity-40 saturate-[0.9]"
                   />
                 ) : null}
               </div>
 
-              <div className="absolute inset-0 bg-[linear-gradient(180deg,rgba(0,0,0,0.10)_0%,rgba(0,0,0,0.42)_42%,rgba(0,0,0,0.86)_100%)]" />
-              <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_left,rgba(16,185,129,0.14),transparent_28%),radial-gradient(circle_at_center,rgba(0,0,0,0.08),transparent_45%)]" />
+              <div className="absolute inset-0 bg-[linear-gradient(180deg,rgba(0,0,0,0.12)_0%,rgba(0,0,0,0.42)_42%,rgba(0,0,0,0.84)_100%)]" />
 
               <div className="absolute inset-x-0 bottom-0 p-4 md:p-6">
                 <div className="flex flex-col gap-5">
                   <div className="flex items-end gap-4">
-                    <div className="flex h-20 w-20 shrink-0 items-center justify-center overflow-hidden rounded-3xl border border-white/15 bg-black/55 text-2xl font-black text-white shadow-xl backdrop-blur-sm">
+                    <div className="flex h-20 w-20 shrink-0 items-center justify-center overflow-hidden rounded-3xl border border-white/15 bg-black/40 text-2xl font-black text-white shadow-xl">
                       {store.logoUrl ? (
                         <img src={store.logoUrl} alt={store.name} className="h-full w-full object-cover" />
                       ) : (
@@ -825,8 +824,8 @@ export default function Painel() {
                     </div>
 
                     <div className="min-w-0">
-                      <p className="mb-2 inline-flex rounded-full border border-emerald-300/20 bg-black/30 px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.18em] text-emerald-200 backdrop-blur-sm md:text-xs">
-                      
+                      <p className="mb-2 inline-flex rounded-full border border-emerald-400/20 bg-emerald-400/10 px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.18em] text-emerald-300 md:text-xs">
+                        Bem Vindo
                       </p>
                       <h2 className="text-2xl font-black text-white drop-shadow-[0_3px_14px_rgba(0,0,0,0.55)] md:text-4xl">Painel completo</h2>
                       <p className="mt-2 max-w-2xl text-sm text-zinc-200 drop-shadow-[0_2px_10px_rgba(0,0,0,0.55)] md:text-base">
@@ -959,12 +958,12 @@ export default function Painel() {
               <p className="mt-3 text-sm leading-6 text-emerald-50/85">{nextBestAction.description}</p>
 
               <div className="mt-6 rounded-3xl border border-white/10 bg-black/25 p-4">
-                <p className="text-xs font-semibold uppercase tracking-[0.18em] text-emerald-200/80">Valor total dos produtos</p>
+                <p className="text-xs font-semibold uppercase tracking-[0.18em] text-emerald-200/80">Potencial visual</p>
                 <div className="mt-2 text-4xl font-black text-white">
                   {estimatedEarnings.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
                 </div>
                 <p className="mt-2 text-sm text-zinc-200/80">
-                  Mais produtos + mais cliques = mais chance de vender e ganhar dinheiro.
+                  Mais produtos + mais cliques = mais chance de comissão.
                 </p>
               </div>
 
