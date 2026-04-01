@@ -517,7 +517,7 @@ preço promocional
 benefícios
 descrição
 botão comprar agora
-botão falar no WhatsApp
+botão Grupo de Ofertas
 produtos relacionados
 TELA 15 — COMPARTILHAR LOJA
 Objetivo
