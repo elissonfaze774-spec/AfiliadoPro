@@ -149,8 +149,10 @@ export default function Painel() {
 
   const storeChannelRef = useRef<ReturnType<typeof supabase.channel> | null>(null);
   const lastStoreIdRef = useRef<string | null>(null);
-  const notificationsRef = useRef<HTMLDivElement | null>(null);
-  const notificationsButtonRef = useRef<HTMLButtonElement | null>(null);
+  const notificationsDesktopRef = useRef<HTMLDivElement | null>(null);
+  const notificationsDesktopButtonRef = useRef<HTMLButtonElement | null>(null);
+  const notificationsMobileRef = useRef<HTMLDivElement | null>(null);
+  const notificationsMobileButtonRef = useRef<HTMLButtonElement | null>(null);
 
   const publicStoreUrl = useMemo(() => {
     if (!store?.slug) return '';
@@ -252,16 +254,16 @@ export default function Painel() {
 
     if (contents.length === 0) {
       return {
-        title: 'Gere seu primeiro conteúdo',
-        description: 'Use a geração de conteúdo para divulgar mais rápido e sem travar.',
+        title: 'Gere um conteúdo prêmium!',
+        description: 'Use a geração de conteúdos para converter o máximo em vendas.',
         actionLabel: 'Gerar conteúdo',
         onClick: () => navigate('/gerar-conteudo'),
       };
     }
 
     return {
-      title: 'Sua loja já está forte, agora divulgue',
-      description: 'Copie seu link e comece a espalhar suas ofertas para gerar cliques.',
+      title: 'Sua loja pronto para divulgação!',
+      description: 'Clique em copiar link e comece agora.',
       actionLabel: 'Copiar link',
       onClick: () => handleCopyStoreLink(),
     };
@@ -281,7 +283,7 @@ export default function Painel() {
       items.push({
         id: 'products-warning',
         title: 'Adicione mais produtos',
-        description: 'Sua loja fica mais forte quando tem mais opções para divulgar.',
+        description: 'Sua loja fica mais forte quando tem mais opções para o cliente',
       });
     }
 
@@ -289,7 +291,7 @@ export default function Painel() {
       items.push({
         id: 'visual-warning',
         title: 'Sua loja pode ficar mais profissional',
-        description: 'Envie foto e banner para passar mais confiança.',
+        description: 'Envie foto e banner com muita qualidade',
       });
     }
 
@@ -562,8 +564,10 @@ export default function Painel() {
 
     const handleClickOutside = (event: MouseEvent) => {
       const target = event.target as Node | null;
-      if (notificationsRef.current?.contains(target)) return;
-      if (notificationsButtonRef.current?.contains(target)) return;
+      if (notificationsDesktopRef.current?.contains(target)) return;
+      if (notificationsDesktopButtonRef.current?.contains(target)) return;
+      if (notificationsMobileRef.current?.contains(target)) return;
+      if (notificationsMobileButtonRef.current?.contains(target)) return;
       setShowNotifications(false);
     };
 
@@ -709,10 +713,10 @@ export default function Painel() {
               </div>
             </div>
 
-            <div className="relative flex flex-wrap items-center gap-3">
+            <div className="relative hidden flex-wrap items-center gap-3 md:flex">
               <div className="relative">
                 <Button
-                  ref={notificationsButtonRef}
+                  ref={notificationsDesktopButtonRef}
                   variant="outline"
                   className="border-white/10 bg-black/30 text-white hover:bg-white/5"
                   onClick={() => setShowNotifications((prev) => !prev)}
@@ -726,7 +730,7 @@ export default function Painel() {
 
                 {showNotifications ? (
                   <div
-                    ref={notificationsRef}
+                    ref={notificationsDesktopRef}
                     className="absolute left-0 top-[calc(100%+12px)] z-[160] w-[min(360px,calc(100vw-32px))] rounded-3xl border border-white/10 bg-[#07110c]/95 p-3 shadow-[0_20px_60px_rgba(0,0,0,0.45)] backdrop-blur-xl"
                   >
                     <div className="mb-2 px-2 py-1">
@@ -774,7 +778,7 @@ export default function Painel() {
             </div>
 
             {access ? (
-              <div className="flex flex-wrap items-center gap-3 xl:col-span-2">
+              <div className="hidden flex-wrap items-center gap-3 md:flex xl:col-span-2">
                 <span
                   className={`inline-flex items-center gap-2 rounded-full border px-4 py-2 text-xs font-semibold ${getBadgeClasses(access.status)}`}
                 >
@@ -819,9 +823,9 @@ export default function Painel() {
                       <p className="mb-2 inline-flex rounded-full border border-emerald-400/20 bg-emerald-400/10 px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.18em] text-emerald-300 md:text-xs">
                         Painel principal
                       </p>
-                      <h2 className="text-2xl font-black text-white md:text-4xl">Sua estrutura para vender mais</h2>
+                      <h2 className="text-2xl font-black text-white md:text-4xl">Painel completo da sua loja!</h2>
                       <p className="mt-2 max-w-2xl text-sm text-zinc-300 md:text-base">
-                        Organização, motivação e velocidade para você divulgar melhor todos os dias.
+                        Clique em configurações, personalize sua loja, adicione produtos e comece a divulgar para vender muito mais.
                       </p>
                     </div>
                   </div>
@@ -829,10 +833,10 @@ export default function Painel() {
                   <div className="flex flex-wrap gap-3">
                     <Button
                       className="rounded-2xl bg-gradient-to-r from-emerald-500 to-green-500 font-bold text-black hover:from-emerald-400 hover:to-green-400"
-                      onClick={nextBestAction.onClick}
+                      onClick={() => navigate('/configuracoes')}
                     >
-                      <Rocket className="mr-2 h-4 w-4" />
-                      {nextBestAction.actionLabel}
+                      <Settings className="mr-2 h-4 w-4" />
+                      Configurações
                     </Button>
 
                     <Button
@@ -858,10 +862,92 @@ export default function Painel() {
             </div>
           </Card>
 
+          <div className="flex flex-col gap-3 md:hidden">
+            <div className="relative flex flex-wrap items-center gap-3">
+              <div className="relative">
+                <Button
+                  ref={notificationsMobileButtonRef}
+                  variant="outline"
+                  className="border-white/10 bg-black/30 text-white hover:bg-white/5"
+                  onClick={() => setShowNotifications((prev) => !prev)}
+                >
+                  <Bell className="mr-2 h-4 w-4" />
+                  Avisos
+                  <span className="ml-2 inline-flex h-5 min-w-[20px] items-center justify-center rounded-full bg-emerald-500 px-1.5 text-[10px] font-bold text-black">
+                    {notifications.length}
+                  </span>
+                </Button>
+
+                {showNotifications ? (
+                  <div
+                    ref={notificationsMobileRef}
+                    className="absolute left-0 top-[calc(100%+12px)] z-[220] w-[min(360px,calc(100vw-32px))] rounded-3xl border border-white/10 bg-[#07110c]/98 p-3 shadow-[0_24px_70px_rgba(0,0,0,0.55)] backdrop-blur-xl"
+                  >
+                    <div className="mb-2 px-2 py-1">
+                      <p className="text-sm font-bold text-white">Central de avisos</p>
+                      <p className="text-xs text-zinc-400">Motivação, dicas e lembretes leves.</p>
+                    </div>
+
+                    <div className="space-y-2">
+                      {notifications.map((item) => (
+                        <div
+                          key={item.id}
+                          className={`rounded-2xl border p-3 ${
+                            item.highlight
+                              ? 'border-emerald-500/20 bg-emerald-500/10'
+                              : 'border-white/10 bg-black/20'
+                          }`}
+                        >
+                          <p className="text-sm font-semibold text-white">{item.title}</p>
+                          <p className="mt-1 text-xs leading-5 text-zinc-400">{item.description}</p>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                ) : null}
+              </div>
+
+              <Button
+                variant="outline"
+                className="border-white/10 bg-black/30 text-white hover:bg-white/5"
+                onClick={handleRefresh}
+                disabled={refreshing}
+              >
+                <RefreshCw className={`mr-2 h-4 w-4 ${refreshing ? 'animate-spin' : ''}`} />
+                Atualizar
+              </Button>
+
+              <Button
+                variant="ghost"
+                className="text-zinc-400 hover:bg-white/5 hover:text-white"
+                onClick={handleLogout}
+              >
+                <LogOut className="mr-2 h-4 w-4" />
+                Sair
+              </Button>
+            </div>
+
+            {access ? (
+              <div className="flex flex-wrap items-center gap-3">
+                <span
+                  className={`inline-flex items-center gap-2 rounded-full border px-4 py-2 text-xs font-semibold ${getBadgeClasses(access.status)}`}
+                >
+                  <ShieldCheck className="h-4 w-4" />
+                  {access.label}
+                </span>
+
+                <span className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/5 px-4 py-2 text-xs text-zinc-300">
+                  <CalendarClock className="h-4 w-4" />
+                  Vencimento: {formatDate(access.expiresAt)}
+                </span>
+              </div>
+            ) : null}
+          </div>
+
           <Card className="border-emerald-500/20 bg-[linear-gradient(180deg,rgba(16,185,129,0.18)_0%,rgba(5,10,8,0.9)_100%)] shadow-[0_20px_60px_rgba(0,0,0,0.35)]">
             <CardContent className="p-5 md:p-6">
               <div className="inline-flex rounded-full border border-emerald-300/20 bg-emerald-300/10 px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.18em] text-emerald-200">
-                Próxima melhor ação
+                Novidade!
               </div>
 
               <h3 className="mt-4 text-2xl font-black text-white">{nextBestAction.title}</h3>

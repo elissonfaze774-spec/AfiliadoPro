@@ -35,12 +35,66 @@ function ensureUrl(value: string) {
 
 function getFallbackGradient(slug: string) {
   const gradients: Record<string, string> = {
-    shopee: 'from-orange-500/25 to-red-500/20',
-    'mercado-livre': 'from-yellow-500/25 to-blue-500/20',
-    amazon: 'from-zinc-600/25 to-yellow-500/20',
+    shopee: 'from-orange-500/30 via-red-500/20 to-amber-500/20',
+    'mercado-livre': 'from-yellow-500/25 via-slate-400/15 to-blue-500/25',
+    amazon: 'from-zinc-500/20 via-zinc-700/10 to-yellow-500/20',
+    magalu: 'from-blue-500/25 via-cyan-400/15 to-indigo-500/25',
+    shein: 'from-zinc-600/20 via-zinc-700/20 to-zinc-900/30',
   };
 
-  return gradients[slug] ?? 'from-emerald-500/25 to-cyan-500/20';
+  return gradients[slug] ?? 'from-emerald-500/20 via-cyan-500/10 to-lime-500/20';
+}
+
+function getInitials(name: string) {
+  return String(name ?? '')
+    .split(' ')
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((part) => part[0]?.toUpperCase())
+    .join('');
+}
+
+function LogoBox({
+  logoUrl,
+  name,
+  slug,
+}: {
+  logoUrl: string;
+  name: string;
+  slug: string;
+}) {
+  const [error, setError] = useState(false);
+  const url = ensureUrl(logoUrl);
+
+  if (!url || error) {
+    return (
+      <div
+        className={`flex h-28 items-center justify-center bg-gradient-to-br ${getFallbackGradient(slug)}`}
+      >
+        <div className="flex h-20 w-20 items-center justify-center rounded-3xl border border-white/10 bg-black/30 text-2xl font-black text-white backdrop-blur-xl">
+          {getInitials(name)}
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div
+      className={`flex h-28 items-center justify-center bg-gradient-to-br ${getFallbackGradient(slug)} p-4`}
+    >
+      <div className="flex h-full w-full items-center justify-center rounded-[22px] border border-white/10 bg-white px-4 py-3 shadow-[0_18px_40px_rgba(0,0,0,0.18)]">
+        <img
+          src={url}
+          alt={name}
+          className="max-h-full max-w-full object-contain"
+          loading="lazy"
+          decoding="async"
+          onError={() => setError(true)}
+          draggable={false}
+        />
+      </div>
+    </div>
+  );
 }
 
 export default function AfilieSe() {
@@ -173,14 +227,16 @@ export default function AfilieSe() {
                   key={network.id}
                   className="overflow-hidden border border-white/10 bg-black/30 shadow-[0_16px_48px_rgba(0,0,0,0.28)]"
                 >
-                  <div className={`h-32 bg-gradient-to-br ${getFallbackGradient(network.slug)}`} />
-                  <CardHeader>
+                  <LogoBox logoUrl={network.logoUrl} name={network.name} slug={network.slug} />
+
+                  <CardHeader className="pb-3">
                     <CardTitle className="text-2xl">{network.name}</CardTitle>
-                    <CardDescription className="text-zinc-400">
+                    <CardDescription className="min-h-[52px] text-zinc-400">
                       {network.description || 'Rede disponível para você começar a operar.'}
                     </CardDescription>
                   </CardHeader>
-                  <CardContent>
+
+                  <CardContent className="pt-0">
                     <Button
                       className="h-12 w-full rounded-2xl bg-emerald-500 font-bold text-black hover:bg-emerald-400"
                       onClick={() => {
