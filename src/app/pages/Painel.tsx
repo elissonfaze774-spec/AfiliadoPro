@@ -713,88 +713,6 @@ export default function Painel() {
               </div>
             </div>
 
-            <div className="flex flex-col gap-3 md:hidden">
-              <div className="relative flex flex-wrap items-center gap-3">
-                <div className="relative">
-                  <Button
-                    ref={notificationsMobileButtonRef}
-                    variant="outline"
-                    className="border-white/10 bg-black/30 text-white hover:bg-white/5"
-                    onClick={() => setShowNotifications((prev) => !prev)}
-                  >
-                    <Bell className="mr-2 h-4 w-4" />
-                    Avisos
-                    <span className="ml-2 inline-flex h-5 min-w-[20px] items-center justify-center rounded-full bg-emerald-500 px-1.5 text-[10px] font-bold text-black">
-                      {notifications.length}
-                    </span>
-                  </Button>
-
-                  {showNotifications ? (
-                    <div
-                      ref={notificationsMobileRef}
-                      className="absolute left-0 top-[calc(100%+12px)] z-[220] w-[min(360px,calc(100vw-32px))] rounded-3xl border border-white/10 bg-[#07110c]/98 p-3 shadow-[0_24px_70px_rgba(0,0,0,0.55)] backdrop-blur-xl"
-                    >
-                      <div className="mb-2 px-2 py-1">
-                        <p className="text-sm font-bold text-white">Central de avisos</p>
-                        <p className="text-xs text-zinc-400">Motivação, dicas e lembretes leves.</p>
-                      </div>
-
-                      <div className="space-y-2">
-                        {notifications.map((item) => (
-                          <div
-                            key={item.id}
-                            className={`rounded-2xl border p-3 ${
-                              item.highlight
-                                ? 'border-emerald-500/20 bg-emerald-500/10'
-                                : 'border-white/10 bg-black/20'
-                            }`}
-                          >
-                            <p className="text-sm font-semibold text-white">{item.title}</p>
-                            <p className="mt-1 text-xs leading-5 text-zinc-400">{item.description}</p>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  ) : null}
-                </div>
-
-                <Button
-                  variant="outline"
-                  className="border-white/10 bg-black/30 text-white hover:bg-white/5"
-                  onClick={handleRefresh}
-                  disabled={refreshing}
-                >
-                  <RefreshCw className={`mr-2 h-4 w-4 ${refreshing ? 'animate-spin' : ''}`} />
-                  Atualizar
-                </Button>
-
-                <Button
-                  variant="ghost"
-                  className="text-zinc-400 hover:bg-white/5 hover:text-white"
-                  onClick={handleLogout}
-                >
-                  <LogOut className="mr-2 h-4 w-4" />
-                  Sair
-                </Button>
-              </div>
-
-              {access ? (
-                <div className="flex flex-wrap items-center gap-3">
-                  <span
-                    className={`inline-flex items-center gap-2 rounded-full border px-4 py-2 text-xs font-semibold ${getBadgeClasses(access.status)}`}
-                  >
-                    <ShieldCheck className="h-4 w-4" />
-                    {access.label}
-                  </span>
-
-                  <span className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/5 px-4 py-2 text-xs text-zinc-300">
-                    <CalendarClock className="h-4 w-4" />
-                    Vencimento: {formatDate(access.expiresAt)}
-                  </span>
-                </div>
-              ) : null}
-            </div>
-
             <div className="relative hidden flex-wrap items-center gap-3 md:flex">
               <div className="relative">
                 <Button
@@ -879,9 +797,9 @@ export default function Painel() {
       </header>
 
       <main className="relative z-10 mx-auto flex max-w-7xl flex-col gap-6 px-4 py-6">
-        <section className="grid grid-cols-1 gap-5 xl:grid-cols-[minmax(0,1.55fr)_minmax(0,0.95fr)]">
-          <Card className="overflow-hidden border-emerald-500/20 bg-white/[0.04] shadow-[0_20px_60px_rgba(0,0,0,0.35)]">
-            <div className="relative min-h-[240px] overflow-hidden md:min-h-[320px]">
+        <section className="grid grid-cols-1 gap-5 xl:grid-cols-[minmax(0,1.55fr)_minmax(0,0.95fr)] xl:items-stretch">
+          <Card className="h-full overflow-hidden border-emerald-500/20 bg-white/[0.04] shadow-[0_20px_60px_rgba(0,0,0,0.35)]">
+            <div className="relative h-full min-h-[240px] overflow-hidden md:min-h-[320px]">
               <div className="absolute inset-0 overflow-hidden bg-[linear-gradient(135deg,rgba(2,8,5,0.92)_0%,rgba(4,22,15,0.80)_45%,rgba(6,38,26,0.62)_100%)]">
                 {store.bannerUrl ? (
                   <img
@@ -948,7 +866,89 @@ export default function Painel() {
             </div>
           </Card>
 
-          <Card className="border-emerald-500/20 bg-[linear-gradient(180deg,rgba(16,185,129,0.18)_0%,rgba(5,10,8,0.9)_100%)] shadow-[0_20px_60px_rgba(0,0,0,0.35)]">
+          <div className="flex flex-col gap-3 md:hidden">
+            <div className="relative flex flex-wrap items-center gap-3">
+              <div className="relative">
+                <Button
+                  ref={notificationsMobileButtonRef}
+                  variant="outline"
+                  className="border-white/10 bg-black/30 text-white hover:bg-white/5"
+                  onClick={() => setShowNotifications((prev) => !prev)}
+                >
+                  <Bell className="mr-2 h-4 w-4" />
+                  Avisos
+                  <span className="ml-2 inline-flex h-5 min-w-[20px] items-center justify-center rounded-full bg-emerald-500 px-1.5 text-[10px] font-bold text-black">
+                    {notifications.length}
+                  </span>
+                </Button>
+
+                {showNotifications ? (
+                  <div
+                    ref={notificationsMobileRef}
+                    className="absolute left-0 top-[calc(100%+12px)] z-[220] w-[min(360px,calc(100vw-32px))] rounded-3xl border border-white/10 bg-[#07110c]/98 p-3 shadow-[0_24px_70px_rgba(0,0,0,0.55)] backdrop-blur-xl"
+                  >
+                    <div className="mb-2 px-2 py-1">
+                      <p className="text-sm font-bold text-white">Central de avisos</p>
+                      <p className="text-xs text-zinc-400">Motivação, dicas e lembretes leves.</p>
+                    </div>
+
+                    <div className="space-y-2">
+                      {notifications.map((item) => (
+                        <div
+                          key={item.id}
+                          className={`rounded-2xl border p-3 ${
+                            item.highlight
+                              ? 'border-emerald-500/20 bg-emerald-500/10'
+                              : 'border-white/10 bg-black/20'
+                          }`}
+                        >
+                          <p className="text-sm font-semibold text-white">{item.title}</p>
+                          <p className="mt-1 text-xs leading-5 text-zinc-400">{item.description}</p>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                ) : null}
+              </div>
+
+              <Button
+                variant="outline"
+                className="border-white/10 bg-black/30 text-white hover:bg-white/5"
+                onClick={handleRefresh}
+                disabled={refreshing}
+              >
+                <RefreshCw className={`mr-2 h-4 w-4 ${refreshing ? 'animate-spin' : ''}`} />
+                Atualizar
+              </Button>
+
+              <Button
+                variant="ghost"
+                className="text-zinc-400 hover:bg-white/5 hover:text-white"
+                onClick={handleLogout}
+              >
+                <LogOut className="mr-2 h-4 w-4" />
+                Sair
+              </Button>
+            </div>
+
+            {access ? (
+              <div className="flex flex-wrap items-center gap-3">
+                <span
+                  className={`inline-flex items-center gap-2 rounded-full border px-4 py-2 text-xs font-semibold ${getBadgeClasses(access.status)}`}
+                >
+                  <ShieldCheck className="h-4 w-4" />
+                  {access.label}
+                </span>
+
+                <span className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/5 px-4 py-2 text-xs text-zinc-300">
+                  <CalendarClock className="h-4 w-4" />
+                  Vencimento: {formatDate(access.expiresAt)}
+                </span>
+              </div>
+            ) : null}
+          </div>
+
+          <Card className="h-full border-emerald-500/20 bg-[linear-gradient(180deg,rgba(16,185,129,0.18)_0%,rgba(5,10,8,0.9)_100%)] shadow-[0_20px_60px_rgba(0,0,0,0.35)]">
             <CardContent className="p-5 md:p-6">
               <div className="inline-flex rounded-full border border-emerald-300/20 bg-emerald-300/10 px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.18em] text-emerald-200">
                 Novidade!
