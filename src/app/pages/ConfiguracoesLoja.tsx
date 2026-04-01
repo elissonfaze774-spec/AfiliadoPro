@@ -32,11 +32,14 @@ type SettingsForm = {
   name: string;
   slug: string;
   whatsapp: string;
+  whatsappGroupLink: string;
   niche: string;
   logoUrl: string;
   bannerUrl: string;
   description: string;
   slogan: string;
+  publicTitle: string;
+  publicSubtitle: string;
   primaryColor: string;
   secondaryColor: string;
   accentColor: string;
@@ -116,7 +119,7 @@ const NICHE_OPTIONS: NicheOption[] = [
 
 const DEFAULTS: Omit<
   SettingsForm,
-  'name' | 'slug' | 'whatsapp' | 'niche' | 'logoUrl' | 'bannerUrl' | 'description' | 'slogan'
+  'name' | 'slug' | 'whatsapp' | 'whatsappGroupLink' | 'niche' | 'logoUrl' | 'bannerUrl' | 'description' | 'slogan' | 'publicTitle' | 'publicSubtitle'
 > = {
   primaryColor: '#052e16',
   secondaryColor: '#071b11',
@@ -128,7 +131,7 @@ const DEFAULTS: Omit<
   mutedTextColor: '#a1a1aa',
   headerBgColor: 'rgba(0,0,0,0.35)',
   primaryButtonText: 'Ver produtos',
-  whatsappButtonText: 'Falar no WhatsApp',
+  whatsappButtonText: 'Grupo no WhatsApp',
   themeMode: 'dark',
 };
 
@@ -263,11 +266,14 @@ function buildInitialForm(store: ReturnType<typeof useApp>['store']): SettingsFo
     name: store?.name || '',
     slug: store?.username || '',
     whatsapp: store?.whatsapp || '',
+    whatsappGroupLink: store?.whatsappGroupLink || '',
     niche: store?.niche || '',
     logoUrl: store?.logoUrl || '',
     bannerUrl: store?.bannerUrl || '',
     description: store?.description || '',
     slogan: store?.slogan || '',
+    publicTitle: store?.publicTitle || '',
+    publicSubtitle: store?.publicSubtitle || '',
     primaryColor: store?.primaryColor || DEFAULTS.primaryColor,
     secondaryColor: store?.secondaryColor || DEFAULTS.secondaryColor,
     accentColor: store?.accentColor || DEFAULTS.accentColor,
@@ -790,6 +796,7 @@ export default function ConfiguracoesLoja() {
         store_name: normalizedName,
         slug: normalizedSlug,
         whatsapp_number: normalizedWhatsapp,
+        whatsapp_group_link: ensureUrl(form.whatsappGroupLink) || null,
         niche: normalizedNiche || null,
         logo_url: normalizedLogo || null,
         banner_url: normalizedBanner || null,
@@ -805,6 +812,8 @@ export default function ConfiguracoesLoja() {
       const advancedPayload = {
         description: form.description.trim(),
         slogan: form.slogan.trim(),
+        public_title: form.publicTitle.trim(),
+        public_subtitle: form.publicSubtitle.trim(),
         primary_color: normalizeColor(form.primaryColor, DEFAULTS.primaryColor),
         secondary_color: normalizeColor(form.secondaryColor, DEFAULTS.secondaryColor),
         accent_color: normalizeColor(form.accentColor, DEFAULTS.accentColor),
@@ -844,11 +853,14 @@ export default function ConfiguracoesLoja() {
         name: normalizedName,
         slug: normalizedSlug,
         whatsapp: normalizedWhatsapp,
+        whatsappGroupLink: ensureUrl(form.whatsappGroupLink),
         niche: normalizedNiche,
         logoUrl: uploadedLogo?.fileName || normalizedLogo,
         bannerUrl: uploadedBanner?.fileName || normalizedBanner,
         description: form.description.trim(),
         slogan: form.slogan.trim(),
+        publicTitle: form.publicTitle.trim(),
+        publicSubtitle: form.publicSubtitle.trim(),
         primaryColor: normalizeColor(form.primaryColor, DEFAULTS.primaryColor),
         secondaryColor: normalizeColor(form.secondaryColor, DEFAULTS.secondaryColor),
         accentColor: normalizeColor(form.accentColor, DEFAULTS.accentColor),
@@ -994,6 +1006,19 @@ export default function ConfiguracoesLoja() {
                     />
                   </div>
 
+                  <div className="min-w-0">
+                    <label className="mb-2 flex items-center gap-2 text-sm font-medium text-white">
+                      <LinkIcon className="h-4 w-4 text-emerald-400" />
+                      Grupo do WhatsApp: link
+                    </label>
+                    <input
+                      value={form.whatsappGroupLink}
+                      onChange={(e) => handleChange('whatsappGroupLink', e.target.value)}
+                      className="h-12 w-full min-w-0 rounded-2xl border border-white/10 bg-black/30 px-4 text-white outline-none transition focus:border-emerald-500"
+                      placeholder="https://chat.whatsapp.com/..."
+                    />
+                  </div>
+
                   <NicheDropdown
                     value={form.niche}
                     onChange={(value) => handleChange('niche', value)}
@@ -1009,6 +1034,32 @@ export default function ConfiguracoesLoja() {
                       onChange={(e) => handleChange('slogan', e.target.value)}
                       className="h-12 w-full min-w-0 rounded-2xl border border-white/10 bg-black/30 px-4 text-white outline-none transition focus:border-emerald-500"
                       placeholder="Ex: tecnologia premium com entrega rápida"
+                    />
+                  </div>
+
+                  <div className="min-w-0 md:col-span-2">
+                    <label className="mb-2 flex items-center gap-2 text-sm font-medium text-white">
+                      <Type className="h-4 w-4 text-emerald-400" />
+                      Título público da loja
+                    </label>
+                    <input
+                      value={form.publicTitle}
+                      onChange={(e) => handleChange('publicTitle', e.target.value)}
+                      className="h-12 w-full min-w-0 rounded-2xl border border-white/10 bg-black/30 px-4 text-white outline-none transition focus:border-emerald-500"
+                      placeholder="Ex: Sua vitrine de ofertas"
+                    />
+                  </div>
+
+                  <div className="min-w-0 md:col-span-2">
+                    <label className="mb-2 flex items-center gap-2 text-sm font-medium text-white">
+                      <Type className="h-4 w-4 text-emerald-400" />
+                      Subtítulo público da loja
+                    </label>
+                    <input
+                      value={form.publicSubtitle}
+                      onChange={(e) => handleChange('publicSubtitle', e.target.value)}
+                      className="h-12 w-full min-w-0 rounded-2xl border border-white/10 bg-black/30 px-4 text-white outline-none transition focus:border-emerald-500"
+                      placeholder="Ex: Produtos selecionados para vender mais"
                     />
                   </div>
 
@@ -1286,7 +1337,7 @@ export default function ConfiguracoesLoja() {
                         className="w-full rounded-2xl border border-white/10 bg-black/20 px-4 py-4 text-base font-bold transition"
                         style={{ color: form.textColor }}
                       >
-                        {form.whatsappButtonText || 'Falar no WhatsApp'}
+                        {form.whatsappButtonText || 'Grupo no WhatsApp'}
                       </button>
 
                       <div className="space-y-3 pt-2">

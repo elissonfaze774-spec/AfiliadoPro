@@ -237,12 +237,7 @@ export default function Painel() {
       {
         text: 'Gerar seu primeiro conteúdo premium',
         done: contents.length > 0,
-      },
-      {
-        text: 'Marcar presença hoje',
-        done: Boolean(presence?.checkedToday),
-      },
-    ],
+      },    ],
     [products, contents.length, store, categories.length, presence?.checkedToday],
   );
 
@@ -333,15 +328,6 @@ export default function Painel() {
         highlight: true,
       },
     ];
-
-    if (!presence?.checkedToday) {
-      items.push({
-        id: 'presence-warning',
-        title: 'Presença diária',
-        description: 'Entrar todos os dias fortalece seu hábito e sua retenção dentro da plataforma.',
-      });
-    }
-
     if (products.length < 3) {
       items.push({
         id: 'products-warning',
@@ -864,7 +850,7 @@ export default function Painel() {
                 {showNotifications ? (
                   <div
                     ref={notificationsRef}
-                    className="absolute right-0 top-full z-[70] mt-3 w-[320px] max-w-[calc(100vw-32px)] rounded-3xl border border-white/10 bg-[#07110c]/95 p-3 shadow-[0_20px_60px_rgba(0,0,0,0.45)] backdrop-blur-xl"
+                    className="fixed right-4 top-24 z-[90] w-[340px] max-w-[calc(100vw-32px)] rounded-3xl border border-white/10 bg-[#07110c]/95 p-3 shadow-[0_20px_60px_rgba(0,0,0,0.45)] backdrop-blur-xl md:right-6 md:top-28"
                   >
                     <div className="mb-2 px-2 py-1">
                       <p className="text-sm font-bold text-white">Central de avisos</p>
