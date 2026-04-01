@@ -879,8 +879,8 @@ export default function Painel() {
       </header>
 
       <main className="relative z-10 mx-auto flex max-w-7xl flex-col gap-6 px-4 py-6">
-        <section className="grid grid-cols-1 gap-5 xl:grid-cols-[minmax(0,1.55fr)_minmax(0,0.95fr)]">
-          <Card className="overflow-hidden border-emerald-500/20 bg-white/[0.04] shadow-[0_20px_60px_rgba(0,0,0,0.35)]">
+        <section className="grid grid-cols-1 gap-5 xl:grid-cols-[minmax(0,1.55fr)_minmax(0,0.95fr)] xl:items-start">
+          <Card className="self-start overflow-hidden border-emerald-500/20 bg-white/[0.04] shadow-[0_20px_60px_rgba(0,0,0,0.35)]">
             <div className="relative min-h-[240px] overflow-hidden md:min-h-[320px]">
               <div className="absolute inset-0 overflow-hidden bg-[linear-gradient(135deg,rgba(2,8,5,0.92)_0%,rgba(4,22,15,0.80)_45%,rgba(6,38,26,0.62)_100%)]">
                 {store.bannerUrl ? (
@@ -906,9 +906,6 @@ export default function Painel() {
                     </div>
 
                     <div className="min-w-0">
-                      <p className="mb-2 inline-flex rounded-full border border-emerald-400/20 bg-emerald-400/10 px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.18em] text-emerald-300 md:text-xs">
-                        
-                      </p>
                       <h2 className="text-2xl font-black text-white drop-shadow-[0_3px_14px_rgba(0,0,0,0.55)] md:text-4xl">Painel completo</h2>
                       <p className="mt-2 max-w-2xl text-sm text-zinc-200 drop-shadow-[0_2px_10px_rgba(0,0,0,0.55)] md:text-base">
                         Clique em configurações, personalize sua loja, adicione produtos e comece a divulgar para vender. 
