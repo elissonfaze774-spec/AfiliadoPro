@@ -289,7 +289,7 @@ export default function ProdutoView() {
                 onClick={handleWhatsApp}
               >
                 <Phone className="mr-2 h-5 w-5" />
-                Falar no WhatsApp
+                Grupo de ofertas
               </Button>
             </div>
 
