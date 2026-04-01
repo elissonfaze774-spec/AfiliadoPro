@@ -37,6 +37,7 @@ type StoreData = {
   slug: string;
   niche: string | null;
   whatsapp: string;
+  whatsappGroupLink?: string;
   logoUrl: string;
   bannerUrl: string;
   active: boolean;
@@ -85,6 +86,7 @@ function normalizeStore(raw: any): StoreData | null {
   const slug = raw.slug ?? '';
   const niche = raw.niche ?? null;
   const whatsapp = raw.whatsapp_number ?? raw.whatsapp ?? '';
+  const whatsappGroupLink = raw.whatsapp_group_link ?? '';
   const logoUrl = raw.logo_url ?? '';
   const bannerUrl = raw.banner_url ?? '';
   const active = Boolean(raw.active);
@@ -101,6 +103,7 @@ function normalizeStore(raw: any): StoreData | null {
     slug,
     niche,
     whatsapp,
+    whatsappGroupLink,
     logoUrl,
     bannerUrl,
     active,
@@ -122,49 +125,32 @@ function getInitials(name: string) {
 
 function formatDate(value?: string | null) {
   if (!value) return '—';
-
   const date = new Date(value);
-
   if (Number.isNaN(date.getTime())) return '—';
-
   return date.toLocaleDateString('pt-BR');
 }
 
 function getBadgeClasses(status?: string | null) {
-  if (status === 'expired') {
-    return 'border-red-500/20 bg-red-500/10 text-red-300';
-  }
-
-  if (status === 'expires_today') {
-    return 'border-amber-500/20 bg-amber-500/10 text-amber-300';
-  }
-
-  if (status === 'expiring_soon') {
-    return 'border-yellow-500/20 bg-yellow-500/10 text-yellow-300';
-  }
-
+  if (status === 'expired') return 'border-red-500/20 bg-red-500/10 text-red-300';
+  if (status === 'expires_today') return 'border-amber-500/20 bg-amber-500/10 text-amber-300';
+  if (status === 'expiring_soon') return 'border-yellow-500/20 bg-yellow-500/10 text-yellow-300';
   return 'border-emerald-500/20 bg-emerald-500/10 text-emerald-300';
 }
 
 export default function Painel() {
   const navigate = useNavigate();
   const { user, authLoading, logout } = useAuth();
-  const { products, clicks, contents, refreshAppData } = useApp();
+  const { products, clicks, contents, refreshAppData, store: appStore } = useApp();
 
   const [store, setStore] = useState<StoreData | null>(null);
   const [loadingStore, setLoadingStore] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [showNotifications, setShowNotifications] = useState(false);
-  const [notificationsPosition, setNotificationsPosition] = useState({
-    top: 0,
-    left: 16,
-    width: 340,
-  });
 
-  const notificationsRef = useRef<HTMLDivElement | null>(null);
-  const notificationsButtonRef = useRef<HTMLButtonElement | null>(null);
   const storeChannelRef = useRef<ReturnType<typeof supabase.channel> | null>(null);
   const lastStoreIdRef = useRef<string | null>(null);
+  const notificationsRef = useRef<HTMLDivElement | null>(null);
+  const notificationsButtonRef = useRef<HTMLButtonElement | null>(null);
 
   const publicStoreUrl = useMemo(() => {
     if (!store?.slug) return '';
@@ -240,7 +226,10 @@ export default function Painel() {
   ];
 
   const completedChecklist = useMemo(() => checklist.filter((item) => item.done).length, [checklist]);
-  const checklistPercent = useMemo(() => Math.round((completedChecklist / checklist.length) * 100), [completedChecklist, checklist.length]);
+  const checklistPercent = useMemo(
+    () => Math.round((completedChecklist / checklist.length) * 100),
+    [completedChecklist, checklist.length],
+  );
 
   const nextBestAction = useMemo(() => {
     if (products.length < 3) {
@@ -337,6 +326,12 @@ export default function Painel() {
       disabled: products.length === 0,
     },
     {
+      title: 'Afilie-se',
+      description: 'Veja plataformas para ampliar suas oportunidades.',
+      icon: Rocket,
+      onClick: () => navigate('/afilie-se'),
+    },
+    {
       title: 'Ver loja',
       description: 'Abra sua loja pública e veja como ficou.',
       icon: ExternalLink,
@@ -350,93 +345,104 @@ export default function Painel() {
     },
   ];
 
-  const resolveStoreForAdmin = useCallback(async (authUser: AuthUserLike): Promise<StoreData | null> => {
-    const authUserId = authUser?.id ?? null;
-    const authEmail = authUser?.email?.trim().toLowerCase() ?? null;
-    const directStoreId = authUser?.storeId ?? null;
+  const resolveStoreForAdmin = useCallback(
+    async (authUser: AuthUserLike): Promise<StoreData | null> => {
+      const authUserId = authUser?.id ?? null;
+      const authEmail = authUser?.email?.trim().toLowerCase() ?? null;
+      const directStoreId = authUser?.storeId ?? null;
 
-    if (directStoreId) {
-      const { data, error } = await supabase
-        .from('stores')
-        .select('*')
-        .eq('id', directStoreId)
-        .maybeSingle();
-
-      if (!error) {
-        const normalized = normalizeStore(data);
-        if (normalized) return normalized;
-      }
-    }
-
-    if (authEmail) {
-      const { data: adminByEmail, error: adminEmailError } = await supabase
-        .from('admins')
-        .select('store_id')
-        .eq('email', authEmail)
-        .maybeSingle();
-
-      if (!adminEmailError && adminByEmail?.store_id) {
-        const { data: storeByAdminEmail, error: storeByAdminEmailError } = await supabase
-          .from('stores')
-          .select('*')
-          .eq('id', adminByEmail.store_id)
-          .maybeSingle();
-
-        if (!storeByAdminEmailError) {
-          const normalized = normalizeStore(storeByAdminEmail);
+      if (directStoreId) {
+        const { data, error } = await supabase.from('stores').select('*').eq('id', directStoreId).maybeSingle();
+        if (!error) {
+          const normalized = normalizeStore(data);
           if (normalized) return normalized;
         }
       }
-    }
 
-    if (authUserId) {
-      const { data: storeByOwner, error: storeByOwnerError } = await supabase
-        .from('stores')
-        .select('*')
-        .eq('owner_user_id', authUserId)
-        .order('created_at', { ascending: false })
-        .limit(1)
-        .maybeSingle();
-
-      if (!storeByOwnerError) {
-        const normalized = normalizeStore(storeByOwner);
-        if (normalized) return normalized;
+      if (appStore?.id) {
+        return normalizeStore({
+          id: appStore.id,
+          store_name: appStore.name,
+          slug: appStore.username,
+          whatsapp: appStore.whatsapp,
+          whatsapp_group_link: appStore.whatsappGroupLink,
+          niche: appStore.niche,
+          logo_url: appStore.logoUrl,
+          banner_url: appStore.bannerUrl,
+        });
       }
-    }
 
-    if (authUserId) {
-      const { data: profile, error: profileError } = await supabase
-        .from('profiles')
-        .select('id, email')
-        .eq('id', authUserId)
-        .maybeSingle();
-
-      if (!profileError && profile?.email) {
-        const profileEmail = String(profile.email).trim().toLowerCase();
-
-        const { data: adminByProfileEmail, error: adminByProfileEmailError } = await supabase
+      if (authEmail) {
+        const { data: adminByEmail, error: adminEmailError } = await supabase
           .from('admins')
           .select('store_id')
-          .eq('email', profileEmail)
+          .eq('email', authEmail)
           .maybeSingle();
 
-        if (!adminByProfileEmailError && adminByProfileEmail?.store_id) {
-          const { data: storeByProfileEmail, error: storeByProfileEmailError } = await supabase
+        if (!adminEmailError && adminByEmail?.store_id) {
+          const { data: storeByAdminEmail, error: storeByAdminEmailError } = await supabase
             .from('stores')
             .select('*')
-            .eq('id', adminByProfileEmail.store_id)
+            .eq('id', adminByEmail.store_id)
             .maybeSingle();
 
-          if (!storeByProfileEmailError) {
-            const normalized = normalizeStore(storeByProfileEmail);
+          if (!storeByAdminEmailError) {
+            const normalized = normalizeStore(storeByAdminEmail);
             if (normalized) return normalized;
           }
         }
       }
-    }
 
-    return null;
-  }, []);
+      if (authUserId) {
+        const { data: storeByOwner, error: storeByOwnerError } = await supabase
+          .from('stores')
+          .select('*')
+          .eq('owner_user_id', authUserId)
+          .order('created_at', { ascending: false })
+          .limit(1)
+          .maybeSingle();
+
+        if (!storeByOwnerError) {
+          const normalized = normalizeStore(storeByOwner);
+          if (normalized) return normalized;
+        }
+      }
+
+      if (authUserId) {
+        const { data: profile, error: profileError } = await supabase
+          .from('profiles')
+          .select('id, email')
+          .eq('id', authUserId)
+          .maybeSingle();
+
+        if (!profileError && profile?.email) {
+          const profileEmail = String(profile.email).trim().toLowerCase();
+
+          const { data: adminByProfileEmail, error: adminByProfileEmailError } = await supabase
+            .from('admins')
+            .select('store_id')
+            .eq('email', profileEmail)
+            .maybeSingle();
+
+          if (!adminByProfileEmailError && adminByProfileEmail?.store_id) {
+            const { data: storeByProfileEmail, error: storeByProfileEmailError } = await supabase
+              .from('stores')
+              .select('*')
+              .eq('id', adminByProfileEmail.store_id)
+              .maybeSingle();
+
+            if (!storeByProfileEmailError) {
+              const normalized = normalizeStore(storeByProfileEmail);
+              if (normalized) return normalized;
+            }
+          }
+        }
+      }
+
+      return null;
+    },
+    [appStore],
+  );
 
   const loadStore = useCallback(
     async (options?: { silent?: boolean }) => {
@@ -492,7 +498,6 @@ export default function Painel() {
             ) {
               return current;
             }
-
             return resolvedStore;
           });
 
@@ -529,19 +534,13 @@ export default function Painel() {
     }
 
     lastStoreIdRef.current = currentStoreId;
-
     if (!currentStoreId) return;
 
     const channel = supabase
       .channel(`painel-store-${currentStoreId}`)
       .on(
         'postgres_changes',
-        {
-          event: '*',
-          schema: 'public',
-          table: 'stores',
-          filter: `id=eq.${currentStoreId}`,
-        },
+        { event: '*', schema: 'public', table: 'stores', filter: `id=eq.${currentStoreId}` },
         async () => {
           await loadStore({ silent: true });
         },
@@ -558,62 +557,27 @@ export default function Painel() {
     };
   }, [store?.id, loadStore]);
 
-  const updateNotificationsPosition = useCallback(() => {
-    const button = notificationsButtonRef.current;
-
-    if (!button) return;
-
-    const rect = button.getBoundingClientRect();
-    const viewportWidth = window.innerWidth;
-    const desiredWidth = Math.min(340, Math.max(280, viewportWidth - 32));
-    const safeLeft = Math.min(Math.max(16, rect.left), Math.max(16, viewportWidth - desiredWidth - 16));
-
-    setNotificationsPosition({
-      top: rect.bottom + 12,
-      left: safeLeft,
-      width: desiredWidth,
-    });
-  }, []);
-
   useEffect(() => {
     if (!showNotifications) return;
 
-    updateNotificationsPosition();
-
-    const handleResizeOrScroll = () => {
-      updateNotificationsPosition();
-    };
-
-    const handlePointerDown = (event: MouseEvent | TouchEvent) => {
+    const handleClickOutside = (event: MouseEvent) => {
       const target = event.target as Node | null;
-
       if (notificationsRef.current?.contains(target)) return;
       if (notificationsButtonRef.current?.contains(target)) return;
-
       setShowNotifications(false);
     };
 
     const handleEscape = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') {
-        setShowNotifications(false);
-      }
+      if (event.key === 'Escape') setShowNotifications(false);
     };
 
-    window.addEventListener('resize', handleResizeOrScroll);
-    window.addEventListener('scroll', handleResizeOrScroll, true);
-    document.addEventListener('mousedown', handlePointerDown);
-    document.addEventListener('touchstart', handlePointerDown);
+    document.addEventListener('mousedown', handleClickOutside);
     document.addEventListener('keydown', handleEscape);
-
     return () => {
-      window.removeEventListener('resize', handleResizeOrScroll);
-      window.removeEventListener('scroll', handleResizeOrScroll, true);
-      document.removeEventListener('mousedown', handlePointerDown);
-      document.removeEventListener('touchstart', handlePointerDown);
+      document.removeEventListener('mousedown', handleClickOutside);
       document.removeEventListener('keydown', handleEscape);
     };
-  }, [showNotifications, updateNotificationsPosition]);
-
+  }, [showNotifications]);
 
   const handleLogout = async () => {
     try {
@@ -633,7 +597,6 @@ export default function Painel() {
 
   const handleCopyStoreLink = async () => {
     if (!publicStoreUrl) return;
-
     try {
       await navigator.clipboard.writeText(publicStoreUrl);
       toast.success('Link da loja copiado.');
@@ -642,9 +605,7 @@ export default function Painel() {
     }
   };
 
-  if ((authLoading || loadingStore) && !store) {
-    return null;
-  }
+  if ((authLoading || loadingStore) && !store) return null;
 
   if (!store) {
     return (
@@ -654,9 +615,7 @@ export default function Painel() {
             <StoreIcon className="h-10 w-10" />
           </div>
           <h1 className="text-3xl font-black">Sua loja ainda não está pronta</h1>
-          <p className="mt-3 max-w-xl text-zinc-400">
-            Não encontramos uma loja vinculada a este admin.
-          </p>
+          <p className="mt-3 max-w-xl text-zinc-400">Não encontramos uma loja vinculada a este admin.</p>
           <div className="mt-6 flex flex-wrap items-center justify-center gap-3">
             <Button
               variant="outline"
@@ -691,12 +650,7 @@ export default function Painel() {
                     <span className="capitalize text-zinc-400">{store.niche || 'Sem nicho'}</span>
                   </div>
                 </div>
-
-                <Button
-                  variant="ghost"
-                  className="text-zinc-400 hover:bg-white/5 hover:text-white"
-                  onClick={handleLogout}
-                >
+                <Button variant="ghost" className="text-zinc-400 hover:bg-white/5 hover:text-white" onClick={handleLogout}>
                   <LogOut className="mr-2 h-4 w-4" />
                   Sair
                 </Button>
@@ -712,14 +666,11 @@ export default function Painel() {
                 </div>
                 <h2 className="text-3xl font-black text-white">Acesso temporariamente indisponível</h2>
                 <p className="mt-3 text-zinc-400">
-                  Sua estrutura continua preservada. Assim que a renovação for concluída,
-                  tudo volta ao normal.
+                  Sua estrutura continua preservada. Assim que a renovação for concluída, tudo volta ao normal.
                 </p>
 
                 <div className="mt-6 flex flex-wrap items-center justify-center gap-3">
-                  <span
-                    className={`inline-flex items-center gap-2 rounded-full border px-4 py-2 text-sm font-semibold ${getBadgeClasses(access?.status)}`}
-                  >
+                  <span className={`inline-flex items-center gap-2 rounded-full border px-4 py-2 text-sm font-semibold ${getBadgeClasses(access?.status)}`}>
                     <ShieldCheck className="h-4 w-4" />
                     {access?.label || 'Expirado'}
                   </span>
@@ -739,9 +690,9 @@ export default function Painel() {
 
   return (
     <div className="min-h-screen overflow-x-hidden bg-[radial-gradient(circle_at_top_left,_rgba(16,185,129,0.14),_transparent_25%),radial-gradient(circle_at_bottom_right,_rgba(34,197,94,0.08),_transparent_20%),linear-gradient(180deg,_#020202_0%,_#050505_50%,_#08120d_100%)]">
-      <header className="border-b border-white/10 bg-black/40 backdrop-blur-sm">
+      <header className="relative z-[90] border-b border-white/10 bg-black/40 backdrop-blur-sm">
         <div className="mx-auto max-w-7xl px-4 py-4">
-          <div className="flex flex-col gap-4">
+          <div className="grid gap-4 xl:grid-cols-[1fr_auto] xl:items-start">
             <div className="min-w-0">
               <div className="flex flex-wrap items-center gap-2">
                 <h1 className="truncate text-2xl font-black text-white">{store.name}</h1>
@@ -758,7 +709,7 @@ export default function Painel() {
               </div>
             </div>
 
-            <div className="flex flex-wrap items-center gap-3">
+            <div className="relative flex flex-wrap items-center gap-3">
               <div className="relative">
                 <Button
                   ref={notificationsButtonRef}
@@ -776,12 +727,7 @@ export default function Painel() {
                 {showNotifications ? (
                   <div
                     ref={notificationsRef}
-                    className="fixed z-[140] rounded-3xl border border-white/10 bg-[#07110c]/95 p-3 shadow-[0_20px_60px_rgba(0,0,0,0.45)] backdrop-blur-xl"
-                    style={{
-                      top: notificationsPosition.top,
-                      left: notificationsPosition.left,
-                      width: notificationsPosition.width,
-                    }}
+                    className="absolute left-0 top-[calc(100%+12px)] z-[160] w-[min(360px,calc(100vw-32px))] rounded-3xl border border-white/10 bg-[#07110c]/95 p-3 shadow-[0_20px_60px_rgba(0,0,0,0.45)] backdrop-blur-xl"
                   >
                     <div className="mb-2 px-2 py-1">
                       <p className="text-sm font-bold text-white">Central de avisos</p>
@@ -828,7 +774,7 @@ export default function Painel() {
             </div>
 
             {access ? (
-              <div className="flex flex-wrap items-center gap-3">
+              <div className="flex flex-wrap items-center gap-3 xl:col-span-2">
                 <span
                   className={`inline-flex items-center gap-2 rounded-full border px-4 py-2 text-xs font-semibold ${getBadgeClasses(access.status)}`}
                 >
@@ -846,17 +792,13 @@ export default function Painel() {
         </div>
       </header>
 
-      <div className="mx-auto max-w-7xl space-y-6 px-4 py-6 md:space-y-8 md:py-8">
-        <section className="grid grid-cols-1 gap-4 xl:grid-cols-[minmax(0,1.2fr)_360px]">
-          <Card className="overflow-hidden border-emerald-500/20 bg-black/40 shadow-[0_20px_60px_rgba(0,0,0,0.35)]">
-            <div className="relative">
-              <div className="h-44 w-full bg-gradient-to-r from-emerald-700 via-emerald-600 to-green-500 md:h-52">
+      <main className="relative z-10 mx-auto flex max-w-7xl flex-col gap-6 px-4 py-6">
+        <section className="grid grid-cols-1 gap-5 xl:grid-cols-[minmax(0,1.55fr)_minmax(0,0.95fr)]">
+          <Card className="overflow-hidden border-emerald-500/20 bg-white/[0.04] shadow-[0_20px_60px_rgba(0,0,0,0.35)]">
+            <div className="relative min-h-[240px] overflow-hidden md:min-h-[320px]">
+              <div className="absolute inset-0 bg-gradient-to-br from-emerald-700 via-emerald-600 to-green-500 md:h-52">
                 {store.bannerUrl ? (
-                  <img
-                    src={store.bannerUrl}
-                    alt={store.name}
-                    className="h-full w-full object-cover opacity-60"
-                  />
+                  <img src={store.bannerUrl} alt={store.name} className="h-full w-full object-cover opacity-60" />
                 ) : null}
               </div>
 
@@ -867,11 +809,7 @@ export default function Painel() {
                   <div className="flex items-end gap-4">
                     <div className="flex h-20 w-20 shrink-0 items-center justify-center overflow-hidden rounded-3xl border border-white/15 bg-black/40 text-2xl font-black text-white shadow-xl">
                       {store.logoUrl ? (
-                        <img
-                          src={store.logoUrl}
-                          alt={store.name}
-                          className="h-full w-full object-cover"
-                        />
+                        <img src={store.logoUrl} alt={store.name} className="h-full w-full object-cover" />
                       ) : (
                         <span>{getInitials(store.name || 'A')}</span>
                       )}
@@ -881,9 +819,7 @@ export default function Painel() {
                       <p className="mb-2 inline-flex rounded-full border border-emerald-400/20 bg-emerald-400/10 px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.18em] text-emerald-300 md:text-xs">
                         Painel principal
                       </p>
-                      <h2 className="text-2xl font-black text-white md:text-4xl">
-                        Sua estrutura para vender mais
-                      </h2>
+                      <h2 className="text-2xl font-black text-white md:text-4xl">Sua estrutura para vender mais</h2>
                       <p className="mt-2 max-w-2xl text-sm text-zinc-300 md:text-base">
                         Organização, motivação e velocidade para você divulgar melhor todos os dias.
                       </p>
@@ -932,14 +868,9 @@ export default function Painel() {
               <p className="mt-3 text-sm leading-6 text-emerald-50/85">{nextBestAction.description}</p>
 
               <div className="mt-6 rounded-3xl border border-white/10 bg-black/25 p-4">
-                <p className="text-xs font-semibold uppercase tracking-[0.18em] text-emerald-200/80">
-                  Potencial visual
-                </p>
+                <p className="text-xs font-semibold uppercase tracking-[0.18em] text-emerald-200/80">Potencial visual</p>
                 <div className="mt-2 text-4xl font-black text-white">
-                  {estimatedEarnings.toLocaleString('pt-BR', {
-                    style: 'currency',
-                    currency: 'BRL',
-                  })}
+                  {estimatedEarnings.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
                 </div>
                 <p className="mt-2 text-sm text-zinc-200/80">
                   Mais produtos + mais cliques = mais chance de comissão.
@@ -959,10 +890,7 @@ export default function Painel() {
 
         <section className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
           {stats.map((stat, index) => (
-            <Card
-              key={index}
-              className="border-white/10 bg-white/[0.04] shadow-[0_10px_30px_rgba(0,0,0,0.25)]"
-            >
+            <Card key={index} className="border-white/10 bg-white/[0.04] shadow-[0_10px_30px_rgba(0,0,0,0.25)]">
               <CardContent className="p-5">
                 <div className="flex items-start justify-between gap-4">
                   <div className="min-w-0">
@@ -1054,19 +982,28 @@ export default function Painel() {
                 </div>
 
                 <div className="space-y-3">
-                  {checklist.map((item, index) => (
+                  {checklist.map((item) => (
                     <div
-                      key={index}
-                      className="flex items-start gap-3 rounded-2xl border border-white/10 bg-black/20 p-4"
+                      key={item.text}
+                      className={`flex items-start gap-3 rounded-2xl border p-4 ${
+                        item.done
+                          ? 'border-emerald-500/15 bg-emerald-500/10'
+                          : 'border-white/10 bg-black/20'
+                      }`}
                     >
                       <div
-                        className={`mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full ${
-                          item.done ? 'bg-emerald-500/20 text-emerald-300' : 'bg-white/10 text-zinc-500'
+                        className={`mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-xl ${
+                          item.done ? 'bg-emerald-500 text-black' : 'bg-white/5 text-zinc-500'
                         }`}
                       >
                         <CheckCircle className="h-4 w-4" />
                       </div>
-                      <p className={item.done ? 'text-white' : 'text-zinc-400'}>{item.text}</p>
+                      <div className="min-w-0">
+                        <p className="text-sm text-white">{item.text}</p>
+                        <p className="mt-1 text-xs text-zinc-500">
+                          {item.done ? 'Concluído' : 'Ainda falta concluir'}
+                        </p>
+                      </div>
                     </div>
                   ))}
                 </div>
@@ -1087,12 +1024,9 @@ export default function Painel() {
               </CardHeader>
 
               <CardContent className="space-y-3">
-                {academyItems.map((item, index) => (
-                  <div
-                    key={index}
-                    className="rounded-3xl border border-white/10 bg-black/20 p-5 transition hover:border-emerald-500/30"
-                  >
-                    <h3 className="text-base font-bold text-white">{item.title}</h3>
+                {academyItems.map((item) => (
+                  <div key={item.title} className="rounded-[22px] border border-white/10 bg-black/20 p-4">
+                    <p className="font-semibold text-white">{item.title}</p>
                     <p className="mt-2 text-sm leading-6 text-zinc-400">{item.description}</p>
                   </div>
                 ))}
@@ -1101,40 +1035,43 @@ export default function Painel() {
 
             <Card className="border-white/10 bg-white/[0.04] shadow-[0_10px_30px_rgba(0,0,0,0.25)]">
               <CardHeader>
-                <CardTitle className="text-white">Link da loja</CardTitle>
+                <CardTitle className="text-white">Centro de divulgação</CardTitle>
                 <CardDescription className="text-zinc-400">
-                  Compartilhe com facilidade e comece a divulgar agora.
+                  Ações rápidas para divulgação e relacionamento.
                 </CardDescription>
               </CardHeader>
 
-              <CardContent>
-                <div className="rounded-3xl border border-emerald-500/15 bg-emerald-500/10 p-4">
-                  <p className="break-all text-sm text-emerald-200">{publicStoreUrl}</p>
-                </div>
+              <CardContent className="space-y-3">
+                <Button
+                  className="h-12 w-full rounded-2xl bg-gradient-to-r from-emerald-500 to-green-500 font-bold text-black hover:from-emerald-400 hover:to-green-400"
+                  onClick={handleCopyStoreLink}
+                >
+                  <Copy className="mr-2 h-4 w-4" />
+                  Copiar link da loja
+                </Button>
 
-                <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2">
-                  <Button
-                    className="rounded-2xl bg-gradient-to-r from-emerald-500 to-emerald-600 font-bold text-black hover:from-emerald-400 hover:to-emerald-500"
-                    onClick={handleCopyStoreLink}
-                  >
-                    <Copy className="mr-2 h-4 w-4" />
-                    Copiar link
-                  </Button>
+                <Button
+                  variant="outline"
+                  className="h-12 w-full rounded-2xl border-white/10 bg-black/20 text-white hover:bg-white/5"
+                  onClick={() => navigate('/gerar-conteudo')}
+                >
+                  <Sparkles className="mr-2 h-4 w-4" />
+                  Abrir central de conteúdo
+                </Button>
 
-                  <Button
-                    variant="outline"
-                    className="rounded-2xl border-white/10 bg-black/20 text-white hover:bg-white/5"
-                    onClick={() => navigate(`/loja/${store.slug}`)}
-                  >
-                    <ExternalLink className="mr-2 h-4 w-4" />
-                    Abrir loja
-                  </Button>
-                </div>
+                <Button
+                  variant="outline"
+                  className="h-12 w-full rounded-2xl border-white/10 bg-black/20 text-white hover:bg-white/5"
+                  onClick={() => navigate('/afilie-se')}
+                >
+                  <Rocket className="mr-2 h-4 w-4" />
+                  Ver plataformas para se afiliar
+                </Button>
               </CardContent>
             </Card>
           </div>
         </section>
-      </div>
+      </main>
     </div>
   );
 }
