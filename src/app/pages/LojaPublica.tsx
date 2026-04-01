@@ -5,7 +5,7 @@ import {
   ArrowUpDown,
   ExternalLink,
   ImageOff,
-  MessageCircle,
+  Gift,
   Package,
   Search,
   ShoppingBag,
@@ -644,7 +644,7 @@ export default function LojaPublica() {
                     className="w-full rounded-2xl border-white/10 bg-black/20 text-white hover:bg-white/5 sm:w-auto"
                     onClick={() => void handleOffersGroup()}
                   >
-                    <MessageCircle className="mr-2 h-4 w-4" />
+                    <Gift className="mr-2 h-4 w-4" />
                     {normalizeGroupButtonText(currentStore.whatsappButtonText)}
                   </Button>
                 </div>
