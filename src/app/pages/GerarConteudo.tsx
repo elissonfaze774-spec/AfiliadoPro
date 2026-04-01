@@ -1,291 +1,525 @@
-import { useState } from 'react';
-import { useNavigate } from 'react-router';
-import { ArrowLeft, Sparkles, Copy, Check, DollarSign } from 'lucide-react';
+import { useMemo, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
+import {
+  ArrowLeft,
+  BadgeCheck,
+  Check,
+  Copy,
+  Lightbulb,
+  Megaphone,
+  MessageSquareText,
+  Sparkles,
+  Target,
+  TrendingUp,
+  Video,
+} from 'lucide-react';
 import { Button } from '../components/ui/button';
 import { Label } from '../components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../components/ui/select';
 import { useApp } from '../context/AppContext';
-import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../components/ui/card';
+import { Input } from '../components/ui/input';
+
+type GeneratedPack = {
+  headline: string;
+  text: string;
+  videoIdea: string;
+  callToAction: string;
+  shortCall: string;
+  approach: string;
+  dailyStrategy: string;
+};
 
 export default function GerarConteudo() {
   const navigate = useNavigate();
-  const { products, generateContent } = useApp();
+  const { products, generateContent, contents } = useApp();
+
   const [formData, setFormData] = useState({
     productId: '',
     platform: '',
     style: '',
+    objective: '',
+    awareness: '',
+    angle: '',
   });
-  const [generatedContent, setGeneratedContent] = useState<any>(null);
+
+  const [generatedPack, setGeneratedPack] = useState<GeneratedPack | null>(null);
   const [copiedField, setCopiedField] = useState<string | null>(null);
+  const [customAudience, setCustomAudience] = useState('');
+
+  const selectedProduct = useMemo(
+    () => products.find((product) => product.id === formData.productId) ?? null,
+    [products, formData.productId],
+  );
 
   const handleGenerate = () => {
-    if (formData.productId && formData.platform && formData.style) {
-      const product = products.find((p) => p.id === formData.productId);
-      if (!product) return;
-
-      const styles = {
-        agressivo: {
-          prefix: '🔥 URGENTE! ',
-          tone: 'direto e persuasivo',
-        },
-        simples: {
-          prefix: '✨ ',
-          tone: 'casual e amigável',
-        },
-        viral: {
-          prefix: '🚨 ATENÇÃO! ',
-          tone: 'emocionante e envolvente',
-        },
-      };
-
-      const selectedStyle = styles[formData.style as keyof typeof styles];
-
-      const content = {
-        text: formData.style === 'agressivo' 
-          ? `${selectedStyle.prefix}${product.name} com DESCONTO ABSURDO! 💥\n\n${product.description}\n\n💰 Apenas ${product.price}\n\n⚠️ ESTOQUE LIMITADO! Corre que acaba!\n\n👉 Link na bio ou me chama no direct!`
-          : formData.style === 'simples'
-          ? `${selectedStyle.prefix}Olha que incrível esse ${product.name}! 😍\n\n${product.description}\n\nE o melhor: ${product.price}! 💜\n\nQuer saber mais? Link na bio! ✨`
-          : `${selectedStyle.prefix}Você PRECISA ver isso! 🤯\n\n${product.name} que está BOMBANDO! 🚀\n\n${product.description}\n\nPreço? ${product.price}! 😱\n\nCorre antes que esgote! Link na bio! 👆`,
-        
-        videoIdea: formData.platform === 'tiktok'
-          ? `Vídeo mostrando o ${product.name} em ação, com música trending e transições rápidas. Mostre os benefícios de forma visual e dinâmica.`
-          : formData.platform === 'instagram'
-          ? `Reels mostrando unboxing do ${product.name} com boa iluminação. Use música popular e adicione legendas destacando os benefícios principais.`
-          : `Status mostrando o produto em uso no dia a dia. Seja autêntico e mostre como ele resolve um problema real.`,
-        
-        callToAction: formData.platform === 'whatsapp'
-          ? `Oi! 👋 Vi que você tem interesse no ${product.name}. Acabei de adicionar na minha loja e está com um preço incrível! Te mando o link: [LINK]`
-          : `Link na bio para comprar! ☝️ Corre que está acabando! 🔥`,
-        
-        shortCall: formData.style === 'agressivo'
-          ? `🔥 CORRE! ESTOQUE LIMITADO!`
-          : formData.style === 'simples'
-          ? `✨ Link na bio!`
-          : `🚨 NÃO PERCA ESSA!`,
-      };
-
-      setGeneratedContent(content);
-
-      generateContent({
-        id: Date.now().toString(),
-        productId: formData.productId,
-        platform: formData.platform,
-        style: formData.style,
-        text: content.text,
-        videoIdea: content.videoIdea,
-        callToAction: content.callToAction,
-        shortCall: content.shortCall,
-        date: new Date().toISOString(),
-      });
+    if (
+      !formData.productId ||
+      !formData.platform ||
+      !formData.style ||
+      !formData.objective ||
+      !formData.awareness
+    ) {
+      return;
     }
+
+    if (!selectedProduct) return;
+
+    const productName = selectedProduct.name;
+    const productPrice = selectedProduct.price;
+    const description =
+      selectedProduct.description || 'Produto com ótima oportunidade de conversão.';
+    const audience = customAudience.trim() || 'pessoas interessadas em ofertas e achadinhos';
+
+    const stylePrefix =
+      {
+        agressivo: '🔥 Oportunidade forte',
+        simples: '✨ Dica boa do dia',
+        premium: '💎 Seleção estratégica',
+        viral: '🚀 Tendência que chama atenção',
+      }[formData.style] || '✨ Conteúdo';
+
+    const objectiveLine =
+      {
+        clique: 'o foco aqui é gerar clique qualificado',
+        grupo: 'o foco aqui é levar as pessoas para o grupo',
+        venda: 'o foco aqui é acelerar decisão de compra',
+        relacionamento: 'o foco aqui é ganhar confiança e conversa',
+      }[formData.objective] || 'o foco aqui é gerar interesse';
+
+    const awarenessLine =
+      {
+        frio: 'fale como se a pessoa ainda não conhecesse o produto',
+        morno: 'fale como se a pessoa já tivesse visto algo parecido',
+        quente: 'fale como se a pessoa já estivesse quase pronta para comprar',
+      }[formData.awareness] || 'fale de forma clara';
+
+    const angleLine = formData.angle
+      ? `Ângulo principal: ${formData.angle}.`
+      : 'Ângulo principal: benefício visual, utilidade e oportunidade.';
+
+    const text = `${stylePrefix}: ${productName}
+
+${description}
+
+Preço percebido: ${productPrice}
+Público ideal: ${audience}
+Estratégia: ${objectiveLine}; ${awarenessLine}. ${angleLine}
+
+Mostre por que esse produto chama atenção, é fácil de entender e tem potencial de compra rápida.
+Finalize com um convite claro para clicar, entrar no grupo ou pedir o link.`;
+
+    const videoIdea =
+      formData.platform === 'tiktok'
+        ? `Abra com um gancho visual forte, mostre o ${productName} em uso, faça 3 cortes rápidos e termine apontando para a oferta.`
+        : formData.platform === 'instagram'
+          ? `Monte um reels curto do ${productName} com abertura forte, benefício central, prova visual e CTA final para grupo ou link.`
+          : formData.platform === 'whatsapp'
+            ? `Use 3 telas: gancho rápido, benefício principal e CTA final chamando para o grupo e para a oferta.`
+            : 'Crie um post enxuto mostrando utilidade, diferencial e chamada para ação.';
+
+    const callToAction =
+      formData.objective === 'grupo'
+        ? 'Quer receber mais ofertas como essa? Entre no grupo e acompanhe as novidades todos os dias.'
+        : formData.objective === 'relacionamento'
+          ? 'Se quiser, eu te explico melhor e te mando outras opções parecidas também.'
+          : formData.objective === 'venda'
+            ? 'Se esse produto faz sentido para você, entre agora antes que a oportunidade esfrie.'
+            : 'Clique agora para ver a oferta completa e aproveitar enquanto está disponível.';
+
+    const shortCall =
+      formData.objective === 'grupo'
+        ? 'Entre no grupo agora'
+        : formData.objective === 'relacionamento'
+          ? 'Fala comigo que eu te ajudo'
+          : 'Clique e veja a oferta';
+
+    const approach = `Abordagem sugerida:
+1. Comece com um gancho simples sobre dor, desejo ou curiosidade.
+2. Mostre o ${productName} como solução prática.
+3. Reforce benefício + percepção de oportunidade.
+4. Convide a pessoa para clicar ou entrar no grupo.`;
+
+    const dailyStrategy = `Plano rápido do dia:
+- Publique 1 conteúdo principal no ${formData.platform}.
+- Faça 2 chamadas curtas derivadas dele.
+- Reaproveite o gancho em status, grupos e conversa privada.
+- No fim do dia, observe qual formato gerou mais clique e repita amanhã.`;
+
+    const pack: GeneratedPack = {
+      headline: `${stylePrefix} para ${productName}`,
+      text,
+      videoIdea,
+      callToAction,
+      shortCall,
+      approach,
+      dailyStrategy,
+    };
+
+    setGeneratedPack(pack);
+
+    generateContent({
+      id: Date.now().toString(),
+      productId: formData.productId,
+      platform: formData.platform,
+      style: formData.style,
+      text: pack.text,
+      videoIdea: pack.videoIdea,
+      callToAction: pack.callToAction,
+      shortCall: pack.shortCall,
+      date: new Date().toISOString(),
+    });
   };
 
   const copyToClipboard = async (text: string, field: string) => {
     try {
       await navigator.clipboard.writeText(text);
       setCopiedField(field);
-      setTimeout(() => setCopiedField(null), 2000);
+      setTimeout(() => setCopiedField(null), 1800);
     } catch (err) {
       console.error('Erro ao copiar:', err);
     }
   };
 
+  const insights = [
+    {
+      icon: TrendingUp,
+      title: 'Estratégia de consistência',
+      description: 'Quem vende mais costuma postar mais vezes de forma simples, clara e repetível.',
+    },
+    {
+      icon: Target,
+      title: 'Oferta + contexto',
+      description: 'Não mostre só o produto. Mostre para quem serve e por que vale atenção agora.',
+    },
+    {
+      icon: MessageSquareText,
+      title: 'Abordagem converte',
+      description: 'Uma boa copy abre conversa, gera clique e constrói confiança ao mesmo tempo.',
+    },
+  ];
+
   return (
-    <div className="min-h-screen bg-black">
-      {/* Header */}
-      <header className="bg-gray-900 border-b border-gray-800">
-        <div className="container mx-auto px-4 py-4">
-          <button onClick={() => navigate('/')} className="flex items-center gap-2">
-            <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-emerald-500 to-emerald-600 flex items-center justify-center">
-              <DollarSign className="w-6 h-6 text-white" />
+    <div className="min-h-screen bg-[radial-gradient(circle_at_top_left,_rgba(16,185,129,0.14),_transparent_24%),linear-gradient(180deg,_#020202_0%,_#050505_52%,_#07110a_100%)] text-white">
+      <header className="border-b border-white/10 bg-black/40 backdrop-blur-xl">
+        <div className="mx-auto flex max-w-7xl items-center justify-between px-4 py-5">
+          <div>
+            <div className="inline-flex items-center gap-2 rounded-full border border-emerald-500/20 bg-emerald-500/10 px-3 py-1 text-xs font-semibold uppercase tracking-[0.2em] text-emerald-300">
+              <Sparkles className="h-4 w-4" />
+              Central de conteúdo
             </div>
-            <span className="text-xl font-bold text-white">AfiliadoPro</span>
-          </button>
-        </div>
-      </header>
-
-      <div className="container mx-auto px-4 py-12">
-        <Button
-          variant="ghost"
-          className="text-gray-400 hover:text-white hover:bg-gray-800 mb-8"
-          onClick={() => navigate('/painel')}
-        >
-          <ArrowLeft className="w-4 h-4 mr-2" />
-          Voltar ao painel
-        </Button>
-
-        <div className="max-w-6xl mx-auto">
-          <div className="text-center mb-12">
-            <div className="inline-flex items-center gap-2 bg-emerald-500/10 border border-emerald-500/20 px-4 py-2 rounded-full mb-4">
-              <Sparkles className="w-5 h-5 text-emerald-400" />
-              <span className="text-emerald-400 text-sm font-medium">
-                Gerador de Conteúdo
-              </span>
-            </div>
-            
-            <h1 className="text-4xl md:text-5xl font-bold text-white mb-4">
-              Gerar post
-            </h1>
-            <p className="text-xl text-gray-400">
-              Crie conteúdo viral para promover seus produtos
+            <h1 className="mt-3 text-3xl font-black md:text-4xl">Gerar conteúdo premium</h1>
+            <p className="mt-2 text-sm text-zinc-400 md:text-base">
+              Copies, estratégias, abordagens, ideias de vídeo e CTA em uma página só.
             </p>
           </div>
 
-          <div className="grid md:grid-cols-2 gap-8">
-            <div className="space-y-6">
-              <Card className="bg-gradient-to-br from-gray-900 to-gray-800 border-gray-700">
-                <CardHeader>
-                  <CardTitle className="text-white">Configurações</CardTitle>
-                </CardHeader>
-                <CardContent className="space-y-4">
-                  <div className="space-y-2">
-                    <Label htmlFor="product" className="text-white">
-                      Produto
-                    </Label>
-                    <Select value={formData.productId} onValueChange={(value) => setFormData({ ...formData, productId: value })}>
-                      <SelectTrigger className="bg-gray-800 border-gray-700 text-white">
-                        <SelectValue placeholder="Selecione um produto" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {products.map((product) => (
-                          <SelectItem key={product.id} value={product.id}>
-                            {product.name}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
+          <Button
+            variant="outline"
+            className="rounded-2xl border-white/10 bg-black/20 text-white hover:bg-white/5"
+            onClick={() => navigate('/painel')}
+          >
+            <ArrowLeft className="mr-2 h-4 w-4" />
+            Voltar
+          </Button>
+        </div>
+      </header>
 
-                  <div className="space-y-2">
-                    <Label htmlFor="platform" className="text-white">
-                      Plataforma
-                    </Label>
-                    <Select value={formData.platform} onValueChange={(value) => setFormData({ ...formData, platform: value })}>
-                      <SelectTrigger className="bg-gray-800 border-gray-700 text-white">
-                        <SelectValue placeholder="Escolha a plataforma" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="tiktok">TikTok</SelectItem>
-                        <SelectItem value="instagram">Instagram</SelectItem>
-                        <SelectItem value="whatsapp">WhatsApp</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
+      <main className="mx-auto max-w-7xl px-4 py-6 md:py-8">
+        <section className="grid gap-4 md:grid-cols-3">
+          {insights.map((item) => (
+            <Card key={item.title} className="border border-white/10 bg-black/30">
+              <CardContent className="p-5">
+                <div className="mb-4 flex h-12 w-12 items-center justify-center rounded-2xl bg-emerald-500 text-black">
+                  <item.icon className="h-5 w-5" />
+                </div>
+                <h2 className="text-lg font-black">{item.title}</h2>
+                <p className="mt-2 text-sm leading-7 text-zinc-400">{item.description}</p>
+              </CardContent>
+            </Card>
+          ))}
+        </section>
 
-                  <div className="space-y-2">
-                    <Label htmlFor="style" className="text-white">
-                      Estilo
-                    </Label>
-                    <Select value={formData.style} onValueChange={(value) => setFormData({ ...formData, style: value })}>
-                      <SelectTrigger className="bg-gray-800 border-gray-700 text-white">
-                        <SelectValue placeholder="Escolha o estilo" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="agressivo">Agressivo</SelectItem>
-                        <SelectItem value="simples">Simples</SelectItem>
-                        <SelectItem value="viral">Viral</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
+        <section className="mt-6 grid gap-6 xl:grid-cols-[0.95fr_1.05fr]">
+          <Card className="border border-white/10 bg-black/30">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Megaphone className="h-5 w-5 text-emerald-400" />
+                Configurações do material
+              </CardTitle>
+              <CardDescription className="text-zinc-400">
+                Monte o briefing e gere um pacote pronto para divulgar.
+              </CardDescription>
+            </CardHeader>
 
-                  <Button
-                    size="lg"
-                    className="w-full bg-gradient-to-r from-emerald-500 to-emerald-600 hover:from-emerald-600 hover:to-emerald-700"
-                    onClick={handleGenerate}
-                    disabled={!formData.productId || !formData.platform || !formData.style}
+            <CardContent className="space-y-5">
+              <div className="space-y-2">
+                <Label>Produto</Label>
+                <Select
+                  value={formData.productId}
+                  onValueChange={(value) => setFormData((prev) => ({ ...prev, productId: value }))}
+                >
+                  <SelectTrigger className="h-12 rounded-2xl border-white/10 bg-black/20 text-white">
+                    <SelectValue placeholder="Escolha o produto" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {products.map((product) => (
+                      <SelectItem key={product.id} value={product.id}>
+                        {product.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="grid gap-5 md:grid-cols-2">
+                <div className="space-y-2">
+                  <Label>Plataforma</Label>
+                  <Select
+                    value={formData.platform}
+                    onValueChange={(value) => setFormData((prev) => ({ ...prev, platform: value }))}
                   >
-                    <Sparkles className="w-4 h-4 mr-2" />
-                    Gerar conteúdo
-                  </Button>
-                </CardContent>
-              </Card>
-            </div>
+                    <SelectTrigger className="h-12 rounded-2xl border-white/10 bg-black/20 text-white">
+                      <SelectValue placeholder="Escolha a plataforma" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="instagram">Instagram</SelectItem>
+                      <SelectItem value="tiktok">TikTok</SelectItem>
+                      <SelectItem value="whatsapp">WhatsApp</SelectItem>
+                      <SelectItem value="facebook">Facebook</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
 
-            <div className="space-y-4">
-              {generatedContent ? (
-                <>
-                  <Card className="bg-gradient-to-br from-gray-900 to-gray-800 border-gray-700">
-                    <CardHeader className="flex flex-row items-center justify-between">
-                      <CardTitle className="text-white">Texto pronto</CardTitle>
-                      <Button
-                        size="sm"
-                        variant="ghost"
-                        className="text-white hover:bg-gray-800"
-                        onClick={() => copyToClipboard(generatedContent.text, 'text')}
-                      >
-                        {copiedField === 'text' ? <Check className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
-                      </Button>
-                    </CardHeader>
-                    <CardContent>
-                      <p className="text-gray-300 whitespace-pre-wrap">{generatedContent.text}</p>
-                    </CardContent>
-                  </Card>
+                <div className="space-y-2">
+                  <Label>Estilo</Label>
+                  <Select
+                    value={formData.style}
+                    onValueChange={(value) => setFormData((prev) => ({ ...prev, style: value }))}
+                  >
+                    <SelectTrigger className="h-12 rounded-2xl border-white/10 bg-black/20 text-white">
+                      <SelectValue placeholder="Escolha o estilo" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="agressivo">Agressivo</SelectItem>
+                      <SelectItem value="simples">Simples</SelectItem>
+                      <SelectItem value="premium">Premium</SelectItem>
+                      <SelectItem value="viral">Viral</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
 
-                  <Card className="bg-gradient-to-br from-gray-900 to-gray-800 border-gray-700">
-                    <CardHeader className="flex flex-row items-center justify-between">
-                      <CardTitle className="text-white">Ideia de vídeo</CardTitle>
-                      <Button
-                        size="sm"
-                        variant="ghost"
-                        className="text-white hover:bg-gray-800"
-                        onClick={() => copyToClipboard(generatedContent.videoIdea, 'video')}
-                      >
-                        {copiedField === 'video' ? <Check className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
-                      </Button>
-                    </CardHeader>
-                    <CardContent>
-                      <p className="text-gray-300">{generatedContent.videoIdea}</p>
-                    </CardContent>
-                  </Card>
+              <div className="grid gap-5 md:grid-cols-2">
+                <div className="space-y-2">
+                  <Label>Objetivo</Label>
+                  <Select
+                    value={formData.objective}
+                    onValueChange={(value) => setFormData((prev) => ({ ...prev, objective: value }))}
+                  >
+                    <SelectTrigger className="h-12 rounded-2xl border-white/10 bg-black/20 text-white">
+                      <SelectValue placeholder="Escolha o objetivo" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="clique">Gerar clique</SelectItem>
+                      <SelectItem value="grupo">Levar para o grupo</SelectItem>
+                      <SelectItem value="venda">Acelerar compra</SelectItem>
+                      <SelectItem value="relacionamento">Abrir conversa</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
 
-                  <Card className="bg-gradient-to-br from-gray-900 to-gray-800 border-gray-700">
-                    <CardHeader className="flex flex-row items-center justify-between">
-                      <CardTitle className="text-white">CTA (Call to Action)</CardTitle>
-                      <Button
-                        size="sm"
-                        variant="ghost"
-                        className="text-white hover:bg-gray-800"
-                        onClick={() => copyToClipboard(generatedContent.callToAction, 'cta')}
-                      >
-                        {copiedField === 'cta' ? <Check className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
-                      </Button>
-                    </CardHeader>
-                    <CardContent>
-                      <p className="text-gray-300">{generatedContent.callToAction}</p>
-                    </CardContent>
-                  </Card>
+                <div className="space-y-2">
+                  <Label>Nível de consciência</Label>
+                  <Select
+                    value={formData.awareness}
+                    onValueChange={(value) => setFormData((prev) => ({ ...prev, awareness: value }))}
+                  >
+                    <SelectTrigger className="h-12 rounded-2xl border-white/10 bg-black/20 text-white">
+                      <SelectValue placeholder="Escolha o nível" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="frio">Público frio</SelectItem>
+                      <SelectItem value="morno">Público morno</SelectItem>
+                      <SelectItem value="quente">Público quente</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
 
-                  <Card className="bg-gradient-to-br from-gray-900 to-gray-800 border-gray-700">
-                    <CardHeader className="flex flex-row items-center justify-between">
-                      <CardTitle className="text-white">Chamada curta</CardTitle>
-                      <Button
-                        size="sm"
-                        variant="ghost"
-                        className="text-white hover:bg-gray-800"
-                        onClick={() => copyToClipboard(generatedContent.shortCall, 'short')}
-                      >
-                        {copiedField === 'short' ? <Check className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
-                      </Button>
-                    </CardHeader>
-                    <CardContent>
-                      <p className="text-gray-300 text-lg font-bold">{generatedContent.shortCall}</p>
-                    </CardContent>
-                  </Card>
-                </>
-              ) : (
-                <Card className="bg-gradient-to-br from-gray-900 to-gray-800 border-gray-700">
-                  <CardContent className="py-12 text-center">
-                    <Sparkles className="w-16 h-16 text-gray-600 mx-auto mb-4" />
-                    <p className="text-gray-400">
-                      Configure as opções e gere seu conteúdo
+              <div className="space-y-2">
+                <Label>Público / audiência</Label>
+                <Input
+                  value={customAudience}
+                  onChange={(e) => setCustomAudience(e.target.value)}
+                  placeholder="Ex: mulheres que gostam de utilidades para casa"
+                  className="h-12 rounded-2xl border-white/10 bg-black/20 text-white"
+                />
+              </div>
+
+              <div className="space-y-2">
+                <Label>Ângulo principal</Label>
+                <Input
+                  value={formData.angle}
+                  onChange={(e) => setFormData((prev) => ({ ...prev, angle: e.target.value }))}
+                  placeholder="Ex: custo-benefício, presente, praticidade, estética..."
+                  className="h-12 rounded-2xl border-white/10 bg-black/20 text-white"
+                />
+              </div>
+
+              <Button
+                size="lg"
+                className="h-12 w-full rounded-2xl bg-emerald-500 font-bold text-black hover:bg-emerald-400"
+                onClick={handleGenerate}
+                disabled={
+                  !formData.productId ||
+                  !formData.platform ||
+                  !formData.style ||
+                  !formData.objective ||
+                  !formData.awareness
+                }
+              >
+                <Sparkles className="mr-2 h-4 w-4" />
+                Gerar material premium
+              </Button>
+
+              <div className="rounded-[28px] border border-white/10 bg-white/[0.03] p-4">
+                <p className="text-sm text-zinc-400">
+                  Conteúdos já gerados nesta sessão:{' '}
+                  <span className="font-bold text-white">{contents.length}</span>
+                </p>
+              </div>
+            </CardContent>
+          </Card>
+
+          <div className="space-y-4">
+            {generatedPack ? (
+              <>
+                <Card className="border border-emerald-500/15 bg-black/30">
+                  <CardHeader className="flex flex-row items-center justify-between">
+                    <div>
+                      <CardTitle>{generatedPack.headline}</CardTitle>
+                      <CardDescription className="text-zinc-400">
+                        Material principal para usar agora.
+                      </CardDescription>
+                    </div>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="rounded-2xl border-white/10 bg-black/20 text-white hover:bg-white/5"
+                      onClick={() => copyToClipboard(generatedPack.text, 'text')}
+                    >
+                      {copiedField === 'text' ? (
+                        <Check className="h-4 w-4" />
+                      ) : (
+                        <Copy className="h-4 w-4" />
+                      )}
+                    </Button>
+                  </CardHeader>
+                  <CardContent>
+                    <p className="whitespace-pre-wrap text-sm leading-7 text-zinc-300">
+                      {generatedPack.text}
                     </p>
                   </CardContent>
                 </Card>
-              )}
-            </div>
+
+                <div className="grid gap-4 md:grid-cols-2">
+                  {[
+                    {
+                      title: 'Ideia de vídeo',
+                      icon: Video,
+                      text: generatedPack.videoIdea,
+                      field: 'video',
+                    },
+                    {
+                      title: 'CTA principal',
+                      icon: BadgeCheck,
+                      text: generatedPack.callToAction,
+                      field: 'cta',
+                    },
+                    {
+                      title: 'Chamada curta',
+                      icon: Lightbulb,
+                      text: generatedPack.shortCall,
+                      field: 'short',
+                    },
+                    {
+                      title: 'Abordagem',
+                      icon: MessageSquareText,
+                      text: generatedPack.approach,
+                      field: 'approach',
+                    },
+                  ].map((item) => (
+                    <Card key={item.title} className="border border-white/10 bg-black/30">
+                      <CardHeader className="flex flex-row items-center justify-between">
+                        <div className="flex items-center gap-2">
+                          <item.icon className="h-5 w-5 text-emerald-400" />
+                          <CardTitle className="text-lg">{item.title}</CardTitle>
+                        </div>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className="rounded-2xl border-white/10 bg-black/20 text-white hover:bg-white/5"
+                          onClick={() => copyToClipboard(item.text, item.field)}
+                        >
+                          {copiedField === item.field ? (
+                            <Check className="h-4 w-4" />
+                          ) : (
+                            <Copy className="h-4 w-4" />
+                          )}
+                        </Button>
+                      </CardHeader>
+                      <CardContent>
+                        <p className="text-sm leading-7 text-zinc-300">{item.text}</p>
+                      </CardContent>
+                    </Card>
+                  ))}
+                </div>
+
+                <Card className="border border-white/10 bg-black/30">
+                  <CardHeader className="flex flex-row items-center justify-between">
+                    <div>
+                      <CardTitle className="flex items-center gap-2">
+                        <Target className="h-5 w-5 text-emerald-400" />
+                        Estratégia diária
+                      </CardTitle>
+                      <CardDescription className="text-zinc-400">
+                        Como transformar o material em rotina.
+                      </CardDescription>
+                    </div>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="rounded-2xl border-white/10 bg-black/20 text-white hover:bg-white/5"
+                      onClick={() => copyToClipboard(generatedPack.dailyStrategy, 'strategy')}
+                    >
+                      {copiedField === 'strategy' ? (
+                        <Check className="h-4 w-4" />
+                      ) : (
+                        <Copy className="h-4 w-4" />
+                      )}
+                    </Button>
+                  </CardHeader>
+                  <CardContent>
+                    <p className="whitespace-pre-wrap text-sm leading-7 text-zinc-300">
+                      {generatedPack.dailyStrategy}
+                    </p>
+                  </CardContent>
+                </Card>
+              </>
+            ) : (
+              <Card className="border border-white/10 bg-black/30">
+                <CardContent className="py-16 text-center">
+                  <Sparkles className="mx-auto mb-4 h-14 w-14 text-zinc-600" />
+                  <p className="text-zinc-400">
+                    Configure as opções e gere um pacote completo de conteúdo.
+                  </p>
+                </CardContent>
+              </Card>
+            )}
           </div>
-        </div>
-      </div>
+        </section>
+      </main>
     </div>
   );
 }

@@ -10,6 +10,7 @@ import GerarConteudo from './pages/GerarConteudo';
 import LojaPublica from './pages/LojaPublica';
 import ConfiguracoesLoja from './pages/ConfiguracoesLoja';
 import SuperAdmin from './pages/SuperAdmin';
+import AfilieSe from './pages/AfilieSe';
 import App from './App';
 import { useAuth } from './context/AuthTemp';
 
@@ -117,6 +118,10 @@ export const router = createBrowserRouter([
           {
             path: 'configuracoes',
             Component: ConfiguracoesLoja,
+          },
+          {
+            path: 'afilie-se',
+            Component: AfilieSe,
           },
         ],
       },

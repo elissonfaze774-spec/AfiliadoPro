@@ -23,6 +23,11 @@ import {
   Target,
   Rocket,
   LayoutGrid,
+  Trophy,
+  Users,
+  ArrowUpRight,
+  Link2,
+  BadgeCheck,
 } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import { useAuth } from '../context/AuthTemp';
@@ -37,6 +42,7 @@ type StoreData = {
   slug: string;
   niche: string | null;
   whatsapp: string;
+  whatsappGroupLink?: string;
   logoUrl: string;
   bannerUrl: string;
   active: boolean;
@@ -85,6 +91,7 @@ function normalizeStore(raw: any): StoreData | null {
   const slug = raw.slug ?? '';
   const niche = raw.niche ?? null;
   const whatsapp = raw.whatsapp_number ?? raw.whatsapp ?? '';
+  const whatsappGroupLink = raw.whatsapp_group_link ?? '';
   const logoUrl = raw.logo_url ?? '';
   const bannerUrl = raw.banner_url ?? '';
   const active = Boolean(raw.active);
@@ -101,6 +108,7 @@ function normalizeStore(raw: any): StoreData | null {
     slug,
     niche,
     whatsapp,
+    whatsappGroupLink,
     logoUrl,
     bannerUrl,
     active,
@@ -149,7 +157,15 @@ function getBadgeClasses(status?: string | null) {
 export default function Painel() {
   const navigate = useNavigate();
   const { user, authLoading, logout } = useAuth();
-  const { products, clicks, contents, refreshAppData } = useApp();
+  const {
+    products,
+    clicks,
+    contents,
+    refreshAppData,
+    presence,
+    categories,
+    store: appStore,
+  } = useApp();
 
   const [store, setStore] = useState<StoreData | null>(null);
   const [loadingStore, setLoadingStore] = useState(true);
@@ -180,15 +196,15 @@ export default function Painel() {
       },
       {
         icon: MousePointerClick,
-        title: 'Cliques',
+        title: 'Cliques únicos',
         value: clicks,
-        helper: 'Interesse gerado pelos seus links',
+        helper: 'Leitura mais limpa com filtro anti-repetição',
       },
       {
         icon: FileText,
         title: 'Conteúdos',
         value: contents.length,
-        helper: 'Textos gerados para vender mais',
+        helper: 'Materiais criados para vender melhor',
       },
       {
         icon: DollarSign,
@@ -197,7 +213,7 @@ export default function Painel() {
           style: 'currency',
           currency: 'BRL',
         }),
-        helper: 'Estimativa visual do painel',
+        helper: 'Estimativa visual do seu painel',
       },
     ],
     [products.length, clicks, contents.length, estimatedEarnings],
@@ -214,9 +230,20 @@ export default function Painel() {
         text: 'Ter pelo menos 1 link de afiliado configurado',
         done: products.some((product) => Boolean(product.affiliateLink)),
       },
-      { text: 'Gerar seu primeiro conteúdo automático', done: contents.length > 0 },
+      {
+        text: 'Organizar a loja em categorias',
+        done: categories.length >= 2,
+      },
+      {
+        text: 'Gerar seu primeiro conteúdo premium',
+        done: contents.length > 0,
+      },
+      {
+        text: 'Marcar presença hoje',
+        done: Boolean(presence?.checkedToday),
+      },
     ],
-    [products, contents.length, store],
+    [products, contents.length, store, categories.length, presence?.checkedToday],
   );
 
   const academyItems = [
@@ -235,7 +262,10 @@ export default function Painel() {
   ];
 
   const completedChecklist = useMemo(() => checklist.filter((item) => item.done).length, [checklist]);
-  const checklistPercent = useMemo(() => Math.round((completedChecklist / checklist.length) * 100), [completedChecklist, checklist.length]);
+  const checklistPercent = useMemo(
+    () => Math.round((completedChecklist / checklist.length) * 100),
+    [completedChecklist, checklist.length],
+  );
 
   const nextBestAction = useMemo(() => {
     if (products.length < 3) {
@@ -244,9 +274,21 @@ export default function Painel() {
         description: 'Quanto mais produtos bons você tiver, maior a chance de gerar cliques e comissão.',
         actionLabel: 'Ir para Produtos',
         onClick: () => {
-        setShowNotifications(false);
-        navigate('/produtos');
-      },
+          setShowNotifications(false);
+          navigate('/produtos');
+        },
+      };
+    }
+
+    if (categories.length < 2) {
+      return {
+        title: 'Organize por categorias',
+        description: 'Uma loja separada por categorias melhora a navegação e deixa tudo mais profissional.',
+        actionLabel: 'Estruturar produtos',
+        onClick: () => {
+          setShowNotifications(false);
+          navigate('/produtos');
+        },
       };
     }
 
@@ -256,9 +298,9 @@ export default function Painel() {
         description: 'Envie logo e banner para passar mais confiança e vender melhor.',
         actionLabel: 'Ir para Configurações',
         onClick: () => {
-        setShowNotifications(false);
-        navigate('/configuracoes');
-      },
+          setShowNotifications(false);
+          navigate('/configuracoes');
+        },
       };
     }
 
@@ -268,19 +310,19 @@ export default function Painel() {
         description: 'Use a geração de conteúdo para divulgar mais rápido e sem travar.',
         actionLabel: 'Gerar conteúdo',
         onClick: () => {
-        setShowNotifications(false);
-        navigate('/gerar-conteudo');
-      },
+          setShowNotifications(false);
+          navigate('/gerar-conteudo');
+        },
       };
     }
 
     return {
       title: 'Sua loja já está forte, agora divulgue',
-      description: 'Copie seu link e comece a espalhar suas ofertas para gerar cliques.',
+      description: 'Copie seu link, mova gente para o grupo e espalhe suas ofertas para gerar cliques.',
       actionLabel: 'Copiar link',
       onClick: () => handleCopyStoreLink(),
     };
-  }, [products.length, store?.bannerUrl, store?.logoUrl, contents.length, navigate]);
+  }, [products.length, categories.length, store?.bannerUrl, store?.logoUrl, contents.length, navigate]);
 
   const notifications = useMemo<NotificationItem[]>(() => {
     const items: NotificationItem[] = [
@@ -292,11 +334,27 @@ export default function Painel() {
       },
     ];
 
+    if (!presence?.checkedToday) {
+      items.push({
+        id: 'presence-warning',
+        title: 'Presença diária',
+        description: 'Entrar todos os dias fortalece seu hábito e sua retenção dentro da plataforma.',
+      });
+    }
+
     if (products.length < 3) {
       items.push({
         id: 'products-warning',
         title: 'Adicione mais produtos',
         description: 'Sua loja fica mais forte quando tem mais opções para divulgar.',
+      });
+    }
+
+    if (categories.length < 2) {
+      items.push({
+        id: 'categories-warning',
+        title: 'Organize por categorias',
+        description: 'Categorias deixam a vitrine mais premium e melhoram a experiência do cliente.',
       });
     }
 
@@ -322,8 +380,8 @@ export default function Painel() {
       description: 'Se ainda não divulgou, esse é um ótimo momento para começar.',
     });
 
-    return items.slice(0, 4);
-  }, [products.length, store?.bannerUrl, store?.logoUrl, contents.length]);
+    return items.slice(0, 6);
+  }, [products.length, categories.length, store?.bannerUrl, store?.logoUrl, contents.length, presence?.checkedToday]);
 
   const quickActions: QuickAction[] = [
     {
@@ -342,6 +400,12 @@ export default function Painel() {
       icon: Sparkles,
       onClick: () => navigate('/gerar-conteudo'),
       disabled: products.length === 0,
+    },
+    {
+      title: 'Afilie-se',
+      description: 'Entre nas principais plataformas e expanda suas oportunidades.',
+      icon: Rocket,
+      onClick: () => navigate('/afilie-se'),
     },
     {
       title: 'Ver loja',
@@ -376,6 +440,19 @@ export default function Painel() {
         const normalized = normalizeStore(data);
         if (normalized) return normalized;
       }
+    }
+
+    if (appStore?.id) {
+      return normalizeStore({
+        id: appStore.id,
+        store_name: appStore.name,
+        slug: appStore.username,
+        whatsapp: appStore.whatsapp,
+        whatsapp_group_link: appStore.whatsappGroupLink,
+        niche: appStore.niche,
+        logo_url: appStore.logoUrl,
+        banner_url: appStore.bannerUrl,
+      });
     }
 
     if (authEmail) {
@@ -446,7 +523,7 @@ export default function Painel() {
     }
 
     return null;
-  }, []);
+  }, [appStore]);
 
   const loadStore = useCallback(
     async (options?: { silent?: boolean }) => {
@@ -493,6 +570,7 @@ export default function Painel() {
               current?.slug === resolvedStore.slug &&
               current?.niche === resolvedStore.niche &&
               current?.whatsapp === resolvedStore.whatsapp &&
+              current?.whatsappGroupLink === resolvedStore.whatsappGroupLink &&
               current?.logoUrl === resolvedStore.logoUrl &&
               current?.bannerUrl === resolvedStore.bannerUrl &&
               current?.accessExpiresAt === resolvedStore.accessExpiresAt &&
@@ -622,6 +700,15 @@ export default function Painel() {
     }
   };
 
+  const handleOpenGroup = () => {
+    if (store?.whatsappGroupLink) {
+      window.open(store.whatsappGroupLink, '_blank', 'noopener,noreferrer');
+      return;
+    }
+
+    toast.error('Configure o link do grupo nas configurações da loja.');
+  };
+
   if ((authLoading || loadingStore) && !store) {
     return null;
   }
@@ -749,6 +836,11 @@ export default function Painel() {
                   <span className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/5 px-4 py-2 text-xs text-zinc-300">
                     <CalendarClock className="h-4 w-4" />
                     Vencimento: {formatDate(access.expiresAt)}
+                  </span>
+
+                  <span className="inline-flex items-center gap-2 rounded-full border border-yellow-500/20 bg-yellow-500/10 px-4 py-2 text-xs text-yellow-300">
+                    <Trophy className="h-4 w-4" />
+                    Presença: {presence?.streakCount ?? 0} dia(s)
                   </span>
                 </div>
               ) : null}
@@ -921,6 +1013,25 @@ export default function Painel() {
                 </p>
               </div>
 
+              <div className="mt-4 rounded-3xl border border-yellow-500/15 bg-yellow-500/10 p-4">
+                <div className="flex items-center justify-between gap-4">
+                  <div>
+                    <p className="text-xs font-semibold uppercase tracking-[0.18em] text-yellow-300">
+                      Presença diária
+                    </p>
+                    <p className="mt-2 text-3xl font-black text-white">{presence?.streakCount ?? 0} dia(s)</p>
+                    <p className="mt-1 text-sm text-zinc-200/80">
+                      {presence?.checkedToday
+                        ? 'Presença registrada hoje com sucesso.'
+                        : 'A presença é validada quando você entra no painel.'}
+                    </p>
+                  </div>
+                  <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-yellow-500/15 text-yellow-300">
+                    <Trophy className="h-7 w-7" />
+                  </div>
+                </div>
+              </div>
+
               <Button
                 className="mt-5 w-full rounded-2xl bg-gradient-to-r from-emerald-500 to-green-500 font-bold text-black hover:from-emerald-400 hover:to-green-400"
                 onClick={nextBestAction.onClick}
@@ -969,7 +1080,7 @@ export default function Painel() {
               </CardHeader>
 
               <CardContent>
-                <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+                <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-2">
                   {quickActions.map((action) => (
                     <button
                       key={action.title}
@@ -1076,6 +1187,52 @@ export default function Painel() {
 
             <Card className="border-white/10 bg-white/[0.04] shadow-[0_10px_30px_rgba(0,0,0,0.25)]">
               <CardHeader>
+                <CardTitle className="text-white">Centro de divulgação</CardTitle>
+                <CardDescription className="text-zinc-400">
+                  Ações rápidas para divulgação e relacionamento.
+                </CardDescription>
+              </CardHeader>
+
+              <CardContent className="space-y-3">
+                <Button
+                  className="h-12 w-full rounded-2xl bg-gradient-to-r from-emerald-500 to-emerald-600 font-bold text-black hover:from-emerald-400 hover:to-emerald-500"
+                  onClick={handleCopyStoreLink}
+                >
+                  <Link2 className="mr-2 h-4 w-4" />
+                  Copiar link da loja
+                </Button>
+
+                <Button
+                  variant="outline"
+                  className="h-12 w-full rounded-2xl border-white/10 bg-black/20 text-white hover:bg-white/5"
+                  onClick={() => navigate('/gerar-conteudo')}
+                >
+                  <Sparkles className="mr-2 h-4 w-4" />
+                  Abrir central de conteúdo
+                </Button>
+
+                <Button
+                  variant="outline"
+                  className="h-12 w-full rounded-2xl border-white/10 bg-black/20 text-white hover:bg-white/5"
+                  onClick={handleOpenGroup}
+                >
+                  <Users className="mr-2 h-4 w-4" />
+                  Abrir grupo do WhatsApp
+                </Button>
+
+                <Button
+                  variant="outline"
+                  className="h-12 w-full rounded-2xl border-white/10 bg-black/20 text-white hover:bg-white/5"
+                  onClick={() => navigate('/afilie-se')}
+                >
+                  <BadgeCheck className="mr-2 h-4 w-4" />
+                  Ver plataformas para se afiliar
+                </Button>
+              </CardContent>
+            </Card>
+
+            <Card className="border-white/10 bg-white/[0.04] shadow-[0_10px_30px_rgba(0,0,0,0.25)]">
+              <CardHeader>
                 <CardTitle className="text-white">Link da loja</CardTitle>
                 <CardDescription className="text-zinc-400">
                   Compartilhe com facilidade e comece a divulgar agora.
@@ -1101,7 +1258,7 @@ export default function Painel() {
                     className="rounded-2xl border-white/10 bg-black/20 text-white hover:bg-white/5"
                     onClick={() => navigate(`/loja/${store.slug}`)}
                   >
-                    <ExternalLink className="mr-2 h-4 w-4" />
+                    <ArrowUpRight className="mr-2 h-4 w-4" />
                     Abrir loja
                   </Button>
                 </div>
