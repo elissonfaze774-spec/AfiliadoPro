@@ -254,7 +254,7 @@ export default function Painel() {
 
     if (contents.length === 0) {
       return {
-        title: 'Gere um conteúdo prêmium!',
+        title: 'Gere um conteúdo prêmium',
         description: 'Use a geração de conteúdos para converter o máximo em vendas.',
         actionLabel: 'Gerar conteúdo',
         onClick: () => navigate('/gerar-conteudo'),
@@ -262,7 +262,7 @@ export default function Painel() {
     }
 
     return {
-      title: 'Sua loja pronto para divulgação!',
+      title: 'Sua loja pronto para divulgação',
       description: 'Clique em copiar link e comece agora.',
       actionLabel: 'Copiar link',
       onClick: () => handleCopyStoreLink(),
