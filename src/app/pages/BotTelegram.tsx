@@ -24,10 +24,8 @@ import {
   Sparkles,
   Tags,
   Trash2,
-  Users,
   XCircle,
   Zap,
-  ShieldCheck,
 } from 'lucide-react';
 import { Button } from '../components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../components/ui/card';
@@ -94,35 +92,35 @@ export default function BotTelegram() {
   const principais = useMemo<BotAction[]>(
     () => [
       {
-        title: 'Iniciar bot',
-        description: 'Entrada principal para ativar a estrutura do bot e começar a usar a automação.',
+        title: 'Começar',
+        description: 'Entre no bot e tenha um ponto central para organizar sua rotina de divulgação.',
         icon: PlayCircle,
-        badge: 'principal',
+        badge: 'essencial',
         featured: true,
       },
       {
-        title: 'Abrir menu',
-        description: 'Mostra o menu visual com as funções organizadas de forma simples e rápida.',
+        title: 'Menu rápido',
+        description: 'Acesso fácil às funções principais para você agir mais rápido no dia a dia.',
         icon: LayoutGrid,
       },
       {
-        title: 'Ver meu ID',
-        description: 'Área para consultar o identificador do usuário dentro da estrutura do bot.',
+        title: 'Seu identificador',
+        description: 'Consulte rapidamente as informações da sua conta dentro do bot.',
         icon: Hash,
       },
       {
         title: 'Ajuda rápida',
-        description: 'Explicações curtas para orientar o admin sem bagunça e sem travar o uso.',
+        description: 'Orientações simples para você não travar e conseguir usar tudo com mais segurança.',
         icon: HelpCircle,
       },
       {
-        title: 'Painel e estatísticas',
-        description: 'Resumo do desempenho, visão geral do bot e indicadores importantes.',
+        title: 'Resultados',
+        description: 'Veja o desempenho das ações feitas no bot e acompanhe melhor sua divulgação.',
         icon: BarChart3,
       },
       {
         title: 'Grupos e categorias',
-        description: 'Visualização de grupos ativos e categorias organizadas para envio inteligente.',
+        description: 'Organize melhor para enviar a mensagem certa, no lugar certo, com mais consistência.',
         icon: Layers3,
       },
     ],
@@ -133,34 +131,34 @@ export default function BotTelegram() {
     () => [
       {
         title: 'Importar por link',
-        description: 'Tenta montar uma oferta automaticamente usando apenas o link informado.',
+        description: 'Ganhe tempo tentando montar uma oferta a partir de um link, sem começar do zero.',
         icon: Link2,
-        badge: 'ofertas',
+        badge: 'tempo',
         featured: true,
       },
       {
         title: 'Criar oferta guiada',
-        description: 'Fluxo visual para montar uma oferta bonita, clara e pronta para divulgar.',
+        description: 'Monte ofertas com mais clareza e rapidez para divulgar melhor seus produtos.',
         icon: Sparkles,
       },
       {
-        title: 'Biblioteca de ofertas',
-        description: 'Lista das ofertas criadas, com visual limpo para organizar e consultar tudo.',
+        title: 'Minhas ofertas',
+        description: 'Tenha suas ofertas organizadas para reutilizar, revisar e divulgar sem bagunça.',
         icon: Search,
       },
       {
         title: 'Editar oferta',
-        description: 'Permite ajustar título, descrição, preço, cupom, link, imagem e chamada final.',
+        description: 'Ajuste título, descrição, preço, cupom, link e imagem sempre que precisar.',
         icon: PenSquare,
       },
       {
         title: 'Duplicar oferta',
-        description: 'Cria uma cópia rápida de uma oferta já existente para ganhar velocidade.',
+        description: 'Reaproveite ofertas que já funcionaram e publique mais rápido.',
         icon: Copy,
       },
       {
         title: 'Apagar oferta',
-        description: 'Remove uma oferta da estrutura quando não fizer mais sentido manter ativa.',
+        description: 'Remova o que não faz mais sentido e mantenha sua área sempre limpa e prática.',
         icon: Trash2,
       },
     ],
@@ -170,35 +168,35 @@ export default function BotTelegram() {
   const disparos = useMemo<BotAction[]>(
     () => [
       {
-        title: 'Disparar oferta',
-        description: 'Envio visual da oferta para grupos ativos, com foco em praticidade e escala.',
+        title: 'Enviar oferta',
+        description: 'Divulgue para grupos ativos com mais velocidade e menos esforço manual.',
         icon: Send,
-        badge: 'automação',
+        badge: 'escala',
         featured: true,
       },
       {
         title: 'Anúncio simples',
-        description: 'Mensagem rápida para divulgação geral, sem precisar montar uma oferta completa.',
+        description: 'Envie comunicados rápidos para manter presença constante nos grupos.',
         icon: Megaphone,
       },
       {
         title: 'Agendar oferta',
-        description: 'Agenda envios futuros para manter constância e não depender só do manual.',
+        description: 'Deixe divulgações programadas para não depender de lembrar tudo na hora.',
         icon: CalendarClock,
       },
       {
         title: 'Agendar anúncio',
-        description: 'Programa mensagens simples para horários estratégicos de divulgação.',
+        description: 'Mantenha constância nas postagens mesmo nos dias mais corridos.',
         icon: Clock3,
       },
       {
-        title: 'Agenda ativa',
-        description: 'Visualização dos agendamentos pendentes, organizados de forma profissional.',
+        title: 'Meus agendamentos',
+        description: 'Tenha controle do que já está programado para não se perder.',
         icon: Zap,
       },
       {
         title: 'Cancelar agendamento',
-        description: 'Cancela um envio pendente com segurança e organização.',
+        description: 'Ajuste sua estratégia com liberdade sempre que quiser mudar um envio.',
         icon: XCircle,
       },
     ],
@@ -208,20 +206,20 @@ export default function BotTelegram() {
   const highlights = useMemo(
     () => [
       {
-        title: 'Mais valor percebido',
-        description: 'O admin enxerga um produto maior, mais avançado e mais premium.',
+        title: 'Mais constância',
+        description: 'Você consegue divulgar mais vezes sem depender só da força de vontade do momento.',
       },
       {
-        title: 'Mais retenção',
-        description: 'Uma área forte como essa aumenta o desejo de continuar usando a plataforma.',
+        title: 'Mais organização',
+        description: 'Ofertas, grupos e envios ficam mais fáceis de controlar no dia a dia.',
       },
       {
-        title: 'Mais escala futura',
-        description: 'A estrutura já fica pronta para ativação profissional quando você decidir.',
+        title: 'Mais velocidade',
+        description: 'Menos tempo montando tudo manualmente e mais tempo focando em vender.',
       },
       {
-        title: 'Mais cara de dinheiro',
-        description: 'Visual green premium pensado para transmitir crescimento, resultado e valor.',
+        title: 'Mais chance de resultado',
+        description: 'Quanto mais frequência e organização, maior a chance de gerar cliques e comissão.',
       },
     ],
     [],
@@ -243,9 +241,10 @@ export default function BotTelegram() {
                   </span>
                 </div>
 
-                <h1 className="text-3xl font-black md:text-4xl">Central BotTelegram</h1>
+                <h1 className="text-3xl font-black md:text-4xl">BotTelegram</h1>
                 <p className="mt-3 max-w-3xl text-sm leading-7 text-zinc-400 md:text-base">
-                  Uma página premium, visual e organizada para transformar o bot em um diferencial forte dentro do AfiliadoPRO.
+                  Uma área pensada para ajudar você a divulgar com mais frequência, organizar melhor suas ofertas
+                  e ganhar tempo no processo.
                 </p>
               </div>
 
@@ -265,7 +264,7 @@ export default function BotTelegram() {
                     setSelectedAction({
                       title: 'Ativar BotTelegram',
                       description:
-                        'A ativação profissional do módulo ainda está em desenvolvimento, mas a área já foi preparada para aumentar o valor percebido do AfiliadoPRO.',
+                        'Quando esse recurso for liberado, você poderá agilizar sua divulgação, manter mais constância e organizar melhor suas ações.',
                       icon: Bot,
                     })
                   }
@@ -285,16 +284,16 @@ export default function BotTelegram() {
                 <div>
                   <div className="mb-4 inline-flex items-center gap-2 rounded-full border border-emerald-500/20 bg-emerald-500/10 px-4 py-2 text-xs font-bold uppercase tracking-[0.16em] text-emerald-300">
                     <Bot className="h-4 w-4" />
-                    módulo visual + automação futura
+                    divulgação mais prática
                   </div>
 
                   <h2 className="max-w-3xl text-3xl font-black leading-tight md:text-5xl">
-                    Botões bonitos, organização forte e visual de produto grande
+                    Menos correria para divulgar. Mais constância para vender.
                   </h2>
 
                   <p className="mt-4 max-w-3xl text-sm leading-7 text-zinc-400 md:text-base">
-                    Nada de poluição visual com barras e comandos jogados. Aqui o módulo foi organizado em ações premium,
-                    com áreas separadas para comandos principais, ofertas e disparos.
+                    O BotTelegram foi pensado para ajudar você a ganhar tempo, manter suas ofertas organizadas
+                    e deixar sua divulgação muito mais prática no dia a dia.
                   </p>
 
                   <div className="mt-6 flex flex-wrap gap-3">
@@ -302,15 +301,15 @@ export default function BotTelegram() {
                       className="rounded-2xl bg-gradient-to-r from-emerald-500 to-green-500 font-bold text-black hover:from-emerald-400 hover:to-green-400"
                       onClick={() =>
                         setSelectedAction({
-                          title: 'Ver estrutura principal',
+                          title: 'Funções principais',
                           description:
-                            'A estrutura completa do BotTelegram ainda está em desenvolvimento, mas a organização visual já foi preparada.',
+                            'Essa área vai ajudar você a começar mais rápido, entender melhor o uso e acompanhar seus resultados.',
                           icon: LayoutGrid,
                         })
                       }
                     >
                       <LayoutGrid className="mr-2 h-4 w-4" />
-                      Ver estrutura
+                      Ver funções principais
                     </Button>
 
                     <Button
@@ -318,9 +317,9 @@ export default function BotTelegram() {
                       className="rounded-2xl border-white/10 bg-black/20 text-white hover:bg-white/5"
                       onClick={() =>
                         setSelectedAction({
-                          title: 'Abrir visão de ofertas',
+                          title: 'Área de ofertas',
                           description:
-                            'O fluxo completo de ofertas ainda está em desenvolvimento, com foco em praticidade e automação futura.',
+                            'Aqui você poderá criar, editar e organizar ofertas para divulgar com mais rapidez e clareza.',
                           icon: Sparkles,
                         })
                       }
@@ -334,9 +333,9 @@ export default function BotTelegram() {
                       className="rounded-2xl border-white/10 bg-black/20 text-white hover:bg-white/5"
                       onClick={() =>
                         setSelectedAction({
-                          title: 'Abrir disparos e agenda',
+                          title: 'Disparos e agenda',
                           description:
-                            'A parte de disparos e agendamentos ainda está em desenvolvimento, mas a área já foi pensada para escala.',
+                            'Essa área vai ajudar você a manter consistência nas divulgações, inclusive nos dias mais corridos.',
                           icon: Send,
                         })
                       }
@@ -350,21 +349,21 @@ export default function BotTelegram() {
                 <div className="grid grid-cols-1 gap-4">
                   <div className="rounded-[28px] border border-emerald-500/20 bg-emerald-500/10 p-5">
                     <p className="text-xs font-bold uppercase tracking-[0.16em] text-emerald-300">
-                      visual atual
+                      ganho principal
                     </p>
-                    <p className="mt-3 text-2xl font-black text-white">Premium e organizado</p>
+                    <p className="mt-3 text-2xl font-black text-white">Mais tempo para focar no que importa</p>
                     <p className="mt-2 text-sm leading-6 text-zinc-300">
-                      Página desenhada para aumentar valor percebido e transmitir força de produto.
+                      Menos esforço repetitivo e mais facilidade para divulgar seus produtos.
                     </p>
                   </div>
 
                   <div className="rounded-[28px] border border-white/10 bg-black/30 p-5">
                     <p className="text-xs font-bold uppercase tracking-[0.16em] text-zinc-300">
-                      direção
+                      objetivo
                     </p>
-                    <p className="mt-3 text-2xl font-black text-white">Averdado que vende</p>
+                    <p className="mt-3 text-2xl font-black text-white">Ajudar você a divulgar com constância</p>
                     <p className="mt-2 text-sm leading-6 text-zinc-400">
-                      Preto + verde, sensação de automação, dinheiro, crescimento e valor premium.
+                      Organização e frequência podem aumentar muito sua chance de resultado.
                     </p>
                   </div>
                 </div>
@@ -376,11 +375,11 @@ export default function BotTelegram() {
             <Card className="border-white/10 bg-black/30">
               <CardHeader>
                 <CardTitle className="flex items-center gap-2 text-white">
-                  <ShieldCheck className="h-5 w-5 text-emerald-400" />
-                  Comandos principais
+                  <LayoutGrid className="h-5 w-5 text-emerald-400" />
+                  Funções principais
                 </CardTitle>
                 <CardDescription className="text-zinc-400">
-                  Base visual do módulo, sem poluição e sem lista feia de comandos.
+                  Recursos para ajudar você a começar, acompanhar e manter tudo sob controle.
                 </CardDescription>
               </CardHeader>
 
@@ -393,18 +392,18 @@ export default function BotTelegram() {
 
             <Card className="border-emerald-500/20 bg-[radial-gradient(circle_at_top_left,_rgba(16,185,129,0.16),_transparent_40%),linear-gradient(180deg,rgba(4,18,12,0.98)_0%,rgba(5,5,5,0.98)_100%)]">
               <CardHeader>
-                <CardTitle className="text-white">Resumo do módulo</CardTitle>
+                <CardTitle className="text-white">O que isso vai trazer para você</CardTitle>
                 <CardDescription className="text-zinc-300">
-                  Estrutura pronta para crescer no futuro.
+                  Benefícios pensados para o seu dia a dia.
                 </CardDescription>
               </CardHeader>
 
               <CardContent className="space-y-3">
                 {[
-                  'Botões visuais no lugar de comandos bagunçados',
-                  'Separação clara entre principais, ofertas e disparos',
-                  'Página alinhada ao visual premium do AfiliadoPRO',
-                  'Base pronta para ativação profissional depois',
+                  'Mais facilidade para organizar ofertas',
+                  'Mais rapidez para divulgar produtos',
+                  'Mais constância nas postagens',
+                  'Mais controle sobre envios e agendamentos',
                 ].map((item) => (
                   <div
                     key={item}
@@ -419,15 +418,15 @@ export default function BotTelegram() {
                   className="mt-2 w-full rounded-2xl bg-gradient-to-r from-emerald-500 to-green-500 font-bold text-black hover:from-emerald-400 hover:to-green-400"
                   onClick={() =>
                     setSelectedAction({
-                      title: 'Próxima evolução do módulo',
+                      title: 'Próximos benefícios',
                       description:
-                        'A próxima etapa do BotTelegram ainda está em desenvolvimento, mas a estrutura visual estratégica já está pronta.',
+                        'Quando esse módulo for liberado, ele vai ajudar você a divulgar com mais consistência, economizar tempo e manter tudo mais organizado.',
                       icon: Rocket,
                     })
                   }
                 >
                   <Rocket className="mr-2 h-4 w-4" />
-                  Ver próxima etapa
+                  Ver benefícios
                 </Button>
               </CardContent>
             </Card>
@@ -441,7 +440,7 @@ export default function BotTelegram() {
                   Ofertas
                 </CardTitle>
                 <CardDescription className="text-zinc-400">
-                  Tudo pensado para criação, edição e organização de ofertas de forma profissional.
+                  Recursos para criar, ajustar e reaproveitar ofertas sem perder tempo.
                 </CardDescription>
               </CardHeader>
 
@@ -461,7 +460,7 @@ export default function BotTelegram() {
                   Disparos e agendamentos
                 </CardTitle>
                 <CardDescription className="text-zinc-400">
-                  Área visual para escalar envios, anúncios e horários estratégicos sem bagunça.
+                  Recursos para ajudar você a divulgar mais, esquecer menos e manter frequência.
                 </CardDescription>
               </CardHeader>
 
@@ -478,10 +477,10 @@ export default function BotTelegram() {
               <CardHeader>
                 <CardTitle className="flex items-center gap-2 text-white">
                   <Sparkles className="h-5 w-5 text-emerald-400" />
-                  Valor percebido do BotTelegram
+                  Por que isso pode fazer diferença
                 </CardTitle>
                 <CardDescription className="text-zinc-400">
-                  Não é só um módulo. É um diferencial forte dentro do produto.
+                  Quanto mais organização e constância, maior a chance de crescer.
                 </CardDescription>
               </CardHeader>
 
@@ -502,7 +501,7 @@ export default function BotTelegram() {
               <CardHeader>
                 <CardTitle className="text-white">Acesso rápido</CardTitle>
                 <CardDescription className="text-zinc-400">
-                  Botões estratégicos para reforçar a sensação de produto premium.
+                  Entradas pensadas para facilitar seu uso.
                 </CardDescription>
               </CardHeader>
 
@@ -511,15 +510,15 @@ export default function BotTelegram() {
                   className="h-12 w-full rounded-2xl bg-gradient-to-r from-emerald-500 to-green-500 font-bold text-black hover:from-emerald-400 hover:to-green-400"
                   onClick={() =>
                     setSelectedAction({
-                      title: 'Ativação premium',
+                      title: 'Ativação do BotTelegram',
                       description:
-                        'A ativação premium do BotTelegram ainda está em desenvolvimento.',
+                        'Quando esse recurso estiver liberado, você poderá ter uma rotina de divulgação mais prática e organizada.',
                       icon: Bot,
                     })
                   }
                 >
                   <Bot className="mr-2 h-4 w-4" />
-                  Ativação premium
+                  Ativar módulo
                 </Button>
 
                 <Button
@@ -527,9 +526,9 @@ export default function BotTelegram() {
                   className="h-12 w-full rounded-2xl border-white/10 bg-black/20 text-white hover:bg-white/5"
                   onClick={() =>
                     setSelectedAction({
-                      title: 'Abrir visão geral',
+                      title: 'Visão geral',
                       description:
-                        'A visão geral completa ainda está em desenvolvimento.',
+                        'Essa área vai reunir funções que ajudam você a divulgar melhor e manter mais consistência.',
                       icon: ExternalLink,
                     })
                   }
@@ -576,8 +575,8 @@ export default function BotTelegram() {
 
             <div className="mt-6 rounded-[24px] border border-white/10 bg-black/20 p-4">
               <p className="text-sm leading-6 text-zinc-400">
-                Esta funcionalidade ainda está em desenvolvimento, mas a estrutura visual já foi preparada
-                para elevar o valor percebido do AfiliadoPRO e abrir espaço para uma ativação profissional no futuro.
+                Este recurso ainda está em desenvolvimento. Quando for liberado, a ideia é ajudar você
+                a divulgar com mais frequência, ganhar tempo e manter tudo mais organizado.
               </p>
             </div>
 
