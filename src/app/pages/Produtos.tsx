@@ -39,6 +39,7 @@ type FilterType =
   | 'mais-baratos';
 
 type ImportedProductPreview = {
+  tempId: string;
   sourceUrl: string;
   finalUrl: string;
   siteName: string;
@@ -53,6 +54,23 @@ type ImportedProductPreview = {
   shortCopy: string;
   cta: string;
 };
+
+type ImportedSingleResult = {
+  mode: 'single';
+  product: ImportedProductPreview;
+};
+
+type ImportedPageResult = {
+  mode: 'page';
+  sourceUrl: string;
+  finalUrl: string;
+  siteName: string;
+  pageTitle: string;
+  count: number;
+  items: ImportedProductPreview[];
+};
+
+type ImportResponseData = ImportedSingleResult | ImportedPageResult;
 
 function ensureUrl(value: string) {
   const trimmed = String(value ?? '').trim();
@@ -145,6 +163,9 @@ export default function Produtos() {
   const [importUrl, setImportUrl] = useState('');
   const [importing, setImporting] = useState(false);
   const [importPreview, setImportPreview] = useState<ImportedProductPreview | null>(null);
+  const [importPagePreview, setImportPagePreview] = useState<ImportedPageResult | null>(null);
+  const [selectedImportedIds, setSelectedImportedIds] = useState<string[]>([]);
+  const [savingImportedBatch, setSavingImportedBatch] = useState(false);
 
   const [form, setForm] = useState<ProductForm>({
     name: '',
@@ -231,9 +252,18 @@ export default function Produtos() {
 
   const isEditing = Boolean(editingId);
 
+  const selectedImportedCount = selectedImportedIds.length;
+
+  const allImportedSelected = useMemo(() => {
+    if (!importPagePreview || importPagePreview.items.length === 0) return false;
+    return importPagePreview.items.every((item) => selectedImportedIds.includes(item.tempId));
+  }, [importPagePreview, selectedImportedIds]);
+
   const resetImport = () => {
     setImportUrl('');
     setImportPreview(null);
+    setImportPagePreview(null);
+    setSelectedImportedIds([]);
     setImporting(false);
   };
 
@@ -266,7 +296,7 @@ export default function Produtos() {
   };
 
   const closeFormModal = () => {
-    if (saving || importing) return;
+    if (saving || importing || savingImportedBatch) return;
     setIsFormOpen(false);
     resetForm();
   };
@@ -308,11 +338,34 @@ export default function Produtos() {
     setSelectedIds((prev) => Array.from(new Set([...prev, ...visibleIds])));
   };
 
+  const toggleImportedSelection = (tempId: string) => {
+    setSelectedImportedIds((prev) => {
+      if (prev.includes(tempId)) {
+        return prev.filter((item) => item !== tempId);
+      }
+      return [...prev, tempId];
+    });
+  };
+
+  const toggleSelectAllImported = () => {
+    if (!importPagePreview) return;
+
+    const ids = importPagePreview.items.map((item) => item.tempId);
+    const allSelected = ids.length > 0 && ids.every((id) => selectedImportedIds.includes(id));
+
+    if (allSelected) {
+      setSelectedImportedIds([]);
+      return;
+    }
+
+    setSelectedImportedIds(ids);
+  };
+
   const handleImportByLink = async () => {
     const url = ensureUrl(importUrl);
 
     if (!url) {
-      toast.error('Cole um link válido para importar o produto.');
+      toast.error('Cole um link válido para importar.');
       return;
     }
 
@@ -343,14 +396,29 @@ export default function Produtos() {
         throw new Error(data?.message || 'Não foi possível importar este link.');
       }
 
-      const preview = data.data as ImportedProductPreview;
+      const result = data.data as ImportResponseData;
 
-      setImportPreview(preview);
-      applyImportedPreview(preview);
-      toast.success('Produto importado com sucesso. Revise e salve.');
+      if (result.mode === 'single') {
+        setImportPagePreview(null);
+        setSelectedImportedIds([]);
+        setImportPreview(result.product);
+        applyImportedPreview(result.product);
+        toast.success('Produto importado com sucesso. Revise e salve.');
+        return;
+      }
+
+      setImportPreview(null);
+      setImportPagePreview(result);
+      setSelectedImportedIds(result.items.map((item) => item.tempId));
+
+      if (result.items[0]) {
+        applyImportedPreview(result.items[0]);
+      }
+
+      toast.success(`Página lida com sucesso. ${result.items.length} produto(s) encontrado(s).`);
     } catch (error: any) {
       console.error('Erro ao importar produto:', error);
-      toast.error(error?.message || 'Não foi possível importar este produto.');
+      toast.error(error?.message || 'Não foi possível importar este link.');
     } finally {
       setImporting(false);
     }
@@ -368,6 +436,79 @@ export default function Produtos() {
       ...prev,
       image: imageUrl,
     }));
+  };
+
+  const handleLoadPageItemIntoForm = (item: ImportedProductPreview) => {
+    setImportPreview(item);
+    applyImportedPreview(item);
+    toast.success('Produto carregado no formulário.');
+  };
+
+  const handleSaveImportedPage = async () => {
+    if (!store?.id) {
+      toast.error('Loja não encontrada.');
+      return;
+    }
+
+    if (!importPagePreview) {
+      toast.error('Nenhuma página importada.');
+      return;
+    }
+
+    const selectedItems = importPagePreview.items.filter((item) =>
+      selectedImportedIds.includes(item.tempId),
+    );
+
+    if (selectedItems.length === 0) {
+      toast.error('Selecione pelo menos um produto da página.');
+      return;
+    }
+
+    const rows = selectedItems
+      .map((item) => ({
+        store_id: store.id,
+        name: item.generatedName || item.rawName || 'Produto importado',
+        description:
+          item.generatedDescription ||
+          item.rawDescription ||
+          item.shortCopy ||
+          'Produto importado automaticamente.',
+        price: item.priceValue,
+        image: ensureUrl(item.image || item.images[0] || ''),
+        affiliate_link: ensureUrl(item.finalUrl || item.sourceUrl || ''),
+      }))
+      .filter((row) => row.name && row.description && row.price > 0 && row.image && row.affiliate_link);
+
+    const skipped = selectedItems.length - rows.length;
+
+    if (rows.length === 0) {
+      toast.error('Nenhum produto selecionado possui dados suficientes para salvar.');
+      return;
+    }
+
+    setSavingImportedBatch(true);
+
+    try {
+      const { error } = await supabase.from('products').insert(rows);
+
+      if (error) throw error;
+
+      await refreshAppData();
+
+      const successMessage =
+        skipped > 0
+          ? `${rows.length} produto(s) importado(s). ${skipped} item(ns) foram ignorado(s) por falta de dados.`
+          : `${rows.length} produto(s) importado(s) com sucesso.`;
+
+      toast.success(successMessage);
+      setImportPagePreview(null);
+      setSelectedImportedIds([]);
+    } catch (error: any) {
+      console.error('Erro ao importar página:', error);
+      toast.error(error?.message || 'Não foi possível importar os produtos da página.');
+    } finally {
+      setSavingImportedBatch(false);
+    }
   };
 
   const handleSave = async () => {
@@ -976,7 +1117,7 @@ export default function Produtos() {
           onClick={closeFormModal}
         >
           <div
-            className="w-full max-w-5xl rounded-[28px] border border-white/10 bg-[#050505] shadow-2xl"
+            className="w-full max-w-6xl rounded-[28px] border border-white/10 bg-[#050505] shadow-2xl"
             onClick={(e) => e.stopPropagation()}
           >
             <div className="flex items-start justify-between gap-4 border-b border-white/10 px-6 py-5">
@@ -985,7 +1126,7 @@ export default function Produtos() {
                   {isEditing ? 'Editar produto' : 'Novo produto'}
                 </h2>
                 <p className="mt-1 text-sm text-zinc-400">
-                  Agora com importação inteligente por link de afiliado.
+                  Importação inteligente por produto ou página.
                 </p>
               </div>
 
@@ -999,16 +1140,16 @@ export default function Produtos() {
             </div>
 
             <div className="max-h-[84vh] overflow-y-auto px-6 py-6">
-              <div className="grid grid-cols-1 gap-6 xl:grid-cols-[1.15fr_0.85fr]">
+              <div className="grid grid-cols-1 gap-6 xl:grid-cols-[1.2fr_0.8fr]">
                 <div className="space-y-6">
                   <div className="rounded-[24px] border border-emerald-500/20 bg-emerald-500/5 p-5">
                     <div className="mb-3 flex items-center gap-2">
                       <LinkIcon className="h-5 w-5 text-emerald-400" />
-                      <h3 className="text-lg font-black text-white">Importação inteligente por link</h3>
+                      <h3 className="text-lg font-black text-white">Importar por link</h3>
                     </div>
 
                     <p className="mb-4 text-sm leading-6 text-zinc-300">
-                      Cole o link do produto afiliado e o sistema tenta puxar nome, preço, imagens e descrição automaticamente.
+                      Cole o link de um produto para preencher o formulário automaticamente ou cole o link de uma página para importar vários produtos de uma vez.
                     </p>
 
                     <div className="flex flex-col gap-3 sm:flex-row">
@@ -1016,7 +1157,7 @@ export default function Produtos() {
                         value={importUrl}
                         onChange={(e) => setImportUrl(e.target.value)}
                         className="h-12 flex-1 rounded-2xl border border-white/10 bg-black/30 px-4 text-white outline-none transition focus:border-emerald-500"
-                        placeholder="Cole aqui o link do produto afiliado..."
+                        placeholder="Cole aqui o link do produto ou da página..."
                       />
 
                       <Button
@@ -1024,7 +1165,7 @@ export default function Produtos() {
                         onClick={handleImportByLink}
                         disabled={importing}
                       >
-                        {importing ? 'Importando...' : 'Importar produto'}
+                        {importing ? 'Importando...' : 'Importar'}
                       </Button>
                     </div>
 
@@ -1036,6 +1177,9 @@ export default function Produtos() {
                           </span>
                           <span className="rounded-full border border-white/10 bg-white/5 px-3 py-1 text-xs font-semibold text-white">
                             {importPreview.priceFormatted}
+                          </span>
+                          <span className="rounded-full border border-white/10 bg-white/5 px-3 py-1 text-xs font-semibold text-white">
+                            {importPreview.siteName}
                           </span>
                         </div>
 
@@ -1095,6 +1239,136 @@ export default function Produtos() {
                             </div>
                           </div>
                         ) : null}
+                      </div>
+                    ) : null}
+
+                    {importPagePreview ? (
+                      <div className="mt-5 rounded-[20px] border border-white/10 bg-black/25 p-4">
+                        <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+                          <div>
+                            <div className="mb-2 flex flex-wrap items-center gap-2">
+                              <span className="rounded-full border border-emerald-500/20 bg-emerald-500/10 px-3 py-1 text-xs font-semibold text-emerald-300">
+                                Página lida com sucesso
+                              </span>
+                              <span className="rounded-full border border-white/10 bg-white/5 px-3 py-1 text-xs font-semibold text-white">
+                                {importPagePreview.siteName}
+                              </span>
+                            </div>
+                            <h4 className="text-lg font-black text-white">
+                              {importPagePreview.pageTitle}
+                            </h4>
+                            <p className="mt-1 text-sm text-zinc-400">
+                              {importPagePreview.items.length} produto(s) encontrado(s)
+                            </p>
+                          </div>
+
+                          <div className="flex flex-wrap gap-3">
+                            <Button
+                              variant="outline"
+                              className="rounded-2xl border-white/10 bg-black/20 text-white hover:bg-white/5"
+                              onClick={toggleSelectAllImported}
+                            >
+                              <CheckSquare className="mr-2 h-4 w-4" />
+                              {allImportedSelected ? 'Desmarcar todos' : 'Selecionar todos'}
+                            </Button>
+
+                            <Button
+                              className="rounded-2xl bg-gradient-to-r from-emerald-500 to-emerald-600 font-bold text-black hover:from-emerald-400 hover:to-emerald-500"
+                              onClick={handleSaveImportedPage}
+                              disabled={savingImportedBatch || selectedImportedCount === 0}
+                            >
+                              {savingImportedBatch
+                                ? 'Importando...'
+                                : `Importar selecionados (${selectedImportedCount})`}
+                            </Button>
+                          </div>
+                        </div>
+
+                        <div className="max-h-[460px] space-y-3 overflow-y-auto pr-1">
+                          {importPagePreview.items.map((item) => {
+                            const checked = selectedImportedIds.includes(item.tempId);
+
+                            return (
+                              <div
+                                key={item.tempId}
+                                className={`rounded-2xl border p-4 transition ${
+                                  checked
+                                    ? 'border-emerald-500/30 bg-emerald-500/10'
+                                    : 'border-white/10 bg-black/20'
+                                }`}
+                              >
+                                <div className="flex flex-col gap-4 md:flex-row">
+                                  <div className="flex items-start gap-3">
+                                    <input
+                                      type="checkbox"
+                                      checked={checked}
+                                      onChange={() => toggleImportedSelection(item.tempId)}
+                                      className="mt-1 h-5 w-5 cursor-pointer accent-emerald-500"
+                                    />
+
+                                    <div className="h-24 w-24 shrink-0 overflow-hidden rounded-2xl bg-black/30">
+                                      {item.image ? (
+                                        <img
+                                          src={item.image}
+                                          alt={item.generatedName}
+                                          className="h-full w-full object-cover"
+                                        />
+                                      ) : (
+                                        <div className="flex h-full w-full items-center justify-center text-zinc-600">
+                                          <ImageIcon className="h-6 w-6" />
+                                        </div>
+                                      )}
+                                    </div>
+                                  </div>
+
+                                  <div className="min-w-0 flex-1">
+                                    <div className="mb-2 flex flex-wrap items-center gap-2">
+                                      <span className="rounded-full border border-white/10 bg-white/5 px-3 py-1 text-xs font-semibold text-white">
+                                        {item.priceFormatted}
+                                      </span>
+                                      <span className="rounded-full border border-white/10 bg-white/5 px-3 py-1 text-xs font-semibold text-white">
+                                        {item.siteName}
+                                      </span>
+                                    </div>
+
+                                    <h5 className="text-base font-black text-white">
+                                      {item.generatedName || item.rawName}
+                                    </h5>
+
+                                    <p className="mt-2 line-clamp-3 text-sm leading-6 text-zinc-400">
+                                      {item.generatedDescription || item.rawDescription}
+                                    </p>
+
+                                    <div className="mt-4 flex flex-wrap gap-3">
+                                      <Button
+                                        variant="outline"
+                                        className="rounded-2xl border-white/10 bg-black/20 text-white hover:bg-white/5"
+                                        onClick={() => handleLoadPageItemIntoForm(item)}
+                                      >
+                                        Usar no formulário
+                                      </Button>
+
+                                      <Button
+                                        variant="outline"
+                                        className="rounded-2xl border-white/10 bg-black/20 text-white hover:bg-white/5"
+                                        onClick={() =>
+                                          window.open(
+                                            ensureUrl(item.finalUrl || item.sourceUrl),
+                                            '_blank',
+                                            'noopener,noreferrer',
+                                          )
+                                        }
+                                      >
+                                        <ExternalLink className="mr-2 h-4 w-4" />
+                                        Abrir link
+                                      </Button>
+                                    </div>
+                                  </div>
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
                       </div>
                     ) : null}
                   </div>
@@ -1238,7 +1512,7 @@ export default function Produtos() {
                       <Button
                         className="rounded-2xl bg-gradient-to-r from-emerald-500 to-emerald-600 font-bold text-black hover:from-emerald-400 hover:to-emerald-500"
                         onClick={handleSave}
-                        disabled={saving || importing}
+                        disabled={saving || importing || savingImportedBatch}
                       >
                         <Save className="mr-2 h-4 w-4" />
                         {saving ? 'Salvando...' : isEditing ? 'Salvar alterações' : 'Salvar produto'}
@@ -1248,7 +1522,7 @@ export default function Produtos() {
                         variant="outline"
                         className="rounded-2xl border-white/10 bg-black/20 text-white hover:bg-white/5"
                         onClick={closeFormModal}
-                        disabled={saving || importing}
+                        disabled={saving || importing || savingImportedBatch}
                       >
                         Cancelar
                       </Button>

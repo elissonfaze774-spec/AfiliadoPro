@@ -7,6 +7,23 @@ const corsHeaders = {
   'Access-Control-Allow-Methods': 'POST, OPTIONS',
 }
 
+type ImportedProductPreview = {
+  tempId: string
+  sourceUrl: string
+  finalUrl: string
+  siteName: string
+  rawName: string
+  generatedName: string
+  priceValue: number
+  priceFormatted: string
+  image: string
+  images: string[]
+  rawDescription: string
+  generatedDescription: string
+  shortCopy: string
+  cta: string
+}
+
 function json(data: unknown, status = 200) {
   return new Response(JSON.stringify(data), {
     status,
@@ -130,7 +147,7 @@ function extractMetaContent(html: string, keys: string[]) {
   return ''
 }
 
-async function readHtmlPreview(response: Response, maxChars = 250_000) {
+async function readHtmlPreview(response: Response, maxChars = 900_000) {
   if (!response.body) {
     return await response.text()
   }
@@ -156,67 +173,44 @@ async function readHtmlPreview(response: Response, maxChars = 250_000) {
   return html.slice(0, maxChars)
 }
 
-function extractJsonLdProduct(html: string) {
-  const matches = [...html.matchAll(/<script[^>]+type=["']application\/ld\+json["'][^>]*>([\s\S]*?)<\/script>/gi)]
-    .slice(0, 3)
+function extractJsonLdBlocks(html: string) {
+  const scriptMatches = [...html.matchAll(/<script[^>]+type=["']application\/ld\+json["'][^>]*>([\s\S]*?)<\/script>/gi)]
+    .slice(0, 20)
 
-  for (const match of matches) {
+  const results: unknown[] = []
+
+  for (const match of scriptMatches) {
+    const content = match[1] ?? ''
+    if (!content.trim()) continue
+
     try {
-      const parsed = JSON.parse(match[1] ?? '')
-      const items = Array.isArray(parsed)
-        ? parsed
-        : Array.isArray(parsed?.['@graph'])
-          ? parsed['@graph']
-          : [parsed]
-
-      for (const item of items) {
-        if (!isRecord(item)) continue
-        const typeValue = String(item['@type'] ?? '').toLowerCase()
-        if (!typeValue.includes('product')) continue
-
-        const imageValue = item['image']
-        const imageList = Array.isArray(imageValue)
-          ? imageValue.filter((entry) => typeof entry === 'string')
-          : typeof imageValue === 'string'
-            ? [imageValue]
-            : []
-
-        let offerPrice = 0
-        const offers = item['offers']
-        if (isRecord(offers)) {
-          offerPrice = normalizePrice(offers['price'] ?? offers['lowPrice'] ?? offers['highPrice'])
-        }
-
-        return {
-          name: cleanText(item['name'] ?? ''),
-          description: cleanText(item['description'] ?? ''),
-          images: imageList,
-          price: offerPrice,
-        }
-      }
+      results.push(JSON.parse(content))
     } catch {
-      // ignore broken json-ld
+      try {
+        const normalized = content
+          .replace(/^\s*<!\[CDATA\[/, '')
+          .replace(/\]\]>\s*$/, '')
+          .trim()
+        results.push(JSON.parse(normalized))
+      } catch {
+        // ignore broken block
+      }
     }
   }
 
-  return null
+  return results
 }
 
-function extractFallbackPrice(html: string) {
-  const patterns = [
-    /R\$\s?([0-9]{1,3}(?:\.[0-9]{3})*,[0-9]{2})/i,
-    /"price"\s*:\s*"([^\"]+)"/i,
-    /"price"\s*:\s*([0-9.,]+)/i,
-  ]
+function normalizeImageList(value: unknown, baseUrl: string) {
+  const items = Array.isArray(value)
+    ? value.filter((entry) => typeof entry === 'string')
+    : typeof value === 'string'
+      ? [value]
+      : []
 
-  for (const pattern of patterns) {
-    const match = html.match(pattern)
-    if (!match?.[1]) continue
-    const price = normalizePrice(match[1])
-    if (price > 0) return price
-  }
-
-  return 0
+  return uniqueStrings(items)
+    .map((item) => toAbsoluteUrl(item, baseUrl))
+    .filter(Boolean)
 }
 
 function sanitizeTitle(value: string, siteName?: string) {
@@ -274,6 +268,255 @@ function buildShortCopy(productName: string) {
 
 function buildCta(productName: string) {
   return cleanText(`Clique agora e confira a oferta de ${productName}.`)
+}
+
+function buildPreview(candidate: {
+  sourceUrl: string
+  finalUrl: string
+  siteName: string
+  rawName: string
+  rawDescription?: string
+  images?: string[]
+  priceValue?: number
+}): ImportedProductPreview | null {
+  const rawName = sanitizeTitle(candidate.rawName, candidate.siteName)
+  const priceValue = Number(candidate.priceValue || 0)
+  const rawDescription = cleanText(candidate.rawDescription || '')
+  const images = uniqueStrings(candidate.images || []).filter(Boolean).slice(0, 5)
+  const finalName = buildCommercialName(rawName) || rawName || 'Produto importado'
+
+  if (!finalName && images.length === 0 && priceValue <= 0) {
+    return null
+  }
+
+  return {
+    tempId: crypto.randomUUID(),
+    sourceUrl: candidate.sourceUrl,
+    finalUrl: candidate.finalUrl,
+    siteName: candidate.siteName,
+    rawName,
+    generatedName: finalName,
+    priceValue,
+    priceFormatted: formatMoney(priceValue),
+    image: images[0] ?? '',
+    images,
+    rawDescription,
+    generatedDescription: buildGeneratedDescription(finalName, rawDescription, priceValue),
+    shortCopy: buildShortCopy(finalName),
+    cta: buildCta(finalName),
+  }
+}
+
+function flattenJsonLd(input: unknown): Record<string, unknown>[] {
+  const results: Record<string, unknown>[] = []
+
+  const walk = (value: unknown) => {
+    if (Array.isArray(value)) {
+      for (const entry of value) walk(entry)
+      return
+    }
+
+    if (!isRecord(value)) return
+
+    results.push(value)
+
+    if (Array.isArray(value['@graph'])) {
+      walk(value['@graph'])
+    }
+
+    if (Array.isArray(value.itemListElement)) {
+      walk(value.itemListElement)
+    }
+  }
+
+  walk(input)
+  return results
+}
+
+function extractJsonLdProductPreviews(html: string, finalUrl: string, sourceUrl: string, siteName: string) {
+  const blocks = extractJsonLdBlocks(html)
+  const previews: ImportedProductPreview[] = []
+
+  for (const block of blocks) {
+    const records = flattenJsonLd(block)
+
+    for (const record of records) {
+      const typeValue = String(record['@type'] ?? '').toLowerCase()
+
+      if (typeValue.includes('product')) {
+        const offers = record.offers
+        const priceValue = isRecord(offers)
+          ? normalizePrice(offers.price ?? offers.lowPrice ?? offers.highPrice)
+          : 0
+
+        const preview = buildPreview({
+          sourceUrl,
+          finalUrl,
+          siteName,
+          rawName: cleanText(record.name ?? ''),
+          rawDescription: cleanText(record.description ?? ''),
+          images: normalizeImageList(record.image, finalUrl),
+          priceValue,
+        })
+
+        if (preview) previews.push(preview)
+      }
+
+      if (typeValue.includes('itemlist') && Array.isArray(record.itemListElement)) {
+        for (const entry of record.itemListElement) {
+          if (!isRecord(entry)) continue
+
+          const itemRecord = isRecord(entry.item) ? entry.item : entry
+          const offers = itemRecord.offers
+          const priceValue = isRecord(offers)
+            ? normalizePrice(offers.price ?? offers.lowPrice ?? offers.highPrice)
+            : 0
+
+          const preview = buildPreview({
+            sourceUrl,
+            finalUrl: ensureUrl(String(itemRecord.url ?? '')) || finalUrl,
+            siteName,
+            rawName: cleanText(itemRecord.name ?? ''),
+            rawDescription: cleanText(itemRecord.description ?? ''),
+            images: normalizeImageList(itemRecord.image, finalUrl),
+            priceValue,
+          })
+
+          if (preview) previews.push(preview)
+        }
+      }
+    }
+  }
+
+  const deduped = new Map<string, ImportedProductPreview>()
+
+  for (const preview of previews) {
+    const key = `${preview.finalUrl}::${preview.generatedName.toLowerCase()}`
+    if (!deduped.has(key)) {
+      deduped.set(key, preview)
+    }
+  }
+
+  return Array.from(deduped.values())
+}
+
+function extractFallbackPrice(html: string) {
+  const patterns = [
+    /R\$\s?([0-9]{1,3}(?:\.[0-9]{3})*,[0-9]{2})/i,
+    /"price"\s*:\s*"([^\"]+)"/i,
+    /"price"\s*:\s*([0-9.,]+)/i,
+  ]
+
+  for (const pattern of patterns) {
+    const match = html.match(pattern)
+    if (!match?.[1]) continue
+    const price = normalizePrice(match[1])
+    if (price > 0) return price
+  }
+
+  return 0
+}
+
+function extractMercadoItemIds(text: string) {
+  const matches = text.match(/\bM[A-Z]{2}\d{6,}\b/g) ?? []
+  return Array.from(new Set(matches))
+}
+
+function getMercadoSiteName(finalUrl: string) {
+  try {
+    const host = new URL(finalUrl).hostname.toLowerCase()
+    if (host.includes('mercadolivre.com.br')) return 'Mercado Livre'
+    if (host.includes('mercadolibre.com')) return 'Mercado Libre'
+    return 'Mercado Livre'
+  } catch {
+    return 'Mercado Livre'
+  }
+}
+
+function isMercadoHost(url: string) {
+  try {
+    const host = new URL(url).hostname.toLowerCase()
+    return (
+      host.includes('mercadolivre.com') ||
+      host.includes('mercadolibre.com') ||
+      host.includes('mercadolivre.com.br')
+    )
+  } catch {
+    return false
+  }
+}
+
+function extractMercadoItemIdFromUrl(url: string) {
+  try {
+    const parsed = new URL(url)
+    const path = parsed.pathname
+    const direct = path.match(/\b(M[A-Z]{2}\d{6,})\b/i)
+    if (direct?.[1]) return direct[1].toUpperCase()
+    return ''
+  } catch {
+    return ''
+  }
+}
+
+async function fetchMercadoItemPreview(itemId: string, sourceUrl: string): Promise<ImportedProductPreview | null> {
+  try {
+    const itemResponse = await fetch(`https://api.mercadolibre.com/items/${itemId}`, {
+      headers: {
+        accept: 'application/json',
+      },
+      signal: AbortSignal.timeout(8000),
+    })
+
+    if (!itemResponse.ok) return null
+
+    const itemData = await itemResponse.json().catch(() => null)
+    if (!isRecord(itemData)) return null
+
+    const descriptionResponse = await fetch(`https://api.mercadolibre.com/items/${itemId}/description`, {
+      headers: {
+        accept: 'application/json',
+      },
+      signal: AbortSignal.timeout(8000),
+    }).catch(() => null)
+
+    let plainText = ''
+    if (descriptionResponse?.ok) {
+      const descriptionData = await descriptionResponse.json().catch(() => null)
+      if (isRecord(descriptionData)) {
+        plainText = cleanText(descriptionData.plain_text ?? descriptionData.text ?? '')
+      }
+    }
+
+    const pictures = Array.isArray(itemData.pictures)
+      ? itemData.pictures
+          .map((picture) => (isRecord(picture) ? String(picture.secure_url ?? picture.url ?? '') : ''))
+          .filter(Boolean)
+      : []
+
+    const secureThumbnail = String(itemData.secure_thumbnail ?? itemData.thumbnail ?? itemData.thumbnail_id ?? '')
+    const images = uniqueStrings([...pictures, secureThumbnail]).filter(Boolean)
+
+    return buildPreview({
+      sourceUrl,
+      finalUrl: ensureUrl(String(itemData.permalink ?? sourceUrl)),
+      siteName: getMercadoSiteName(String(itemData.permalink ?? sourceUrl)),
+      rawName: cleanText(itemData.title ?? ''),
+      rawDescription: plainText,
+      images,
+      priceValue: normalizePrice(itemData.price),
+    })
+  } catch {
+    return null
+  }
+}
+
+async function fetchMercadoListPreviews(itemIds: string[], sourceUrl: string) {
+  const limitedIds = Array.from(new Set(itemIds)).slice(0, 24)
+  const settled = await Promise.allSettled(limitedIds.map((id) => fetchMercadoItemPreview(id, sourceUrl)))
+
+  return settled
+    .map((result) => (result.status === 'fulfilled' ? result.value : null))
+    .filter((item): item is ImportedProductPreview => Boolean(item))
 }
 
 serve(async (req) => {
@@ -345,7 +588,7 @@ serve(async (req) => {
     const sourceUrl = ensureUrl(String(isRecord(body) ? body.url ?? '' : ''))
 
     if (!sourceUrl) {
-      return json({ success: false, message: 'Informe um link válido para importar o produto.' }, 400)
+      return json({ success: false, message: 'Informe um link válido para importar.' }, 400)
     }
 
     const response = await fetch(sourceUrl, {
@@ -359,7 +602,7 @@ serve(async (req) => {
         pragma: 'no-cache',
         'cache-control': 'no-cache',
       },
-      signal: AbortSignal.timeout(8000),
+      signal: AbortSignal.timeout(12000),
     })
 
     if (!response.ok) {
@@ -370,85 +613,145 @@ serve(async (req) => {
     }
 
     const finalUrl = response.url || sourceUrl
-    const html = await readHtmlPreview(response, 250_000)
+    const html = await readHtmlPreview(response, 900_000)
 
     if (!html || html.length < 100) {
-      return json({ success: false, message: 'A página retornou conteúdo insuficiente para importar o produto.' }, 200)
+      return json(
+        { success: false, message: 'A página retornou conteúdo insuficiente para importar.' },
+        200,
+      )
     }
 
-    if (/captcha|access denied|just a moment|security check|verify you are human/i.test(html)) {
+    if (/captcha|access denied|just a moment|security check|verify you are human|forbidden/i.test(html)) {
       return json(
         {
           success: false,
           message:
-            'Esse site bloqueou a leitura automática no servidor. Tente outro link direto do produto ou preencha manualmente.',
+            'Esse site bloqueou a leitura automática no servidor. Tente um link direto do produto ou preencha manualmente.',
         },
         200,
       )
     }
 
-    const siteName = extractMetaContent(html, ['og:site_name', 'application-name']) || getHostLabel(finalUrl)
-    const productJson = extractJsonLdProduct(html)
+    const siteName =
+      extractMetaContent(html, ['og:site_name', 'application-name']) || getHostLabel(finalUrl)
+
+    const isMercado = isMercadoHost(finalUrl) || isMercadoHost(sourceUrl)
+    const mercadoUrlId = extractMercadoItemIdFromUrl(finalUrl) || extractMercadoItemIdFromUrl(sourceUrl)
+
+    if (isMercado && mercadoUrlId) {
+      const preview = await fetchMercadoItemPreview(mercadoUrlId, sourceUrl)
+
+      if (preview) {
+        return json({
+          success: true,
+          data: {
+            mode: 'single',
+            product: preview,
+          },
+        })
+      }
+    }
+
+    if (isMercado) {
+      const mercadoIds = extractMercadoItemIds(`${finalUrl}\n${html}`)
+
+      if (mercadoIds.length >= 2) {
+        const items = await fetchMercadoListPreviews(mercadoIds, sourceUrl)
+
+        if (items.length > 0) {
+          return json({
+            success: true,
+            data: {
+              mode: 'page',
+              sourceUrl,
+              finalUrl,
+              siteName: getMercadoSiteName(finalUrl),
+              pageTitle: sanitizeTitle(extractTitle(html), getMercadoSiteName(finalUrl)) || 'Página importada',
+              count: items.length,
+              items,
+            },
+          })
+        }
+      }
+    }
+
+    const jsonLdProducts = extractJsonLdProductPreviews(html, finalUrl, sourceUrl, siteName)
+
+    if (jsonLdProducts.length >= 2) {
+      return json({
+        success: true,
+        data: {
+          mode: 'page',
+          sourceUrl,
+          finalUrl,
+          siteName,
+          pageTitle: sanitizeTitle(extractTitle(html), siteName) || 'Página importada',
+          count: jsonLdProducts.length,
+          items: jsonLdProducts.slice(0, 24),
+        },
+      })
+    }
+
+    const firstJsonLdProduct = jsonLdProducts[0] ?? null
+    if (firstJsonLdProduct) {
+      return json({
+        success: true,
+        data: {
+          mode: 'single',
+          product: firstJsonLdProduct,
+        },
+      })
+    }
 
     const rawTitle =
-      productJson?.name ||
       extractMetaContent(html, ['og:title', 'twitter:title']) ||
       extractTitle(html) ||
       ''
 
     const rawDescription =
-      productJson?.description ||
       extractMetaContent(html, ['og:description', 'twitter:description', 'description']) ||
       ''
 
     const rawImages = uniqueStrings([
-      ...(productJson?.images ?? []),
       extractMetaContent(html, ['og:image', 'twitter:image']),
     ])
       .map((item) => toAbsoluteUrl(item, finalUrl))
       .filter(Boolean)
-      .slice(0, 4)
+      .slice(0, 5)
 
     const priceValue =
-      productJson?.price ||
       normalizePrice(extractMetaContent(html, ['product:price:amount', 'og:price:amount', 'price'])) ||
       extractFallbackPrice(html)
 
-    const sanitizedName = sanitizeTitle(rawTitle, siteName)
-    const generatedName = buildCommercialName(sanitizedName)
-    const finalName = generatedName || sanitizedName || 'Produto importado'
+    const genericPreview = buildPreview({
+      sourceUrl,
+      finalUrl,
+      siteName,
+      rawName: rawTitle,
+      rawDescription,
+      images: rawImages,
+      priceValue,
+    })
 
-    if (!sanitizedName && !rawImages.length && !priceValue) {
-      return json(
-        {
-          success: false,
-          message:
-            'Não consegui extrair dados suficientes desse link. Tente um link direto do produto ou preencha manualmente.',
+    if (genericPreview) {
+      return json({
+        success: true,
+        data: {
+          mode: 'single',
+          product: genericPreview,
         },
-        200,
-      )
+      })
     }
 
-    const generatedDescription = buildGeneratedDescription(finalName, rawDescription, priceValue)
-
-    return json({
-      success: true,
-      data: {
-        sourceUrl,
-        finalUrl,
-        siteName,
-        rawName: sanitizedName,
-        generatedName: finalName,
-        priceValue,
-        priceFormatted: formatMoney(priceValue),
-        image: rawImages[0] ?? '',
-        images: rawImages,
-        rawDescription: cleanText(rawDescription),
-        generatedDescription,
-        shortCopy: buildShortCopy(finalName),
-        cta: buildCta(finalName),
+    return json(
+      {
+        success: false,
+        message:
+          'Não consegui extrair dados suficientes desse link. Tente um link direto do produto ou preencha manualmente.',
       },
-    })
+      200,
+    )
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Erro interno inesperado.'
     console.error('import-affiliate-product error:', message)
