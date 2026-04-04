@@ -23,6 +23,7 @@ import {
   Target,
   Rocket,
   LayoutGrid,
+  Bot,
 } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import { useAuth } from '../context/AuthTemp';
@@ -344,6 +345,12 @@ export default function Painel() {
       description: 'Personalize sua loja e deixe tudo mais profissional.',
       icon: Settings,
       onClick: () => navigate('/configuracoes'),
+    },
+    {
+      title: 'BotTelegram',
+      description: 'Área do bot com funções e automações em desenvolvimento.',
+      icon: Bot,
+      onClick: () => navigate('/bot-telegram'),
     },
   ];
 
