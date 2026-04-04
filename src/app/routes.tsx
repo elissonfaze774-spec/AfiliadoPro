@@ -26,7 +26,6 @@ function AccessBlockedScreen() {
         <div className="mb-6 flex h-20 w-20 items-center justify-center rounded-3xl border border-amber-500/20 bg-amber-500/10 text-amber-300">
           ⏳
         </div>
-
         <h1 className="text-3xl font-black">Seu acesso está temporariamente indisponível</h1>
         <p className="mt-3 max-w-xl text-zinc-400">
           Sua estrutura continua preservada. Assim que a renovação for concluída,
