@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   ArrowLeft,
@@ -71,6 +71,15 @@ type ImportedPageResult = {
 };
 
 type ImportResponseData = ImportedSingleResult | ImportedPageResult;
+type ExtensionImportPayload = ImportedSingleResult | ImportedPageResult;
+
+declare global {
+  interface WindowEventMap {
+    'afiliadopro-extension-import': CustomEvent<ExtensionImportPayload>;
+    'afiliadopro-extension-import-request': CustomEvent<void>;
+    'afiliadopro-extension-import-consumed': CustomEvent<void>;
+  }
+}
 
 function ensureUrl(value: string) {
   const trimmed = String(value ?? '').trim();
@@ -289,6 +298,68 @@ export default function Produtos() {
       description: preview.generatedDescription || preview.rawDescription || prev.description,
     }));
   };
+
+  useEffect(() => {
+    const applyPreviewToForm = (preview: ImportedProductPreview) => {
+      setForm((prev) => ({
+        ...prev,
+        name: preview.generatedName || preview.rawName || prev.name,
+        price: preview.priceValue > 0 ? toFormPrice(preview.priceValue) : prev.price,
+        image: preview.image || preview.images[0] || prev.image,
+        affiliateLink: preview.finalUrl || preview.sourceUrl || prev.affiliateLink,
+        description: preview.generatedDescription || preview.rawDescription || prev.description,
+      }));
+    };
+
+    const handleExtensionImport = (event: CustomEvent<ExtensionImportPayload>) => {
+      const payload = event.detail;
+      if (!payload) return;
+
+      setIsFormOpen(true);
+      setEditingId(null);
+      setImporting(false);
+      setSavingImportedBatch(false);
+      setImportUrl('');
+
+      if (payload.mode === 'single') {
+        setImportPagePreview(null);
+        setSelectedImportedIds([]);
+        setImportPreview(payload.product);
+        applyPreviewToForm(payload.product);
+        toast.success('Produto recebido da extensão com sucesso.');
+      } else {
+        setImportPreview(null);
+        setImportPagePreview(payload);
+        setSelectedImportedIds(payload.items.map((item) => item.tempId));
+
+        if (payload.items[0]) {
+          applyPreviewToForm(payload.items[0]);
+        }
+
+        toast.success(`${payload.items.length} produto(s) recebidos da extensão.`);
+      }
+
+      window.dispatchEvent(
+        new CustomEvent('afiliadopro-extension-import-consumed'),
+      );
+    };
+
+    window.addEventListener(
+      'afiliadopro-extension-import',
+      handleExtensionImport as EventListener,
+    );
+
+    window.dispatchEvent(
+      new CustomEvent('afiliadopro-extension-import-request'),
+    );
+
+    return () => {
+      window.removeEventListener(
+        'afiliadopro-extension-import',
+        handleExtensionImport as EventListener,
+      );
+    };
+  }, []);
 
   const openCreateModal = () => {
     resetForm();
