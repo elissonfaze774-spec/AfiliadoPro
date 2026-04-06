@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import {
+  ArrowLeft,
   ArrowUpDown,
   ExternalLink,
   Gift,
@@ -10,7 +11,6 @@ import {
   ShoppingBag,
   Store as StoreIcon,
   X,
-  ArrowLeft,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { supabase } from '../../lib/supabase';
@@ -648,7 +648,7 @@ export default function LojaPublica() {
 
         <div className="mx-auto max-w-7xl space-y-5 px-4 py-4 md:space-y-7 md:py-8">
           <section className="overflow-hidden rounded-[34px] border border-white/10 shadow-[0_24px_70px_rgba(0,0,0,0.35)]">
-            <div className="relative h-[220px] sm:h-[280px] md:h-[340px] lg:h-[400px]">
+            <div className="relative h-[170px] sm:h-[230px] md:h-[340px] lg:h-[400px]">
               {currentStore.bannerUrl ? (
                 <ProductImage
                   src={ensureUrl(currentStore.bannerUrl)}
@@ -660,9 +660,9 @@ export default function LojaPublica() {
                 <div className="h-full w-full bg-[radial-gradient(circle_at_top_left,rgba(16,185,129,0.22),transparent_28%),linear-gradient(135deg,#030712_0%,#07130e_40%,#03120c_100%)]" />
               )}
 
-              <div className="absolute inset-0 bg-[linear-gradient(180deg,rgba(0,0,0,0.10)_0%,rgba(0,0,0,0.35)_38%,rgba(0,0,0,0.82)_100%)]" />
+              <div className="absolute inset-0 bg-[linear-gradient(180deg,rgba(0,0,0,0.08)_0%,rgba(0,0,0,0.22)_45%,rgba(0,0,0,0.55)_100%)] md:bg-[linear-gradient(180deg,rgba(0,0,0,0.10)_0%,rgba(0,0,0,0.35)_38%,rgba(0,0,0,0.82)_100%)]" />
 
-              <div className="absolute inset-x-0 bottom-0 p-4 md:p-6 lg:p-8">
+              <div className="absolute inset-x-0 bottom-0 hidden p-6 md:block lg:p-8">
                 <div className="max-w-4xl">
                   <div className="mb-3 flex flex-wrap gap-2">
                     {currentStore.slogan ? (
@@ -692,7 +692,7 @@ export default function LojaPublica() {
                   </div>
 
                   <div className="flex items-end gap-4">
-                    <div className="flex h-20 w-20 shrink-0 items-center justify-center overflow-hidden rounded-[24px] border border-white/15 bg-black/30 text-xl font-black text-white shadow-2xl md:h-24 md:w-24 md:rounded-[28px]">
+                    <div className="flex h-24 w-24 shrink-0 items-center justify-center overflow-hidden rounded-[28px] border border-white/15 bg-black/30 text-xl font-black text-white shadow-2xl">
                       {currentStore.logoUrl ? (
                         <ProductImage
                           src={ensureUrl(currentStore.logoUrl)}
@@ -707,14 +707,14 @@ export default function LojaPublica() {
 
                     <div className="min-w-0 flex-1">
                       <h1
-                        className="break-words text-3xl font-black leading-none md:text-5xl"
+                        className="break-words text-5xl font-black leading-none"
                         style={{ color: currentStore.textColor }}
                       >
                         {currentStore.name}
                       </h1>
 
                       <p
-                        className="mt-3 max-w-2xl text-sm leading-6 md:text-base md:leading-7"
+                        className="mt-3 max-w-2xl text-base leading-7"
                         style={{ color: currentStore.mutedTextColor }}
                       >
                         {currentStore.description ||
@@ -746,6 +746,77 @@ export default function LojaPublica() {
                     </Button>
                   </div>
                 </div>
+              </div>
+            </div>
+
+            <div className="border-t border-white/10 bg-[linear-gradient(180deg,rgba(8,11,24,0.92)_0%,rgba(5,10,18,0.98)_100%)] p-4 md:hidden">
+              <div className="flex items-start gap-3">
+                <div className="flex h-20 w-20 shrink-0 items-center justify-center overflow-hidden rounded-[24px] border border-white/15 bg-black/30 text-xl font-black text-white shadow-2xl">
+                  {currentStore.logoUrl ? (
+                    <ProductImage
+                      src={ensureUrl(currentStore.logoUrl)}
+                      alt={currentStore.name}
+                      eager
+                      className="h-full w-full object-cover"
+                    />
+                  ) : (
+                    <span>{getInitials(currentStore.name || 'L')}</span>
+                  )}
+                </div>
+
+                <div className="min-w-0 flex-1">
+                  <div className="mb-2 flex flex-wrap gap-2">
+                    {!!currentStore.niche && (
+                      <span className="inline-flex rounded-full border border-white/10 bg-white/5 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.14em] text-zinc-300">
+                        {currentStore.niche}
+                      </span>
+                    )}
+
+                    {!!currentStore.username && (
+                      <span className="inline-flex rounded-full border border-white/10 bg-white/5 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.14em] text-zinc-300">
+                        @{currentStore.username}
+                      </span>
+                    )}
+                  </div>
+
+                  <h1
+                    className="break-words text-[30px] font-black leading-[1.02] tracking-[-0.02em]"
+                    style={{ color: currentStore.textColor }}
+                  >
+                    {currentStore.name}
+                  </h1>
+                </div>
+              </div>
+
+              <p
+                className="mt-4 text-[15px] leading-7"
+                style={{ color: currentStore.mutedTextColor }}
+              >
+                {currentStore.description ||
+                  'Explore os produtos disponíveis desta loja e encontre a melhor oferta para você.'}
+              </p>
+
+              <div className="mt-4 grid grid-cols-1 gap-3">
+                <Button
+                  className="w-full rounded-2xl px-6 font-bold"
+                  style={{
+                    backgroundColor: currentStore.buttonBgColor,
+                    color: currentStore.buttonTextColor,
+                  }}
+                  onClick={scrollToProducts}
+                >
+                  <ShoppingBag className="mr-2 h-4 w-4" />
+                  {currentStore.primaryButtonText || 'Ver produtos'}
+                </Button>
+
+                <Button
+                  variant="outline"
+                  className="w-full rounded-2xl border-white/10 bg-black/20 text-white hover:bg-white/5"
+                  onClick={() => void handleOffersGroup()}
+                >
+                  <Gift className="mr-2 h-4 w-4" />
+                  {normalizeGroupButtonText(currentStore.whatsappButtonText)}
+                </Button>
               </div>
             </div>
           </section>
