@@ -147,7 +147,23 @@ function normalizeStore(row: any): StoreData | null {
   };
 }
 
-function normalizeProduct(row: any, fallbackCategory: string): Product {
+function resolveCategoryNameFromRow(row: any, categoryNameMap: Map<string, string>, fallbackCategory: string) {
+  const categoryRelation = Array.isArray(row?.categories) ? row.categories[0] : row?.categories;
+  const relationName = categoryRelation?.name ?? '';
+  const rawCategoryId = String(row?.category_id ?? row?.categoryId ?? '').trim();
+
+  return (
+    row?.category_name ??
+    row?.category ??
+    row?.categoryLabel ??
+    relationName ??
+    (rawCategoryId ? categoryNameMap.get(rawCategoryId) : '') ??
+    row?.niche ??
+    fallbackCategory
+  );
+}
+
+function normalizeProduct(row: any, fallbackCategory: string, categoryNameMap: Map<string, string>): Product {
   const priceValue =
     typeof row?.price === 'number'
       ? row.price
@@ -155,13 +171,7 @@ function normalizeProduct(row: any, fallbackCategory: string): Product {
         ? Number(row.price)
         : 0;
 
-  const categoryName =
-    row?.category_name ??
-    row?.category ??
-    row?.categoryLabel ??
-    row?.niche ??
-    row?.categories?.name ??
-    fallbackCategory;
+  const categoryName = resolveCategoryNameFromRow(row, categoryNameMap, fallbackCategory);
 
   return {
     id: String(row?.id ?? ''),
@@ -257,6 +267,7 @@ export default function LojaPublica() {
 
   const storeChannelRef = useRef<ReturnType<typeof supabase.channel> | null>(null);
   const productChannelRef = useRef<ReturnType<typeof supabase.channel> | null>(null);
+  const categoryChannelRef = useRef<ReturnType<typeof supabase.channel> | null>(null);
   const categoryRowsRef = useRef<Record<string, HTMLDivElement | null>>({});
   const initializedRowsRef = useRef<Record<string, boolean>>({});
   const rowDragStateRef = useRef<Record<string, DragState>>({});
@@ -299,16 +310,27 @@ export default function LojaPublica() {
         return;
       }
 
-      const { data: productRows, error: productsError } = await supabase
-        .from('products')
-        .select('*')
-        .eq('store_id', normalizedStore.id)
-        .order('created_at', { ascending: false });
+      const [{ data: productRows, error: productsError }, { data: categoryRows, error: categoriesError }] = await Promise.all([
+        supabase
+          .from('products')
+          .select('*')
+          .eq('store_id', normalizedStore.id)
+          .order('created_at', { ascending: false }),
+        supabase
+          .from('categories')
+          .select('id, name')
+          .eq('store_id', normalizedStore.id),
+      ]);
 
       if (productsError) throw productsError;
+      if (categoriesError) throw categoriesError;
 
       const fallbackCategory = normalizedStore.niche || 'Produtos em destaque';
-      setProducts((productRows ?? []).map((row) => normalizeProduct(row, fallbackCategory)));
+      const categoryNameMap = new Map(
+        (categoryRows ?? []).map((category: any) => [String(category.id), String(category.name ?? '').trim()]),
+      );
+
+      setProducts((productRows ?? []).map((row) => normalizeProduct(row, fallbackCategory, categoryNameMap)));
     } catch (error) {
       console.error('Erro ao carregar loja pública:', error);
       setStore(null);
@@ -334,6 +356,11 @@ export default function LojaPublica() {
     if (productChannelRef.current) {
       void supabase.removeChannel(productChannelRef.current);
       productChannelRef.current = null;
+    }
+
+    if (categoryChannelRef.current) {
+      void supabase.removeChannel(categoryChannelRef.current);
+      categoryChannelRef.current = null;
     }
 
     if (!storeId || !storeUsername) return;
@@ -370,6 +397,22 @@ export default function LojaPublica() {
       )
       .subscribe();
 
+    categoryChannelRef.current = supabase
+      .channel(`public-categories-${storeId}`)
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'categories',
+          filter: `store_id=eq.${storeId}`,
+        },
+        async () => {
+          await loadStoreAndProducts(storeUsername);
+        },
+      )
+      .subscribe();
+
     return () => {
       if (storeChannelRef.current) {
         void supabase.removeChannel(storeChannelRef.current);
@@ -379,6 +422,11 @@ export default function LojaPublica() {
       if (productChannelRef.current) {
         void supabase.removeChannel(productChannelRef.current);
         productChannelRef.current = null;
+      }
+
+      if (categoryChannelRef.current) {
+        void supabase.removeChannel(categoryChannelRef.current);
+        categoryChannelRef.current = null;
       }
     };
   }, [store?.id, store?.username]);
