@@ -1,11 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import {
-  ArrowLeft,
-  ArrowRight,
   ArrowUpDown,
-  ChevronLeft,
-  ChevronRight,
   ExternalLink,
   Gift,
   ImageOff,
@@ -14,6 +10,7 @@ import {
   ShoppingBag,
   Store as StoreIcon,
   X,
+  ArrowLeft,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { supabase } from '../../lib/supabase';
@@ -254,6 +251,7 @@ export default function LojaPublica() {
   const storeChannelRef = useRef<ReturnType<typeof supabase.channel> | null>(null);
   const productChannelRef = useRef<ReturnType<typeof supabase.channel> | null>(null);
   const categoryRowsRef = useRef<Record<string, HTMLDivElement | null>>({});
+  const initializedRowsRef = useRef<Record<string, boolean>>({});
 
   const isAdminViewing = user?.role === 'admin' || user?.role === 'super-admin';
 
@@ -448,6 +446,7 @@ export default function LojaPublica() {
       id: `${label}-${index}`.toLowerCase().replace(/[^a-z0-9]+/gi, '-'),
       label,
       items,
+      loopItems: items.length > 1 ? [...items, ...items, ...items] : items,
     }));
   }, [filteredProducts, store?.niche]);
 
@@ -457,6 +456,22 @@ export default function LojaPublica() {
       label: group.label,
       total: group.items.length,
     }));
+  }, [groupedProducts]);
+
+  useEffect(() => {
+    const timeout = window.setTimeout(() => {
+      groupedProducts.forEach((group) => {
+        if (group.items.length <= 1) return;
+
+        const row = categoryRowsRef.current[group.id];
+        if (!row || initializedRowsRef.current[group.id]) return;
+
+        row.scrollLeft = row.scrollWidth / 3;
+        initializedRowsRef.current[group.id] = true;
+      });
+    }, 80);
+
+    return () => window.clearTimeout(timeout);
   }, [groupedProducts]);
 
   const openProductAction = (product: Product) => {
@@ -519,17 +534,6 @@ export default function LojaPublica() {
     );
   };
 
-  const scrollCategory = (categoryId: string, direction: 'left' | 'right') => {
-    const row = categoryRowsRef.current[categoryId];
-    if (!row) return;
-
-    const amount = Math.max(row.clientWidth * 0.84, 280);
-    row.scrollBy({
-      left: direction === 'left' ? -amount : amount,
-      behavior: 'smooth',
-    });
-  };
-
   const scrollToProducts = () => {
     const section = document.getElementById('produtos');
     section?.scrollIntoView({ behavior: 'smooth', block: 'start' });
@@ -538,6 +542,23 @@ export default function LojaPublica() {
   const scrollToCategory = (categoryId: string) => {
     const section = document.getElementById(categoryId);
     section?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  };
+
+  const handleInfiniteRowScroll = (categoryId: string, originalItemsLength: number) => {
+    if (originalItemsLength <= 1) return;
+
+    const row = categoryRowsRef.current[categoryId];
+    if (!row) return;
+
+    const oneSetWidth = row.scrollWidth / 3;
+    const leftLimit = oneSetWidth * 0.35;
+    const rightLimit = oneSetWidth * 1.65;
+
+    if (row.scrollLeft <= leftLimit) {
+      row.scrollLeft += oneSetWidth;
+    } else if (row.scrollLeft >= rightLimit) {
+      row.scrollLeft -= oneSetWidth;
+    }
   };
 
   if (loading) {
@@ -750,7 +771,7 @@ export default function LojaPublica() {
                   className="mt-2 max-w-3xl text-sm leading-6 md:text-base"
                   style={{ color: currentStore.mutedTextColor }}
                 >
-                  Categorias em linhas horizontais, com navegação lateral e visual mais forte para destacar os produtos.
+                  Agora com sensação de vitrine infinita ao deslizar, deixando a loja mais elegante, viva e viciante.
                 </p>
 
                 <div className="relative mt-4">
@@ -842,132 +863,96 @@ export default function LojaPublica() {
                         {group.items.length} {group.items.length === 1 ? 'produto disponível' : 'produtos disponíveis'}
                       </p>
                     </div>
+                  </div>
 
-                    <div className="hidden items-center gap-2 md:flex">
-                      <Button
-                        type="button"
-                        variant="outline"
-                        className="rounded-2xl border-white/10 bg-black/20 text-white hover:bg-white/5"
-                        onClick={() => scrollCategory(group.id, 'left')}
-                      >
-                        <ChevronLeft className="h-4 w-4" />
-                      </Button>
+                  <div className="relative">
+                    <div className="pointer-events-none absolute inset-y-0 left-0 z-10 w-10 bg-gradient-to-r from-black/35 via-black/15 to-transparent" />
+                    <div className="pointer-events-none absolute inset-y-0 right-0 z-10 w-10 bg-gradient-to-l from-black/35 via-black/15 to-transparent" />
 
-                      <Button
-                        type="button"
-                        variant="outline"
-                        className="rounded-2xl border-white/10 bg-black/20 text-white hover:bg-white/5"
-                        onClick={() => scrollCategory(group.id, 'right')}
-                      >
-                        <ChevronRight className="h-4 w-4" />
-                      </Button>
+                    <div
+                      ref={(element) => {
+                        categoryRowsRef.current[group.id] = element;
+                      }}
+                      onScroll={() => handleInfiniteRowScroll(group.id, group.items.length)}
+                      className="flex gap-4 overflow-x-auto px-1 pb-2 pr-14 pt-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+                    >
+                      {group.loopItems.map((product, index) => (
+                        <article
+                          key={`${group.id}-${product.id}-${index}`}
+                          className="group overflow-hidden rounded-[30px] border border-white/10 bg-black/20 shadow-[0_16px_48px_rgba(0,0,0,0.28)] transition duration-300 hover:-translate-y-1 hover:border-emerald-500/30"
+                          style={{
+                            width: 'min(84vw, 330px)',
+                            minWidth: 'min(84vw, 330px)',
+                          }}
+                        >
+                          <div className="relative h-[280px] overflow-hidden bg-black/30">
+                            <ProductImage
+                              src={ensureUrl(product.image)}
+                              alt={product.name}
+                              className="h-full w-full object-cover transition duration-500 group-hover:scale-[1.05]"
+                            />
+
+                            <div className="absolute inset-0 bg-[linear-gradient(180deg,rgba(0,0,0,0.00)_0%,rgba(0,0,0,0.08)_45%,rgba(0,0,0,0.62)_100%)]" />
+
+                            <div className="absolute left-4 top-4">
+                              <span className="inline-flex rounded-full border border-white/10 bg-black/45 px-3 py-1 text-[11px] font-bold uppercase tracking-[0.16em] text-white backdrop-blur-md">
+                                {group.label}
+                              </span>
+                            </div>
+
+                            <div className="absolute right-4 top-4">
+                              <span
+                                className="inline-flex items-center rounded-full border px-4 py-2 text-base font-black shadow-[0_10px_30px_rgba(34,197,94,0.28)]"
+                                style={{
+                                  color: MONEY_GREEN_DARK,
+                                  borderColor: 'rgba(255,255,255,0.18)',
+                                  background:
+                                    'linear-gradient(135deg, rgba(34,197,94,0.96) 0%, rgba(74,222,128,0.96) 100%)',
+                                  backdropFilter: 'blur(16px)',
+                                }}
+                              >
+                                {formatMoney(product.priceValue)}
+                              </span>
+                            </div>
+
+                            <div className="absolute inset-x-0 bottom-0 p-4">
+                              <h4 className="line-clamp-2 text-xl font-black text-white">{product.name}</h4>
+                            </div>
+                          </div>
+
+                          <div className="p-5">
+                            <p
+                              className="line-clamp-3 text-sm leading-6"
+                              style={{ color: currentStore.mutedTextColor }}
+                            >
+                              {product.description || 'Sem descrição disponível para este produto.'}
+                            </p>
+
+                            <div className="mt-5 grid grid-cols-1 gap-3 sm:grid-cols-2">
+                              <Button
+                                className="w-full rounded-2xl font-bold"
+                                style={{
+                                  backgroundColor: currentStore.buttonBgColor,
+                                  color: currentStore.buttonTextColor,
+                                }}
+                                onClick={() => openProductAction(product)}
+                              >
+                                <ExternalLink className="mr-2 h-4 w-4" />
+                                Comprar
+                              </Button>
+
+                              <Button
+                                variant="outline"
+                                className="w-full rounded-2xl border-white/10 bg-black/20 text-white hover:bg-white/5"
+                                onClick={() => setSelectedProduct(product)}
+                              >
+                                Ver detalhes
+                              </Button>
+                            </div>
+                          </div>
+                        </article>
+                      ))}
                     </div>
-                  </div>
-
-                  <div
-                    ref={(element) => {
-                      categoryRowsRef.current[group.id] = element;
-                    }}
-                    className="flex gap-4 overflow-x-auto pb-2 pr-1 snap-x snap-mandatory [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
-                  >
-                    {group.items.map((product) => (
-                      <article
-                        key={product.id}
-                        className="group snap-start overflow-hidden rounded-[30px] border border-white/10 bg-black/20 shadow-[0_16px_48px_rgba(0,0,0,0.28)] transition duration-300 hover:-translate-y-1 hover:border-emerald-500/30"
-                        style={{
-                          width: 'min(86vw, 320px)',
-                          minWidth: 'min(86vw, 320px)',
-                        }}
-                      >
-                        <div className="relative h-[280px] overflow-hidden bg-black/30">
-                          <ProductImage
-                            src={ensureUrl(product.image)}
-                            alt={product.name}
-                            className="h-full w-full object-cover transition duration-500 group-hover:scale-[1.05]"
-                          />
-
-                          <div className="absolute inset-0 bg-[linear-gradient(180deg,rgba(0,0,0,0.00)_0%,rgba(0,0,0,0.08)_45%,rgba(0,0,0,0.62)_100%)]" />
-
-                          <div className="absolute left-4 top-4">
-                            <span className="inline-flex rounded-full border border-white/10 bg-black/45 px-3 py-1 text-[11px] font-bold uppercase tracking-[0.16em] text-white backdrop-blur-md">
-                              {group.label}
-                            </span>
-                          </div>
-
-                          <div className="absolute right-4 top-4">
-                            <span
-                              className="inline-flex items-center rounded-full border px-4 py-2 text-base font-black shadow-[0_10px_30px_rgba(34,197,94,0.28)]"
-                              style={{
-                                color: MONEY_GREEN_DARK,
-                                borderColor: 'rgba(255,255,255,0.18)',
-                                background:
-                                  'linear-gradient(135deg, rgba(34,197,94,0.96) 0%, rgba(74,222,128,0.96) 100%)',
-                                backdropFilter: 'blur(16px)',
-                              }}
-                            >
-                              {formatMoney(product.priceValue)}
-                            </span>
-                          </div>
-
-                          <div className="absolute inset-x-0 bottom-0 p-4">
-                            <h4 className="line-clamp-2 text-xl font-black text-white">{product.name}</h4>
-                          </div>
-                        </div>
-
-                        <div className="p-5">
-                          <p
-                            className="line-clamp-3 text-sm leading-6"
-                            style={{ color: currentStore.mutedTextColor }}
-                          >
-                            {product.description || 'Sem descrição disponível para este produto.'}
-                          </p>
-
-                          <div className="mt-5 grid grid-cols-1 gap-3 sm:grid-cols-2">
-                            <Button
-                              className="w-full rounded-2xl font-bold"
-                              style={{
-                                backgroundColor: currentStore.buttonBgColor,
-                                color: currentStore.buttonTextColor,
-                              }}
-                              onClick={() => openProductAction(product)}
-                            >
-                              <ExternalLink className="mr-2 h-4 w-4" />
-                              Comprar
-                            </Button>
-
-                            <Button
-                              variant="outline"
-                              className="w-full rounded-2xl border-white/10 bg-black/20 text-white hover:bg-white/5"
-                              onClick={() => setSelectedProduct(product)}
-                            >
-                              Ver detalhes
-                            </Button>
-                          </div>
-                        </div>
-                      </article>
-                    ))}
-                  </div>
-
-                  <div className="mt-3 flex items-center justify-between gap-3 md:hidden">
-                    <Button
-                      type="button"
-                      variant="outline"
-                      className="flex-1 rounded-2xl border-white/10 bg-black/20 text-white hover:bg-white/5"
-                      onClick={() => scrollCategory(group.id, 'left')}
-                    >
-                      <ArrowLeft className="mr-2 h-4 w-4" />
-                      Anterior
-                    </Button>
-
-                    <Button
-                      type="button"
-                      variant="outline"
-                      className="flex-1 rounded-2xl border-white/10 bg-black/20 text-white hover:bg-white/5"
-                      onClick={() => scrollCategory(group.id, 'right')}
-                    >
-                      Próximo
-                      <ArrowRight className="ml-2 h-4 w-4" />
-                    </Button>
                   </div>
                 </div>
               ))
