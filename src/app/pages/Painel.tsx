@@ -20,7 +20,6 @@ import {
   CalendarClock,
   Bell,
   ChevronRight,
-  Target,
   Rocket,
   LayoutGrid,
   Bot,
@@ -721,7 +720,7 @@ export default function Painel() {
             </div>
 
             <div className="flex flex-col gap-3 md:hidden">
-              <div className="relative flex flex-wrap items-center gap-3">
+              <div className="flex flex-wrap items-center justify-between gap-2">
                 <div className="relative">
                   <Button
                     ref={notificationsMobileButtonRef}
@@ -729,11 +728,7 @@ export default function Painel() {
                     className="border-white/10 bg-black/30 text-white hover:bg-white/5"
                     onClick={() => setShowNotifications((prev) => !prev)}
                   >
-                    <Bell className="mr-2 h-4 w-4" />
-                    Avisos
-                    <span className="ml-2 inline-flex h-5 min-w-[20px] items-center justify-center rounded-full bg-emerald-500 px-1.5 text-[10px] font-bold text-black">
-                      {notifications.length}
-                    </span>
+                    <Bell className="h-4 w-4" />
                   </Button>
 
                   {showNotifications ? (
@@ -743,7 +738,7 @@ export default function Painel() {
                     >
                       <div className="mb-2 px-2 py-1">
                         <p className="text-sm font-bold text-white">Central de avisos</p>
-                        <p className="text-xs text-zinc-400">Motivação, dicas e lembretes leves.</p>
+                        <p className="text-xs text-zinc-400">Motivação e dicas.</p>
                       </div>
 
                       <div className="space-y-2">
@@ -771,8 +766,15 @@ export default function Painel() {
                   onClick={handleRefresh}
                   disabled={refreshing}
                 >
-                  <RefreshCw className={`mr-2 h-4 w-4 ${refreshing ? 'animate-spin' : ''}`} />
-                  Atualizar
+                  <RefreshCw className={`h-4 w-4 ${refreshing ? 'animate-spin' : ''}`} />
+                </Button>
+
+                <Button
+                  variant="outline"
+                  className="border-white/10 bg-black/30 text-white hover:bg-white/5"
+                  onClick={() => navigate(`/loja/${store.slug}`)}
+                >
+                  <ExternalLink className="h-4 w-4" />
                 </Button>
 
                 <Button
@@ -780,23 +782,22 @@ export default function Painel() {
                   className="text-zinc-400 hover:bg-white/5 hover:text-white"
                   onClick={handleLogout}
                 >
-                  <LogOut className="mr-2 h-4 w-4" />
-                  Sair
+                  <LogOut className="h-4 w-4" />
                 </Button>
               </div>
 
               {access ? (
-                <div className="flex flex-wrap items-center gap-3">
+                <div className="flex flex-wrap items-center gap-2">
                   <span
-                    className={`inline-flex items-center gap-2 rounded-full border px-4 py-2 text-xs font-semibold ${getBadgeClasses(access.status)}`}
+                    className={`inline-flex items-center gap-2 rounded-full border px-3 py-1 text-xs font-semibold ${getBadgeClasses(access.status)}`}
                   >
-                    <ShieldCheck className="h-4 w-4" />
+                    <ShieldCheck className="h-3 w-3" />
                     {access.label}
                   </span>
 
-                  <span className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/5 px-4 py-2 text-xs text-zinc-300">
-                    <CalendarClock className="h-4 w-4" />
-                    Vencimento: {formatDate(access.expiresAt)}
+                  <span className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/5 px-3 py-1 text-xs text-zinc-300">
+                    <CalendarClock className="h-3 w-3" />
+                    {formatDate(access.expiresAt)}
                   </span>
                 </div>
               ) : null}
@@ -854,6 +855,15 @@ export default function Painel() {
               >
                 <RefreshCw className={`mr-2 h-4 w-4 ${refreshing ? 'animate-spin' : ''}`} />
                 Atualizar
+              </Button>
+
+              <Button
+                variant="outline"
+                className="border-white/10 bg-black/30 text-white hover:bg-white/5"
+                onClick={() => navigate(`/loja/${store.slug}`)}
+              >
+                <ExternalLink className="mr-2 h-4 w-4" />
+                Ver loja
               </Button>
 
               <Button
@@ -915,7 +925,7 @@ export default function Painel() {
                     <div className="min-w-0">
                       <h2 className="text-2xl font-black text-white drop-shadow-[0_3px_14px_rgba(0,0,0,0.55)] md:text-4xl">Painel completo</h2>
                       <p className="mt-2 max-w-2xl text-sm text-zinc-200 drop-shadow-[0_2px_10px_rgba(0,0,0,0.55)] md:text-base">
-                        Clique em configurações, personalize sua loja, adicione produtos e comece a divulgar para vender. 
+                        Clique em configurações, personalize sua loja, adicione produtos e comece a divulgar para vender.
                       </p>
                     </div>
                   </div>
