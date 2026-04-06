@@ -2,10 +2,13 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import {
   ArrowLeft,
+  ArrowRight,
   ArrowUpDown,
+  ChevronLeft,
+  ChevronRight,
   ExternalLink,
-  ImageOff,
   Gift,
+  ImageOff,
   Package,
   Search,
   ShoppingBag,
@@ -52,6 +55,8 @@ type Product = {
   image: string;
   affiliateLink: string;
   priceValue: number;
+  categoryName: string;
+  createdAt: string | null;
 };
 
 type SortType = 'recentes' | 'mais-caros' | 'mais-baratos' | 'nome';
@@ -138,13 +143,21 @@ function normalizeStore(row: any): StoreData | null {
   };
 }
 
-function normalizeProduct(row: any): Product {
+function normalizeProduct(row: any, fallbackCategory: string): Product {
   const priceValue =
     typeof row?.price === 'number'
       ? row.price
       : typeof row?.price === 'string'
         ? Number(row.price)
         : 0;
+
+  const categoryName =
+    row?.category_name ??
+    row?.category ??
+    row?.categoryLabel ??
+    row?.niche ??
+    row?.categories?.name ??
+    fallbackCategory;
 
   return {
     id: String(row?.id ?? ''),
@@ -153,6 +166,8 @@ function normalizeProduct(row: any): Product {
     image: row?.image ?? '',
     affiliateLink: row?.affiliate_link ?? row?.affiliateLink ?? '',
     priceValue: Number.isFinite(priceValue) ? priceValue : 0,
+    categoryName: String(categoryName ?? fallbackCategory).trim() || fallbackCategory,
+    createdAt: row?.created_at ?? null,
   };
 }
 
@@ -238,6 +253,7 @@ export default function LojaPublica() {
 
   const storeChannelRef = useRef<ReturnType<typeof supabase.channel> | null>(null);
   const productChannelRef = useRef<ReturnType<typeof supabase.channel> | null>(null);
+  const categoryRowsRef = useRef<Record<string, HTMLDivElement | null>>({});
 
   const isAdminViewing = user?.role === 'admin' || user?.role === 'super-admin';
 
@@ -285,7 +301,8 @@ export default function LojaPublica() {
 
       if (productsError) throw productsError;
 
-      setProducts((productRows ?? []).map(normalizeProduct));
+      const fallbackCategory = normalizedStore.niche || 'Produtos em destaque';
+      setProducts((productRows ?? []).map((row) => normalizeProduct(row, fallbackCategory)));
     } catch (error) {
       console.error('Erro ao carregar loja pública:', error);
       setStore(null);
@@ -364,7 +381,7 @@ export default function LojaPublica() {
     if (!store) return {};
 
     return {
-      background: `radial-gradient(circle at top left, ${store.accentColor}20, transparent 25%), linear-gradient(180deg, ${store.primaryColor} 0%, ${store.secondaryColor} 100%)`,
+      background: `radial-gradient(circle at top left, ${store.accentColor}16, transparent 25%), radial-gradient(circle at top right, ${store.accentColor}12, transparent 20%), linear-gradient(180deg, ${store.primaryColor} 0%, ${store.secondaryColor} 100%)`,
     };
   }, [store]);
 
@@ -382,20 +399,20 @@ export default function LojaPublica() {
 
     return {
       background: store.headerBgColor || 'rgba(0,0,0,0.35)',
-      backdropFilter: 'blur(12px)',
+      backdropFilter: 'blur(14px)',
     };
   }, [store]);
 
   const filteredProducts = useMemo(() => {
     const term = search.trim().toLowerCase();
-
     let list = [...products];
 
     if (term) {
       list = list.filter((product) => {
         return (
           product.name.toLowerCase().includes(term) ||
-          product.description.toLowerCase().includes(term)
+          product.description.toLowerCase().includes(term) ||
+          product.categoryName.toLowerCase().includes(term)
         );
       });
     }
@@ -406,10 +423,41 @@ export default function LojaPublica() {
       list.sort((a, b) => a.priceValue - b.priceValue);
     } else if (sort === 'nome') {
       list.sort((a, b) => a.name.localeCompare(b.name, 'pt-BR'));
+    } else {
+      list.sort((a, b) => {
+        const aTime = a.createdAt ? new Date(a.createdAt).getTime() : 0;
+        const bTime = b.createdAt ? new Date(b.createdAt).getTime() : 0;
+        return bTime - aTime;
+      });
     }
 
     return list;
   }, [products, search, sort]);
+
+  const groupedProducts = useMemo(() => {
+    const map = new Map<string, Product[]>();
+
+    filteredProducts.forEach((product) => {
+      const categoryLabel = product.categoryName || store?.niche || 'Produtos em destaque';
+      const current = map.get(categoryLabel) ?? [];
+      current.push(product);
+      map.set(categoryLabel, current);
+    });
+
+    return Array.from(map.entries()).map(([label, items], index) => ({
+      id: `${label}-${index}`.toLowerCase().replace(/[^a-z0-9]+/gi, '-'),
+      label,
+      items,
+    }));
+  }, [filteredProducts, store?.niche]);
+
+  const categoryChips = useMemo(() => {
+    return groupedProducts.map((group) => ({
+      id: group.id,
+      label: group.label,
+      total: group.items.length,
+    }));
+  }, [groupedProducts]);
 
   const openProductAction = (product: Product) => {
     const affiliateUrl = ensureUrl(product.affiliateLink);
@@ -471,6 +519,27 @@ export default function LojaPublica() {
     );
   };
 
+  const scrollCategory = (categoryId: string, direction: 'left' | 'right') => {
+    const row = categoryRowsRef.current[categoryId];
+    if (!row) return;
+
+    const amount = Math.max(row.clientWidth * 0.84, 280);
+    row.scrollBy({
+      left: direction === 'left' ? -amount : amount,
+      behavior: 'smooth',
+    });
+  };
+
+  const scrollToProducts = () => {
+    const section = document.getElementById('produtos');
+    section?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  };
+
+  const scrollToCategory = (categoryId: string) => {
+    const section = document.getElementById(categoryId);
+    section?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  };
+
   if (loading) {
     return (
       <div className="min-h-screen bg-black">
@@ -522,9 +591,9 @@ export default function LojaPublica() {
 
   return (
     <>
-      <div className="min-h-screen pb-16" style={pageStyle}>
-        <header className="sticky top-0 z-30 border-b border-white/10" style={headerStyle}>
-          <div className="mx-auto flex max-w-7xl items-center justify-between gap-3 px-4 py-4">
+      <div className="min-h-screen pb-14" style={pageStyle}>
+        <header className="sticky top-0 z-40 border-b border-white/10" style={headerStyle}>
+          <div className="mx-auto flex max-w-7xl items-center justify-between gap-3 px-4 py-3">
             <div className="flex min-w-0 items-center gap-3">
               {isAdminViewing ? (
                 <Button
@@ -542,12 +611,23 @@ export default function LojaPublica() {
                 </div>
               )}
             </div>
+
+            {!isAdminViewing ? (
+              <Button
+                variant="outline"
+                className="hidden rounded-2xl border-white/10 bg-black/20 text-white hover:bg-white/5 sm:inline-flex"
+                onClick={() => void handleOffersGroup()}
+              >
+                <Gift className="mr-2 h-4 w-4" />
+                {normalizeGroupButtonText(currentStore.whatsappButtonText)}
+              </Button>
+            ) : null}
           </div>
         </header>
 
-        <div className="mx-auto max-w-7xl space-y-6 px-4 py-6 md:space-y-8 md:py-10">
-          <section className="overflow-hidden rounded-[36px] border border-white/10 shadow-[0_20px_60px_rgba(0,0,0,0.35)]">
-            <div className="relative h-[120px] sm:h-[150px] md:h-[190px] lg:h-[220px]">
+        <div className="mx-auto max-w-7xl space-y-5 px-4 py-4 md:space-y-7 md:py-8">
+          <section className="overflow-hidden rounded-[34px] border border-white/10 shadow-[0_24px_70px_rgba(0,0,0,0.35)]">
+            <div className="relative h-[220px] sm:h-[280px] md:h-[340px] lg:h-[400px]">
               {currentStore.bannerUrl ? (
                 <ProductImage
                   src={ensureUrl(currentStore.bannerUrl)}
@@ -556,168 +636,174 @@ export default function LojaPublica() {
                   className="h-full w-full object-cover"
                 />
               ) : (
-                <div className="h-full w-full bg-gradient-to-r from-black via-zinc-900 to-black" />
+                <div className="h-full w-full bg-[radial-gradient(circle_at_top_left,rgba(16,185,129,0.22),transparent_28%),linear-gradient(135deg,#030712_0%,#07130e_40%,#03120c_100%)]" />
               )}
 
-              <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/30 to-transparent" />
-            </div>
+              <div className="absolute inset-0 bg-[linear-gradient(180deg,rgba(0,0,0,0.10)_0%,rgba(0,0,0,0.35)_38%,rgba(0,0,0,0.82)_100%)]" />
 
-            <div className="border-t border-white/10 bg-[linear-gradient(180deg,rgba(3,10,24,0.92)_0%,rgba(4,18,38,0.96)_100%)] px-4 py-4 md:px-6 md:py-5">
-              <div className="max-w-4xl">
-                <div className="mb-3 flex flex-wrap gap-2">
-                  {currentStore.slogan ? (
-                    <span
-                      className="inline-flex rounded-full px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.16em]"
-                      style={{
-                        backgroundColor: `${currentStore.accentColor}22`,
-                        color: currentStore.accentColor,
-                        border: `1px solid ${currentStore.accentColor}33`,
-                      }}
-                    >
-                      {currentStore.slogan}
-                    </span>
-                  ) : null}
+              <div className="absolute inset-x-0 bottom-0 p-4 md:p-6 lg:p-8">
+                <div className="max-w-4xl">
+                  <div className="mb-3 flex flex-wrap gap-2">
+                    {currentStore.slogan ? (
+                      <span
+                        className="inline-flex rounded-full px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.16em]"
+                        style={{
+                          backgroundColor: `${currentStore.accentColor}22`,
+                          color: currentStore.accentColor,
+                          border: `1px solid ${currentStore.accentColor}33`,
+                        }}
+                      >
+                        {currentStore.slogan}
+                      </span>
+                    ) : null}
 
-                  {!!currentStore.username && (
-                    <span className="inline-flex rounded-full border border-white/10 bg-white/5 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.14em] text-zinc-300">
-                      @{currentStore.username}
-                    </span>
-                  )}
+                    {!!currentStore.username && (
+                      <span className="inline-flex rounded-full border border-white/10 bg-white/5 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.14em] text-zinc-300">
+                        @{currentStore.username}
+                      </span>
+                    )}
 
-                  {!!currentStore.niche && (
-                    <span className="inline-flex rounded-full border border-white/10 bg-white/5 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.14em] text-zinc-300">
-                      {currentStore.niche}
-                    </span>
-                  )}
-                </div>
-
-                <div className="flex items-start gap-4">
-                  <div className="flex h-20 w-20 shrink-0 items-center justify-center overflow-hidden rounded-[24px] border border-white/15 bg-black/30 text-xl font-black text-white shadow-2xl md:h-24 md:w-24 md:rounded-[28px]">
-                    {currentStore.logoUrl ? (
-                      <ProductImage
-                        src={ensureUrl(currentStore.logoUrl)}
-                        alt={currentStore.name}
-                        eager
-                        className="h-full w-full object-cover"
-                      />
-                    ) : (
-                      <span>{getInitials(currentStore.name || 'L')}</span>
+                    {!!currentStore.niche && (
+                      <span className="inline-flex rounded-full border border-white/10 bg-white/5 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.14em] text-zinc-300">
+                        {currentStore.niche}
+                      </span>
                     )}
                   </div>
 
-                  <div className="min-w-0 flex-1 pt-1">
-                    <h1
-                      className="break-words text-3xl font-black leading-none md:text-5xl"
-                      style={{ color: currentStore.textColor }}
-                    >
-                      {currentStore.name}
-                    </h1>
+                  <div className="flex items-end gap-4">
+                    <div className="flex h-20 w-20 shrink-0 items-center justify-center overflow-hidden rounded-[24px] border border-white/15 bg-black/30 text-xl font-black text-white shadow-2xl md:h-24 md:w-24 md:rounded-[28px]">
+                      {currentStore.logoUrl ? (
+                        <ProductImage
+                          src={ensureUrl(currentStore.logoUrl)}
+                          alt={currentStore.name}
+                          eager
+                          className="h-full w-full object-cover"
+                        />
+                      ) : (
+                        <span>{getInitials(currentStore.name || 'L')}</span>
+                      )}
+                    </div>
 
-                    <p
-                      className="mt-3 max-w-2xl text-sm leading-7 md:text-base"
-                      style={{ color: currentStore.mutedTextColor }}
-                    >
-                      {currentStore.description ||
-                        'Explore os produtos disponíveis desta loja e encontre a melhor oferta para você.'}
-                    </p>
+                    <div className="min-w-0 flex-1">
+                      <h1
+                        className="break-words text-3xl font-black leading-none md:text-5xl"
+                        style={{ color: currentStore.textColor }}
+                      >
+                        {currentStore.name}
+                      </h1>
+
+                      <p
+                        className="mt-3 max-w-2xl text-sm leading-6 md:text-base md:leading-7"
+                        style={{ color: currentStore.mutedTextColor }}
+                      >
+                        {currentStore.description ||
+                          'Explore os produtos disponíveis desta loja e encontre a melhor oferta para você.'}
+                      </p>
+                    </div>
                   </div>
-                </div>
 
-                <div className="mt-5 flex flex-col gap-3 sm:flex-row">
-                  <Button
-                    className="w-full rounded-2xl px-6 font-bold sm:w-auto"
-                    style={{
-                      backgroundColor: currentStore.buttonBgColor,
-                      color: currentStore.buttonTextColor,
-                    }}
-                    onClick={() => {
-                      const section = document.getElementById('produtos');
-                      section?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-                    }}
-                  >
-                    <ShoppingBag className="mr-2 h-4 w-4" />
-                    {currentStore.primaryButtonText || 'Ver produtos'}
-                  </Button>
+                  <div className="mt-5 flex flex-col gap-3 sm:flex-row">
+                    <Button
+                      className="w-full rounded-2xl px-6 font-bold sm:w-auto"
+                      style={{
+                        backgroundColor: currentStore.buttonBgColor,
+                        color: currentStore.buttonTextColor,
+                      }}
+                      onClick={scrollToProducts}
+                    >
+                      <ShoppingBag className="mr-2 h-4 w-4" />
+                      {currentStore.primaryButtonText || 'Ver produtos'}
+                    </Button>
 
-                  <Button
-                    variant="outline"
-                    className="w-full rounded-2xl border-white/10 bg-black/20 text-white hover:bg-white/5 sm:w-auto"
-                    onClick={() => void handleOffersGroup()}
-                  >
-                    <Gift className="mr-2 h-4 w-4" />
-                    {normalizeGroupButtonText(currentStore.whatsappButtonText)}
-                  </Button>
+                    <Button
+                      variant="outline"
+                      className="w-full rounded-2xl border-white/10 bg-black/20 text-white hover:bg-white/5 sm:w-auto"
+                      onClick={() => void handleOffersGroup()}
+                    >
+                      <Gift className="mr-2 h-4 w-4" />
+                      {normalizeGroupButtonText(currentStore.whatsappButtonText)}
+                    </Button>
+                  </div>
                 </div>
               </div>
             </div>
           </section>
 
-          <section className="mb-6">
-            <div className="rounded-[32px] border border-white/10 p-6 md:p-7" style={cardStyle}>
-              <div className="grid gap-6 xl:grid-cols-[1fr_280px] xl:items-end">
-                <div>
-                  <h2
-                    className="text-2xl font-black md:text-3xl"
-                    style={{ color: currentStore.textColor }}
-                  >
-                    Encontre o produto ideal
-                  </h2>
-
-                  <p
-                    className="mt-3 max-w-3xl text-base leading-7"
-                    style={{ color: currentStore.mutedTextColor }}
-                  >
-                    Navegue pela vitrine, filtre mais rápido e abra o produto que mais combina com você.
-                  </p>
-
-                  <div className="relative mt-5">
-                    <Search className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-zinc-500" />
-                    <input
-                      value={search}
-                      onChange={(e) => setSearch(e.target.value)}
-                      className="h-12 w-full rounded-2xl border border-white/10 bg-black/30 pl-11 pr-4 text-white outline-none transition focus:border-emerald-500"
-                      placeholder="Buscar produtos..."
-                    />
-                  </div>
-                </div>
-
-                <div>
-                  <label className="mb-2 flex items-center gap-2 text-sm font-medium text-white">
-                    <ArrowUpDown className="h-4 w-4 text-emerald-400" />
-                    Ordenar por
-                  </label>
-
-                  <select
-                    value={sort}
-                    onChange={(e) => setSort(e.target.value as SortType)}
-                    className="h-12 w-full rounded-2xl border border-white/10 bg-black/30 px-4 text-white outline-none transition focus:border-emerald-500"
-                  >
-                    <option value="recentes">Mais recentes</option>
-                    <option value="mais-caros">Mais caros</option>
-                    <option value="mais-baratos">Mais baratos</option>
-                    <option value="nome">Nome</option>
-                  </select>
-                </div>
-              </div>
-            </div>
-          </section>
-
-          <section id="produtos" className="scroll-mt-28">
-            <div className="mb-6 flex items-center justify-between gap-4">
+          <section className="rounded-[30px] border border-white/10 p-4 md:p-5" style={cardStyle}>
+            <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_260px] xl:items-end">
               <div>
+                <p
+                  className="mb-2 text-[11px] font-bold uppercase tracking-[0.28em]"
+                  style={{ color: currentStore.accentColor }}
+                >
+                  vitrine premium
+                </p>
+
                 <h2
                   className="text-2xl font-black md:text-3xl"
                   style={{ color: currentStore.textColor }}
                 >
-                  Produtos da loja
+                  Produtos por categoria
                 </h2>
-                <p className="mt-2" style={{ color: currentStore.mutedTextColor }}>
-                  Escolha um produto, veja os detalhes e avance para a oferta.
+
+                <p
+                  className="mt-2 max-w-3xl text-sm leading-6 md:text-base"
+                  style={{ color: currentStore.mutedTextColor }}
+                >
+                  Categorias em linhas horizontais, com navegação lateral e visual mais forte para destacar os produtos.
                 </p>
+
+                <div className="relative mt-4">
+                  <Search className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-zinc-500" />
+                  <input
+                    value={search}
+                    onChange={(e) => setSearch(e.target.value)}
+                    className="h-12 w-full rounded-2xl border border-white/10 bg-black/30 pl-11 pr-4 text-white outline-none transition focus:border-emerald-500"
+                    placeholder="Buscar por nome, descrição ou categoria..."
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="mb-2 flex items-center gap-2 text-sm font-medium text-white">
+                  <ArrowUpDown className="h-4 w-4 text-emerald-400" />
+                  Ordenar por
+                </label>
+
+                <select
+                  value={sort}
+                  onChange={(e) => setSort(e.target.value as SortType)}
+                  className="h-12 w-full rounded-2xl border border-white/10 bg-black/30 px-4 text-white outline-none transition focus:border-emerald-500"
+                >
+                  <option value="recentes">Mais recentes</option>
+                  <option value="mais-caros">Mais caros</option>
+                  <option value="mais-baratos">Mais baratos</option>
+                  <option value="nome">Nome</option>
+                </select>
               </div>
             </div>
 
-            {filteredProducts.length === 0 ? (
+            {categoryChips.length > 0 ? (
+              <div className="mt-4 flex gap-2 overflow-x-auto pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+                {categoryChips.map((chip) => (
+                  <button
+                    key={chip.id}
+                    type="button"
+                    className="inline-flex shrink-0 items-center gap-2 rounded-full border border-white/10 bg-white/[0.04] px-4 py-2 text-sm font-semibold text-white transition hover:border-emerald-500/30 hover:bg-emerald-500/10"
+                    onClick={() => scrollToCategory(chip.id)}
+                  >
+                    <span>{chip.label}</span>
+                    <span className="rounded-full bg-emerald-500 px-2 py-0.5 text-[11px] font-black text-black">
+                      {chip.total}
+                    </span>
+                  </button>
+                ))}
+              </div>
+            ) : null}
+          </section>
+
+          <section id="produtos" className="scroll-mt-24 space-y-5">
+            {groupedProducts.length === 0 ? (
               <div
                 className="rounded-[32px] border border-white/10 p-10 text-center"
                 style={cardStyle}
@@ -731,75 +817,160 @@ export default function LojaPublica() {
                 </p>
               </div>
             ) : (
-              <div className="grid grid-cols-1 gap-6 md:grid-cols-2 xl:grid-cols-3">
-                {filteredProducts.map((product) => (
-                  <div
-                    key={product.id}
-                    className="group overflow-hidden rounded-[32px] border border-white/10 shadow-[0_14px_40px_rgba(0,0,0,0.28)] transition duration-300 hover:-translate-y-1 hover:border-emerald-500/30"
-                    style={cardStyle}
-                  >
-                    <div className="relative h-64 overflow-hidden bg-black/20">
-                      <ProductImage
-                        src={ensureUrl(product.image)}
-                        alt={product.name}
-                        className="h-full w-full object-cover transition duration-500 group-hover:scale-[1.04]"
-                      />
-
-                      <div className="absolute inset-0 bg-gradient-to-t from-black/25 via-transparent to-transparent" />
-
-                      <div className="absolute right-4 top-4">
-                        <span
-                          className="inline-flex items-center rounded-full border px-4 py-2 text-base font-black shadow-[0_10px_30px_rgba(34,197,94,0.28)]"
-                          style={{
-                            color: MONEY_GREEN_DARK,
-                            borderColor: 'rgba(255,255,255,0.18)',
-                            background:
-                              'linear-gradient(135deg, rgba(34,197,94,0.96) 0%, rgba(74,222,128,0.96) 100%)',
-                            backdropFilter: 'blur(16px)',
-                          }}
-                        >
-                          {formatMoney(product.priceValue)}
-                        </span>
-                      </div>
+              groupedProducts.map((group) => (
+                <div
+                  key={group.id}
+                  id={group.id}
+                  className="rounded-[34px] border border-white/10 p-4 md:p-5"
+                  style={cardStyle}
+                >
+                  <div className="mb-4 flex items-center justify-between gap-3">
+                    <div className="min-w-0">
+                      <p
+                        className="text-[11px] font-bold uppercase tracking-[0.28em]"
+                        style={{ color: currentStore.accentColor }}
+                      >
+                        categoria
+                      </p>
+                      <h3
+                        className="truncate text-2xl font-black md:text-3xl"
+                        style={{ color: currentStore.textColor }}
+                      >
+                        {group.label}
+                      </h3>
+                      <p className="mt-1 text-sm" style={{ color: currentStore.mutedTextColor }}>
+                        {group.items.length} {group.items.length === 1 ? 'produto disponível' : 'produtos disponíveis'}
+                      </p>
                     </div>
 
-                    <div className="p-5">
-                      <h3 className="text-xl font-black" style={{ color: currentStore.textColor }}>
-                        {product.name}
-                      </h3>
-
-                      <p
-                        className="mt-3 line-clamp-3 text-sm leading-6"
-                        style={{ color: currentStore.mutedTextColor }}
+                    <div className="hidden items-center gap-2 md:flex">
+                      <Button
+                        type="button"
+                        variant="outline"
+                        className="rounded-2xl border-white/10 bg-black/20 text-white hover:bg-white/5"
+                        onClick={() => scrollCategory(group.id, 'left')}
                       >
-                        {product.description || 'Sem descrição disponível para este produto.'}
-                      </p>
+                        <ChevronLeft className="h-4 w-4" />
+                      </Button>
 
-                      <div className="mt-5 flex flex-col gap-3 sm:flex-row">
-                        <Button
-                          className="flex-1 rounded-2xl font-bold"
-                          style={{
-                            backgroundColor: currentStore.buttonBgColor,
-                            color: currentStore.buttonTextColor,
-                          }}
-                          onClick={() => openProductAction(product)}
-                        >
-                          <ExternalLink className="mr-2 h-4 w-4" />
-                          Comprar agora
-                        </Button>
-
-                        <Button
-                          variant="outline"
-                          className="rounded-2xl border-white/10 bg-black/20 text-white hover:bg-white/5"
-                          onClick={() => setSelectedProduct(product)}
-                        >
-                          Ver detalhes
-                        </Button>
-                      </div>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        className="rounded-2xl border-white/10 bg-black/20 text-white hover:bg-white/5"
+                        onClick={() => scrollCategory(group.id, 'right')}
+                      >
+                        <ChevronRight className="h-4 w-4" />
+                      </Button>
                     </div>
                   </div>
-                ))}
-              </div>
+
+                  <div
+                    ref={(element) => {
+                      categoryRowsRef.current[group.id] = element;
+                    }}
+                    className="flex gap-4 overflow-x-auto pb-2 pr-1 snap-x snap-mandatory [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+                  >
+                    {group.items.map((product) => (
+                      <article
+                        key={product.id}
+                        className="group snap-start overflow-hidden rounded-[30px] border border-white/10 bg-black/20 shadow-[0_16px_48px_rgba(0,0,0,0.28)] transition duration-300 hover:-translate-y-1 hover:border-emerald-500/30"
+                        style={{
+                          width: 'min(86vw, 320px)',
+                          minWidth: 'min(86vw, 320px)',
+                        }}
+                      >
+                        <div className="relative h-[280px] overflow-hidden bg-black/30">
+                          <ProductImage
+                            src={ensureUrl(product.image)}
+                            alt={product.name}
+                            className="h-full w-full object-cover transition duration-500 group-hover:scale-[1.05]"
+                          />
+
+                          <div className="absolute inset-0 bg-[linear-gradient(180deg,rgba(0,0,0,0.00)_0%,rgba(0,0,0,0.08)_45%,rgba(0,0,0,0.62)_100%)]" />
+
+                          <div className="absolute left-4 top-4">
+                            <span className="inline-flex rounded-full border border-white/10 bg-black/45 px-3 py-1 text-[11px] font-bold uppercase tracking-[0.16em] text-white backdrop-blur-md">
+                              {group.label}
+                            </span>
+                          </div>
+
+                          <div className="absolute right-4 top-4">
+                            <span
+                              className="inline-flex items-center rounded-full border px-4 py-2 text-base font-black shadow-[0_10px_30px_rgba(34,197,94,0.28)]"
+                              style={{
+                                color: MONEY_GREEN_DARK,
+                                borderColor: 'rgba(255,255,255,0.18)',
+                                background:
+                                  'linear-gradient(135deg, rgba(34,197,94,0.96) 0%, rgba(74,222,128,0.96) 100%)',
+                                backdropFilter: 'blur(16px)',
+                              }}
+                            >
+                              {formatMoney(product.priceValue)}
+                            </span>
+                          </div>
+
+                          <div className="absolute inset-x-0 bottom-0 p-4">
+                            <h4 className="line-clamp-2 text-xl font-black text-white">{product.name}</h4>
+                          </div>
+                        </div>
+
+                        <div className="p-5">
+                          <p
+                            className="line-clamp-3 text-sm leading-6"
+                            style={{ color: currentStore.mutedTextColor }}
+                          >
+                            {product.description || 'Sem descrição disponível para este produto.'}
+                          </p>
+
+                          <div className="mt-5 grid grid-cols-1 gap-3 sm:grid-cols-2">
+                            <Button
+                              className="w-full rounded-2xl font-bold"
+                              style={{
+                                backgroundColor: currentStore.buttonBgColor,
+                                color: currentStore.buttonTextColor,
+                              }}
+                              onClick={() => openProductAction(product)}
+                            >
+                              <ExternalLink className="mr-2 h-4 w-4" />
+                              Comprar
+                            </Button>
+
+                            <Button
+                              variant="outline"
+                              className="w-full rounded-2xl border-white/10 bg-black/20 text-white hover:bg-white/5"
+                              onClick={() => setSelectedProduct(product)}
+                            >
+                              Ver detalhes
+                            </Button>
+                          </div>
+                        </div>
+                      </article>
+                    ))}
+                  </div>
+
+                  <div className="mt-3 flex items-center justify-between gap-3 md:hidden">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      className="flex-1 rounded-2xl border-white/10 bg-black/20 text-white hover:bg-white/5"
+                      onClick={() => scrollCategory(group.id, 'left')}
+                    >
+                      <ArrowLeft className="mr-2 h-4 w-4" />
+                      Anterior
+                    </Button>
+
+                    <Button
+                      type="button"
+                      variant="outline"
+                      className="flex-1 rounded-2xl border-white/10 bg-black/20 text-white hover:bg-white/5"
+                      onClick={() => scrollCategory(group.id, 'right')}
+                    >
+                      Próximo
+                      <ArrowRight className="ml-2 h-4 w-4" />
+                    </Button>
+                  </div>
+                </div>
+              ))
             )}
           </section>
         </div>
@@ -827,7 +998,10 @@ export default function LojaPublica() {
               <div className="p-6 md:p-8">
                 <div className="mb-6 flex items-start justify-between gap-4">
                   <div>
-                    <h3 className="text-2xl font-black text-white">{selectedProduct.name}</h3>
+                    <p className="text-[11px] font-bold uppercase tracking-[0.26em] text-emerald-400">
+                      {selectedProduct.categoryName}
+                    </p>
+                    <h3 className="mt-2 text-2xl font-black text-white">{selectedProduct.name}</h3>
                     <p className="mt-2 text-2xl font-black text-emerald-400">
                       {formatMoney(selectedProduct.priceValue)}
                     </p>
