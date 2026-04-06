@@ -701,7 +701,7 @@ export default function Painel() {
   return (
     <div className="min-h-screen overflow-x-hidden bg-[radial-gradient(circle_at_top_left,_rgba(16,185,129,0.14),_transparent_25%),radial-gradient(circle_at_bottom_right,_rgba(34,197,94,0.08),_transparent_20%),linear-gradient(180deg,_#020202_0%,_#050505_50%,_#08120d_100%)]">
       <header className="relative z-[90] border-b border-white/10 bg-black/40 backdrop-blur-sm">
-        <div className="mx-auto max-w-7xl px-4 py-2.5 md:py-4">
+        <div className="mx-auto max-w-7xl px-4 py-2 md:py-4">
           <div className="md:hidden">
             <div className="flex items-start justify-between gap-3">
               <div className="min-w-0 flex-1 pt-1">
@@ -736,20 +736,20 @@ export default function Painel() {
                 ) : null}
               </div>
 
-              <div className="w-[160px] shrink-0 rounded-[26px] border border-white/10 bg-white/[0.04] p-2.5 shadow-[0_18px_40px_rgba(0,0,0,0.26)]">
-                <div className="grid grid-cols-2 gap-2">
+              <div className="w-[148px] shrink-0 rounded-[24px] border border-white/10 bg-white/[0.04] p-2 shadow-[0_18px_40px_rgba(0,0,0,0.22)]">
+                <div className="grid grid-cols-2 gap-1.5">
                   <div className="relative">
                     <Button
                       ref={notificationsMobileButtonRef}
                       variant="outline"
-                      className="h-11 w-full flex-col gap-1 rounded-2xl border-white/10 bg-black/30 px-0 text-[10px] font-semibold text-white hover:bg-white/5"
+                      className="h-10 w-full flex-col gap-0.5 rounded-[18px] border-white/10 bg-black/30 px-0 text-[9px] font-semibold text-white hover:bg-white/5"
                       onClick={() => setShowNotifications((prev) => !prev)}
                     >
-                      <Bell className="h-4 w-4" />
+                      <Bell className="h-3.5 w-3.5" />
                       Avisos
                     </Button>
 
-                    <span className="pointer-events-none absolute right-2 top-2 inline-flex h-5 min-w-[20px] items-center justify-center rounded-full bg-emerald-500 px-1.5 text-[10px] font-bold text-black">
+                    <span className="pointer-events-none absolute right-1.5 top-1.5 inline-flex h-4.5 min-w-[18px] items-center justify-center rounded-full bg-emerald-500 px-1 text-[9px] font-bold text-black">
                       {notifications.length}
                     </span>
 
@@ -784,29 +784,29 @@ export default function Painel() {
 
                   <Button
                     variant="outline"
-                    className="h-11 w-full flex-col gap-1 rounded-2xl border-white/10 bg-black/30 px-0 text-[10px] font-semibold text-white hover:bg-white/5"
+                    className="h-10 w-full flex-col gap-0.5 rounded-[18px] border-white/10 bg-black/30 px-0 text-[9px] font-semibold text-white hover:bg-white/5"
                     onClick={handleRefresh}
                     disabled={refreshing}
                   >
-                    <RefreshCw className={`h-4 w-4 ${refreshing ? 'animate-spin' : ''}`} />
+                    <RefreshCw className={`h-3.5 w-3.5 ${refreshing ? 'animate-spin' : ''}`} />
                     Atualizar
                   </Button>
 
                   <Button
                     variant="outline"
-                    className="h-11 w-full flex-col gap-1 rounded-2xl border-white/10 bg-black/30 px-0 text-[10px] font-semibold text-white hover:bg-white/5"
+                    className="h-10 w-full flex-col gap-0.5 rounded-[18px] border-white/10 bg-black/30 px-0 text-[9px] font-semibold text-white hover:bg-white/5"
                     onClick={() => navigate(`/loja/${store.slug}`)}
                   >
-                    <ExternalLink className="h-4 w-4" />
+                    <ExternalLink className="h-3.5 w-3.5" />
                     Ver loja
                   </Button>
 
                   <Button
                     variant="outline"
-                    className="h-11 w-full flex-col gap-1 rounded-2xl border-white/10 bg-black/30 px-0 text-[10px] font-semibold text-zinc-300 hover:bg-white/5 hover:text-white"
+                    className="h-10 w-full flex-col gap-0.5 rounded-[18px] border-white/10 bg-black/30 px-0 text-[9px] font-semibold text-zinc-300 hover:bg-white/5 hover:text-white"
                     onClick={handleLogout}
                   >
-                    <LogOut className="h-4 w-4" />
+                    <LogOut className="h-3.5 w-3.5" />
                     Sair
                   </Button>
                 </div>
