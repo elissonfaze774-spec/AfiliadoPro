@@ -702,8 +702,8 @@ export default function Painel() {
     <div className="min-h-screen overflow-x-hidden bg-[radial-gradient(circle_at_top_left,_rgba(16,185,129,0.14),_transparent_25%),radial-gradient(circle_at_bottom_right,_rgba(34,197,94,0.08),_transparent_20%),linear-gradient(180deg,_#020202_0%,_#050505_50%,_#08120d_100%)]">
       <header className="relative z-[90] border-b border-white/10 bg-black/40 backdrop-blur-sm">
         <div className="mx-auto max-w-7xl px-4 py-4">
-          <div className="grid gap-4 xl:grid-cols-[1fr_auto] xl:items-start">
-            <div className="min-w-0">
+          <div className="grid grid-cols-[minmax(0,1fr)_168px] items-start gap-3 md:hidden">
+            <div className="min-w-0 pt-1">
               <div className="flex flex-wrap items-center gap-2">
                 <h1 className="truncate text-2xl font-black text-white">{store.name}</h1>
                 <span className="inline-flex items-center gap-1 rounded-full border border-emerald-500/20 bg-emerald-500/10 px-2.5 py-1 text-xs text-emerald-300">
@@ -719,22 +719,29 @@ export default function Painel() {
               </div>
             </div>
 
-            <div className="flex flex-col gap-3 md:hidden">
-              <div className="flex flex-wrap items-center justify-between gap-2">
+            <div className="relative self-start rounded-[28px] border border-white/10 bg-white/[0.045] p-2.5 shadow-[0_20px_50px_rgba(0,0,0,0.28)]">
+              <div className="grid grid-cols-2 gap-2">
                 <div className="relative">
                   <Button
                     ref={notificationsMobileButtonRef}
                     variant="outline"
-                    className="border-white/10 bg-black/30 text-white hover:bg-white/5"
+                    className="h-11 w-full rounded-2xl border-white/10 bg-black/30 px-2 text-[11px] font-semibold text-white hover:bg-white/5"
                     onClick={() => setShowNotifications((prev) => !prev)}
                   >
-                    <Bell className="h-4 w-4" />
+                    <div className="flex flex-col items-center gap-0.5 leading-none">
+                      <Bell className="h-4 w-4" />
+                      <span>Avisos</span>
+                    </div>
                   </Button>
+
+                  <span className="pointer-events-none absolute right-1.5 top-1.5 inline-flex h-4 min-w-[16px] items-center justify-center rounded-full bg-emerald-500 px-1 text-[9px] font-black text-black">
+                    {notifications.length}
+                  </span>
 
                   {showNotifications ? (
                     <div
                       ref={notificationsMobileRef}
-                      className="absolute left-0 top-[calc(100%+12px)] z-[220] w-[min(360px,calc(100vw-32px))] rounded-3xl border border-white/10 bg-[#07110c]/98 p-3 shadow-[0_24px_70px_rgba(0,0,0,0.55)] backdrop-blur-xl"
+                      className="absolute right-0 top-[calc(100%+12px)] z-[220] w-[min(360px,calc(100vw-32px))] rounded-3xl border border-white/10 bg-[#07110c]/98 p-3 shadow-[0_24px_70px_rgba(0,0,0,0.55)] backdrop-blur-xl"
                     >
                       <div className="mb-2 px-2 py-1">
                         <p className="text-sm font-bold text-white">Central de avisos</p>
@@ -762,45 +769,78 @@ export default function Painel() {
 
                 <Button
                   variant="outline"
-                  className="border-white/10 bg-black/30 text-white hover:bg-white/5"
+                  className="h-11 rounded-2xl border-white/10 bg-black/30 px-2 text-[11px] font-semibold text-white hover:bg-white/5"
                   onClick={handleRefresh}
                   disabled={refreshing}
                 >
-                  <RefreshCw className={`h-4 w-4 ${refreshing ? 'animate-spin' : ''}`} />
+                  <div className="flex flex-col items-center gap-0.5 leading-none">
+                    <RefreshCw className={`h-4 w-4 ${refreshing ? 'animate-spin' : ''}`} />
+                    <span>Atualizar</span>
+                  </div>
                 </Button>
 
                 <Button
                   variant="outline"
-                  className="border-white/10 bg-black/30 text-white hover:bg-white/5"
+                  className="h-11 rounded-2xl border-white/10 bg-black/30 px-2 text-[11px] font-semibold text-white hover:bg-white/5"
                   onClick={() => navigate(`/loja/${store.slug}`)}
                 >
-                  <ExternalLink className="h-4 w-4" />
+                  <div className="flex flex-col items-center gap-0.5 leading-none">
+                    <ExternalLink className="h-4 w-4" />
+                    <span>Ver loja</span>
+                  </div>
                 </Button>
 
                 <Button
-                  variant="ghost"
-                  className="text-zinc-400 hover:bg-white/5 hover:text-white"
+                  variant="outline"
+                  className="h-11 rounded-2xl border-white/10 bg-black/30 px-2 text-[11px] font-semibold text-zinc-300 hover:bg-white/5 hover:text-white"
                   onClick={handleLogout}
                 >
-                  <LogOut className="h-4 w-4" />
+                  <div className="flex flex-col items-center gap-0.5 leading-none">
+                    <LogOut className="h-4 w-4" />
+                    <span>Sair</span>
+                  </div>
                 </Button>
               </div>
 
               {access ? (
-                <div className="flex flex-wrap items-center gap-2">
-                  <span
-                    className={`inline-flex items-center gap-2 rounded-full border px-3 py-1 text-xs font-semibold ${getBadgeClasses(access.status)}`}
+                <div className="mt-2.5 space-y-2">
+                  <div
+                    className={`flex items-center gap-2 rounded-2xl border px-3 py-2 ${getBadgeClasses(access.status)}`}
                   >
-                    <ShieldCheck className="h-3 w-3" />
-                    {access.label}
-                  </span>
+                    <ShieldCheck className="h-3.5 w-3.5 shrink-0" />
+                    <div className="min-w-0">
+                      <p className="text-[9px] font-bold uppercase tracking-[0.16em] opacity-70">Acesso ativo</p>
+                      <p className="truncate text-[11px] font-semibold">{access.label}</p>
+                    </div>
+                  </div>
 
-                  <span className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/5 px-3 py-1 text-xs text-zinc-300">
-                    <CalendarClock className="h-3 w-3" />
-                    {formatDate(access.expiresAt)}
-                  </span>
+                  <div className="flex items-center gap-2 rounded-2xl border border-white/10 bg-white/5 px-3 py-2 text-zinc-300">
+                    <CalendarClock className="h-3.5 w-3.5 shrink-0" />
+                    <div className="min-w-0">
+                      <p className="text-[9px] font-bold uppercase tracking-[0.16em] text-zinc-400">Vencimento</p>
+                      <p className="truncate text-[11px] font-semibold text-white">{formatDate(access.expiresAt)}</p>
+                    </div>
+                  </div>
                 </div>
               ) : null}
+            </div>
+          </div>
+
+          <div className="hidden gap-4 md:grid xl:grid-cols-[1fr_auto] xl:items-start">
+            <div className="min-w-0">
+              <div className="flex flex-wrap items-center gap-2">
+                <h1 className="truncate text-2xl font-black text-white">{store.name}</h1>
+                <span className="inline-flex items-center gap-1 rounded-full border border-emerald-500/20 bg-emerald-500/10 px-2.5 py-1 text-xs text-emerald-300">
+                  <Crown className="h-3.5 w-3.5" />
+                  Admin
+                </span>
+              </div>
+
+              <div className="mt-2 flex flex-wrap items-center gap-3 text-sm">
+                <span className="text-zinc-400">@{store.slug}</span>
+                <span className="text-zinc-700">•</span>
+                <span className="capitalize text-zinc-400">{store.niche || 'Sem nicho'}</span>
+              </div>
             </div>
 
             <div className="relative hidden flex-wrap items-center gap-3 md:flex">
@@ -895,7 +935,7 @@ export default function Painel() {
         </div>
       </header>
 
-      <main className="relative z-10 mx-auto flex max-w-7xl flex-col gap-6 px-4 py-6">
+      <main className="relative z-10 mx-auto flex max-w-7xl flex-col gap-6 px-4 pt-4 pb-6 md:py-6">
         <section className="grid grid-cols-1 gap-5 xl:grid-cols-[minmax(0,1.55fr)_minmax(0,0.95fr)] xl:items-start">
           <Card className="self-start overflow-hidden border-emerald-500/20 bg-white/[0.04] shadow-[0_20px_60px_rgba(0,0,0,0.35)]">
             <div className="relative min-h-[240px] overflow-hidden md:min-h-[320px]">
