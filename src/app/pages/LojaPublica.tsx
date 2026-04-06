@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
+import type { MouseEvent as ReactMouseEvent } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import {
   ArrowLeft,
@@ -57,6 +58,12 @@ type Product = {
 };
 
 type SortType = 'recentes' | 'mais-caros' | 'mais-baratos' | 'nome';
+
+type DragState = {
+  isDown: boolean;
+  startX: number;
+  scrollLeft: number;
+};
 
 const MONEY_GREEN_DARK = '#052e16';
 
@@ -252,6 +259,7 @@ export default function LojaPublica() {
   const productChannelRef = useRef<ReturnType<typeof supabase.channel> | null>(null);
   const categoryRowsRef = useRef<Record<string, HTMLDivElement | null>>({});
   const initializedRowsRef = useRef<Record<string, boolean>>({});
+  const rowDragStateRef = useRef<Record<string, DragState>>({});
 
   const isAdminViewing = user?.role === 'admin' || user?.role === 'super-admin';
 
@@ -561,6 +569,41 @@ export default function LojaPublica() {
     }
   };
 
+  const handleRowMouseDown = (event: ReactMouseEvent<HTMLDivElement>, categoryId: string) => {
+    const target = event.target as HTMLElement;
+    if (target.closest('button')) return;
+
+    const row = categoryRowsRef.current[categoryId];
+    if (!row) return;
+
+    rowDragStateRef.current[categoryId] = {
+      isDown: true,
+      startX: event.pageX - row.offsetLeft,
+      scrollLeft: row.scrollLeft,
+    };
+  };
+
+  const handleRowMouseMove = (event: ReactMouseEvent<HTMLDivElement>, categoryId: string) => {
+    const row = categoryRowsRef.current[categoryId];
+    const dragState = rowDragStateRef.current[categoryId];
+
+    if (!row || !dragState?.isDown) return;
+
+    event.preventDefault();
+
+    const x = event.pageX - row.offsetLeft;
+    const walk = (x - dragState.startX) * 1.12;
+    row.scrollLeft = dragState.scrollLeft - walk;
+  };
+
+  const handleRowMouseUp = (categoryId: string) => {
+    rowDragStateRef.current[categoryId] = {
+      isDown: false,
+      startX: 0,
+      scrollLeft: 0,
+    };
+  };
+
   if (loading) {
     return (
       <div className="min-h-screen bg-black">
@@ -646,7 +689,7 @@ export default function LojaPublica() {
           </div>
         </header>
 
-        <div className="mx-auto max-w-7xl space-y-5 px-4 py-4 md:space-y-7 md:py-8">
+        <div className="mx-auto max-w-7xl space-y-4 px-4 py-4 md:space-y-7 md:py-8">
           <section className="overflow-hidden rounded-[34px] border border-white/10 shadow-[0_24px_70px_rgba(0,0,0,0.35)]">
             <div className="relative h-[170px] sm:h-[220px] md:h-[220px] lg:h-[250px]">
               {currentStore.bannerUrl ? (
@@ -748,43 +791,50 @@ export default function LojaPublica() {
             </div>
           </section>
 
-          <section className="rounded-[30px] border border-white/10 p-4 md:p-5" style={cardStyle}>
-            <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_260px] xl:items-end">
+          <section className="rounded-[28px] border border-white/10 p-3 md:rounded-[30px] md:p-5" style={cardStyle}>
+            <div className="grid gap-3 xl:grid-cols-[minmax(0,1fr)_260px] xl:items-end">
               <div>
                 <p
-                  className="mb-2 text-[11px] font-bold uppercase tracking-[0.28em]"
+                  className="mb-1 text-[10px] font-bold uppercase tracking-[0.24em] md:mb-2 md:text-[11px] md:tracking-[0.28em]"
                   style={{ color: currentStore.accentColor }}
                 >
                   vitrine premium
                 </p>
 
                 <h2
-                  className="text-2xl font-black md:text-3xl"
+                  className="text-[22px] font-black leading-tight md:text-3xl"
                   style={{ color: currentStore.textColor }}
                 >
                   Produtos por categoria
                 </h2>
 
                 <p
-                  className="mt-2 max-w-3xl text-sm leading-6 md:text-base"
+                  className="mt-1 text-[13px] leading-6 md:hidden"
+                  style={{ color: currentStore.mutedTextColor }}
+                >
+                  Deslize para ver mais produtos.
+                </p>
+
+                <p
+                  className="mt-2 hidden max-w-3xl text-base leading-6 md:block"
                   style={{ color: currentStore.mutedTextColor }}
                 >
                   Agora com sensação de vitrine infinita ao deslizar, deixando a loja mais elegante, viva e viciante.
                 </p>
 
-                <div className="relative mt-4">
+                <div className="relative mt-3 md:mt-4">
                   <Search className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-zinc-500" />
                   <input
                     value={search}
                     onChange={(e) => setSearch(e.target.value)}
-                    className="h-12 w-full rounded-2xl border border-white/10 bg-black/30 pl-11 pr-4 text-white outline-none transition focus:border-emerald-500"
+                    className="h-10 w-full rounded-2xl border border-white/10 bg-black/30 pl-11 pr-4 text-sm text-white outline-none transition focus:border-emerald-500 md:h-12 md:text-base"
                     placeholder="Buscar por nome, descrição ou categoria..."
                   />
                 </div>
               </div>
 
               <div>
-                <label className="mb-2 flex items-center gap-2 text-sm font-medium text-white">
+                <label className="mb-1 flex items-center gap-2 text-sm font-medium text-white md:mb-2">
                   <ArrowUpDown className="h-4 w-4 text-emerald-400" />
                   Ordenar por
                 </label>
@@ -792,7 +842,7 @@ export default function LojaPublica() {
                 <select
                   value={sort}
                   onChange={(e) => setSort(e.target.value as SortType)}
-                  className="h-12 w-full rounded-2xl border border-white/10 bg-black/30 px-4 text-white outline-none transition focus:border-emerald-500"
+                  className="h-10 w-full rounded-2xl border border-white/10 bg-black/30 px-4 text-sm text-white outline-none transition focus:border-emerald-500 md:h-12 md:text-base"
                 >
                   <option value="recentes">Mais recentes</option>
                   <option value="mais-caros">Mais caros</option>
@@ -803,12 +853,12 @@ export default function LojaPublica() {
             </div>
 
             {categoryChips.length > 0 ? (
-              <div className="mt-4 flex gap-2 overflow-x-auto pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+              <div className="mt-3 flex gap-2 overflow-x-auto pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden md:mt-4">
                 {categoryChips.map((chip) => (
                   <button
                     key={chip.id}
                     type="button"
-                    className="inline-flex shrink-0 items-center gap-2 rounded-full border border-white/10 bg-white/[0.04] px-4 py-2 text-sm font-semibold text-white transition hover:border-emerald-500/30 hover:bg-emerald-500/10"
+                    className="inline-flex shrink-0 items-center gap-2 rounded-full border border-white/10 bg-white/[0.04] px-3 py-1.5 text-sm font-semibold text-white transition hover:border-emerald-500/30 hover:bg-emerald-500/10 md:px-4 md:py-2"
                     onClick={() => scrollToCategory(chip.id)}
                   >
                     <span>{chip.label}</span>
@@ -872,7 +922,11 @@ export default function LojaPublica() {
                         categoryRowsRef.current[group.id] = element;
                       }}
                       onScroll={() => handleInfiniteRowScroll(group.id, group.items.length)}
-                      className="flex gap-4 overflow-x-auto px-1 pb-2 pr-14 pt-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+                      onMouseDown={(event) => handleRowMouseDown(event, group.id)}
+                      onMouseMove={(event) => handleRowMouseMove(event, group.id)}
+                      onMouseUp={() => handleRowMouseUp(group.id)}
+                      onMouseLeave={() => handleRowMouseUp(group.id)}
+                      className="flex cursor-grab gap-4 overflow-x-auto px-1 pb-2 pr-14 pt-1 select-none [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
                     >
                       {group.loopItems.map((product, index) => (
                         <article
