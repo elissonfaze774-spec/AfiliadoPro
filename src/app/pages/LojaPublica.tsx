@@ -129,7 +129,7 @@ function normalizeStore(row: any): StoreData | null {
     buttonTextColor: row.button_text_color ?? '#03120c',
     cardBgColor: row.card_bg_color ?? 'rgba(255,255,255,0.04)',
     textColor: row.text_color ?? '#ffffff',
-    mutedTextColor: row.muted_text_color ?? '#a1a1aa',
+    mutedTextColor: row.muted_text_color ?? '#cbd5e1',
     headerBgColor: row.header_bg_color ?? 'rgba(0,0,0,0.35)',
     primaryButtonText: row.primary_button_text ?? 'Ver produtos',
     whatsappButtonText: normalizeGroupButtonText(row.whatsapp_button_text),
@@ -379,7 +379,7 @@ export default function LojaPublica() {
     if (!store) return {};
 
     return {
-      background: `radial-gradient(circle at top left, ${store.accentColor}16, transparent 25%), radial-gradient(circle at top right, ${store.accentColor}12, transparent 20%), linear-gradient(180deg, ${store.primaryColor} 0%, ${store.secondaryColor} 100%)`,
+      background: `radial-gradient(circle at top left, ${store.accentColor}18, transparent 26%), radial-gradient(circle at top right, rgba(255,255,255,0.05), transparent 20%), linear-gradient(180deg, ${store.primaryColor} 0%, ${store.secondaryColor} 100%)`,
     };
   }, [store]);
 
@@ -609,6 +609,8 @@ export default function LojaPublica() {
   }
 
   const currentStore = store;
+  const bannerImageClass =
+    'h-full w-full object-cover scale-[1.02] brightness-[1.08] contrast-[1.08] saturate-[1.18]';
 
   return (
     <>
@@ -654,13 +656,14 @@ export default function LojaPublica() {
                   src={ensureUrl(currentStore.bannerUrl)}
                   alt={currentStore.name}
                   eager
-                  className="h-full w-full object-cover"
+                  className={bannerImageClass}
                 />
               ) : (
-                <div className="h-full w-full bg-[radial-gradient(circle_at_top_left,rgba(16,185,129,0.22),transparent_28%),linear-gradient(135deg,#030712_0%,#07130e_40%,#03120c_100%)]" />
+                <div className="h-full w-full bg-[radial-gradient(circle_at_top_left,rgba(16,185,129,0.28),transparent_30%),linear-gradient(135deg,#07111f_0%,#0b1730_50%,#06121f_100%)]" />
               )}
 
-              <div className="absolute inset-0 bg-[linear-gradient(180deg,rgba(0,0,0,0.08)_0%,rgba(0,0,0,0.22)_45%,rgba(0,0,0,0.55)_100%)] md:bg-[linear-gradient(180deg,rgba(0,0,0,0.10)_0%,rgba(0,0,0,0.35)_38%,rgba(0,0,0,0.82)_100%)]" />
+              <div className="absolute inset-0 bg-[linear-gradient(180deg,rgba(0,0,0,0.02)_0%,rgba(0,0,0,0.10)_38%,rgba(0,0,0,0.30)_100%)] md:bg-[linear-gradient(180deg,rgba(0,0,0,0.04)_0%,rgba(0,0,0,0.18)_35%,rgba(0,0,0,0.56)_100%)]" />
+              <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_center,rgba(255,255,255,0.10),transparent_34%)]" />
 
               <div className="absolute inset-x-0 bottom-0 hidden p-6 md:block lg:p-8">
                 <div className="max-w-4xl">
@@ -679,20 +682,20 @@ export default function LojaPublica() {
                     ) : null}
 
                     {!!currentStore.username && (
-                      <span className="inline-flex rounded-full border border-white/10 bg-white/5 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.14em] text-zinc-300">
+                      <span className="inline-flex rounded-full border border-white/10 bg-black/25 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.14em] text-zinc-100 backdrop-blur-md">
                         @{currentStore.username}
                       </span>
                     )}
 
                     {!!currentStore.niche && (
-                      <span className="inline-flex rounded-full border border-white/10 bg-white/5 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.14em] text-zinc-300">
+                      <span className="inline-flex rounded-full border border-white/10 bg-black/25 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.14em] text-zinc-100 backdrop-blur-md">
                         {currentStore.niche}
                       </span>
                     )}
                   </div>
 
                   <div className="flex items-end gap-4">
-                    <div className="flex h-24 w-24 shrink-0 items-center justify-center overflow-hidden rounded-[28px] border border-white/15 bg-black/30 text-xl font-black text-white shadow-2xl">
+                    <div className="flex h-24 w-24 shrink-0 items-center justify-center overflow-hidden rounded-[28px] border border-white/20 bg-black/20 text-xl font-black text-white shadow-2xl backdrop-blur-md">
                       {currentStore.logoUrl ? (
                         <ProductImage
                           src={ensureUrl(currentStore.logoUrl)}
@@ -714,8 +717,7 @@ export default function LojaPublica() {
                       </h1>
 
                       <p
-                        className="mt-3 max-w-2xl text-base leading-7"
-                        style={{ color: currentStore.mutedTextColor }}
+                        className="mt-3 max-w-2xl text-base leading-7 text-zinc-100/90"
                       >
                         {currentStore.description ||
                           'Explore os produtos disponíveis desta loja e encontre a melhor oferta para você.'}
@@ -725,7 +727,7 @@ export default function LojaPublica() {
 
                   <div className="mt-5 flex flex-col gap-3 sm:flex-row">
                     <Button
-                      className="w-full rounded-2xl px-6 font-bold sm:w-auto"
+                      className="w-full rounded-2xl px-6 font-bold shadow-[0_12px_28px_rgba(255,255,255,0.14)] sm:w-auto"
                       style={{
                         backgroundColor: currentStore.buttonBgColor,
                         color: currentStore.buttonTextColor,
@@ -738,7 +740,7 @@ export default function LojaPublica() {
 
                     <Button
                       variant="outline"
-                      className="w-full rounded-2xl border-white/10 bg-black/20 text-white hover:bg-white/5 sm:w-auto"
+                      className="w-full rounded-2xl border-white/15 bg-black/15 text-white backdrop-blur-md hover:bg-white/10 sm:w-auto"
                       onClick={() => void handleOffersGroup()}
                     >
                       <Gift className="mr-2 h-4 w-4" />
@@ -749,7 +751,34 @@ export default function LojaPublica() {
               </div>
             </div>
 
-            <div className="border-t border-white/10 bg-[linear-gradient(180deg,rgba(8,11,24,0.92)_0%,rgba(5,10,18,0.98)_100%)] p-4 md:hidden">
+            <div className="border-t border-white/10 bg-[linear-gradient(180deg,rgba(8,14,32,0.94)_0%,rgba(6,12,28,0.98)_100%)] p-4 md:hidden">
+              <div className="mb-3 flex flex-wrap gap-2">
+                {currentStore.slogan ? (
+                  <span
+                    className="inline-flex rounded-full px-3 py-1 text-[10px] font-bold uppercase tracking-[0.18em]"
+                    style={{
+                      backgroundColor: `${currentStore.accentColor}20`,
+                      color: currentStore.accentColor,
+                      border: `1px solid ${currentStore.accentColor}30`,
+                    }}
+                  >
+                    {currentStore.slogan}
+                  </span>
+                ) : null}
+
+                {!!currentStore.username && (
+                  <span className="inline-flex rounded-full border border-white/10 bg-white/5 px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.14em] text-zinc-200">
+                    @{currentStore.username}
+                  </span>
+                )}
+
+                {!!currentStore.niche && (
+                  <span className="inline-flex rounded-full border border-white/10 bg-white/5 px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.14em] text-zinc-200">
+                    {currentStore.niche}
+                  </span>
+                )}
+              </div>
+
               <div className="flex items-start gap-3">
                 <div className="flex h-20 w-20 shrink-0 items-center justify-center overflow-hidden rounded-[24px] border border-white/15 bg-black/30 text-xl font-black text-white shadow-2xl">
                   {currentStore.logoUrl ? (
@@ -765,22 +794,8 @@ export default function LojaPublica() {
                 </div>
 
                 <div className="min-w-0 flex-1">
-                  <div className="mb-2 flex flex-wrap gap-2">
-                    {!!currentStore.niche && (
-                      <span className="inline-flex rounded-full border border-white/10 bg-white/5 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.14em] text-zinc-300">
-                        {currentStore.niche}
-                      </span>
-                    )}
-
-                    {!!currentStore.username && (
-                      <span className="inline-flex rounded-full border border-white/10 bg-white/5 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.14em] text-zinc-300">
-                        @{currentStore.username}
-                      </span>
-                    )}
-                  </div>
-
                   <h1
-                    className="break-words text-[30px] font-black leading-[1.02] tracking-[-0.02em]"
+                    className="break-words text-[38px] font-black leading-[0.98] tracking-[-0.03em]"
                     style={{ color: currentStore.textColor }}
                   >
                     {currentStore.name}
@@ -789,8 +804,7 @@ export default function LojaPublica() {
               </div>
 
               <p
-                className="mt-4 text-[15px] leading-7"
-                style={{ color: currentStore.mutedTextColor }}
+                className="mt-3 text-[15px] leading-7 text-zinc-100/90"
               >
                 {currentStore.description ||
                   'Explore os produtos disponíveis desta loja e encontre a melhor oferta para você.'}
@@ -798,7 +812,7 @@ export default function LojaPublica() {
 
               <div className="mt-4 grid grid-cols-1 gap-3">
                 <Button
-                  className="w-full rounded-2xl px-6 font-bold"
+                  className="w-full rounded-2xl px-6 font-bold shadow-[0_12px_28px_rgba(255,255,255,0.12)]"
                   style={{
                     backgroundColor: currentStore.buttonBgColor,
                     color: currentStore.buttonTextColor,
@@ -811,7 +825,7 @@ export default function LojaPublica() {
 
                 <Button
                   variant="outline"
-                  className="w-full rounded-2xl border-white/10 bg-black/20 text-white hover:bg-white/5"
+                  className="w-full rounded-2xl border-white/10 bg-black/18 text-white hover:bg-white/5"
                   onClick={() => void handleOffersGroup()}
                 >
                   <Gift className="mr-2 h-4 w-4" />
