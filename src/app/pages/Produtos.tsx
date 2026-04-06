@@ -6,6 +6,7 @@ import {
   Copy,
   ExternalLink,
   FolderKanban,
+  FolderPlus,
   Image as ImageIcon,
   Link as LinkIcon,
   Package,
@@ -28,6 +29,14 @@ type ProductForm = {
   image: string;
   affiliateLink: string;
   description: string;
+  categoryId: string;
+};
+
+type Category = {
+  id: string;
+  name: string;
+  storeId: string;
+  createdAt: string | null;
 };
 
 type FilterType =
@@ -148,6 +157,31 @@ function getProductCreatedAt(product: any) {
   return Number.isFinite(timestamp) ? timestamp : 0;
 }
 
+function getProductCategoryId(product: any) {
+  return String(product?.categoryId ?? product?.category_id ?? '').trim();
+}
+
+function normalizeCategory(row: any): Category | null {
+  if (!row?.id) return null;
+
+  return {
+    id: String(row.id),
+    name: String(row.name ?? '').trim(),
+    storeId: String(row.store_id ?? row.storeId ?? '').trim(),
+    createdAt: row.created_at ?? null,
+  };
+}
+
+function sortCategories(list: Category[]) {
+  return [...list].sort((a, b) => {
+    const aTime = a.createdAt ? new Date(a.createdAt).getTime() : 0;
+    const bTime = b.createdAt ? new Date(b.createdAt).getTime() : 0;
+
+    if (aTime !== bTime) return aTime - bTime;
+    return a.name.localeCompare(b.name, 'pt-BR');
+  });
+}
+
 const FILTER_OPTIONS: Array<{ value: FilterType; label: string }> = [
   { value: 'todos', label: 'Todos' },
   { value: 'com-link', label: 'Com link' },
@@ -175,6 +209,13 @@ export default function Produtos() {
   const [importPagePreview, setImportPagePreview] = useState<ImportedPageResult | null>(null);
   const [selectedImportedIds, setSelectedImportedIds] = useState<string[]>([]);
   const [savingImportedBatch, setSavingImportedBatch] = useState(false);
+  const [categories, setCategories] = useState<Category[]>([]);
+  const [categoriesLoading, setCategoriesLoading] = useState(false);
+  const [isCategoryModalOpen, setIsCategoryModalOpen] = useState(false);
+  const [editingCategory, setEditingCategory] = useState<Category | null>(null);
+  const [categoryName, setCategoryName] = useState('');
+  const [savingCategory, setSavingCategory] = useState(false);
+  const [deletingCategoryId, setDeletingCategoryId] = useState<string | null>(null);
 
   const [form, setForm] = useState<ProductForm>({
     name: '',
@@ -182,31 +223,43 @@ export default function Produtos() {
     image: '',
     affiliateLink: '',
     description: '',
+    categoryId: '',
   });
 
+  const categoryNameMap = useMemo(() => {
+    return new Map(categories.map((category) => [category.id, category.name]));
+  }, [categories]);
+
   const enrichedProducts = useMemo(() => {
-    return products.map((product, index) => ({
-      product,
-      index,
-      name: getProductName(product),
-      description: getProductDescription(product),
-      image: getProductImage(product),
-      affiliateLink: getProductAffiliateLink(product),
-      priceNumber: getProductPrice(product),
-      createdAt: getProductCreatedAt(product),
-    }));
-  }, [products]);
+    return products.map((product, index) => {
+      const categoryId = getProductCategoryId(product);
+
+      return {
+        product,
+        index,
+        name: getProductName(product),
+        description: getProductDescription(product),
+        image: getProductImage(product),
+        affiliateLink: getProductAffiliateLink(product),
+        priceNumber: getProductPrice(product),
+        createdAt: getProductCreatedAt(product),
+        categoryId,
+        categoryName: categoryId ? categoryNameMap.get(categoryId) ?? 'Sem categoria' : 'Sem categoria',
+      };
+    });
+  }, [products, categoryNameMap]);
 
   const filteredProducts = useMemo(() => {
     const term = search.trim().toLowerCase();
     let list = [...enrichedProducts];
 
     if (term) {
-      list = list.filter(({ name, description, affiliateLink }) => {
+      list = list.filter(({ name, description, affiliateLink, categoryName }) => {
         return (
           name.toLowerCase().includes(term) ||
           description.toLowerCase().includes(term) ||
-          affiliateLink.toLowerCase().includes(term)
+          affiliateLink.toLowerCase().includes(term) ||
+          categoryName.toLowerCase().includes(term)
         );
       });
     }
@@ -268,6 +321,52 @@ export default function Produtos() {
     return importPagePreview.items.every((item) => selectedImportedIds.includes(item.tempId));
   }, [importPagePreview, selectedImportedIds]);
 
+  const categoriesWithCount = useMemo(() => {
+    return categories.map((category) => ({
+      ...category,
+      totalProducts: products.filter((product) => getProductCategoryId(product) === category.id).length,
+    }));
+  }, [categories, products]);
+
+  const uncategorizedProductsCount = useMemo(() => {
+    return products.filter((product) => !getProductCategoryId(product)).length;
+  }, [products]);
+
+  const loadCategories = async (storeId?: string | null) => {
+    const resolvedStoreId = storeId ?? store?.id ?? null;
+
+    if (!resolvedStoreId) {
+      setCategories([]);
+      return;
+    }
+
+    setCategoriesLoading(true);
+
+    try {
+      const { data, error } = await supabase
+        .from('categories')
+        .select('*')
+        .eq('store_id', resolvedStoreId);
+
+      if (error) throw error;
+
+      const normalized = (data ?? [])
+        .map(normalizeCategory)
+        .filter((category): category is Category => Boolean(category?.id && category.name));
+
+      setCategories(sortCategories(normalized));
+    } catch (error) {
+      console.error('Erro ao carregar categorias:', error);
+      setCategories([]);
+    } finally {
+      setCategoriesLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    void loadCategories(store?.id);
+  }, [store?.id]);
+
   const resetImport = () => {
     setImportUrl('');
     setImportPreview(null);
@@ -284,8 +383,25 @@ export default function Produtos() {
       image: '',
       affiliateLink: '',
       description: '',
+      categoryId: '',
     });
     resetImport();
+  };
+
+  const resetCategoryForm = () => {
+    setEditingCategory(null);
+    setCategoryName('');
+  };
+
+  const openCreateCategoryModal = () => {
+    resetCategoryForm();
+    setIsCategoryModalOpen(true);
+  };
+
+  const closeCategoryModal = () => {
+    if (savingCategory) return;
+    setIsCategoryModalOpen(false);
+    resetCategoryForm();
   };
 
   const applyImportedPreview = (preview: ImportedProductPreview) => {
@@ -383,9 +499,100 @@ export default function Produtos() {
       image: getProductImage(product),
       affiliateLink: getProductAffiliateLink(product),
       description: getProductDescription(product),
+      categoryId: getProductCategoryId(product),
     });
     resetImport();
     setIsFormOpen(true);
+  };
+
+  const startEditCategory = (category: Category) => {
+    setEditingCategory(category);
+    setCategoryName(category.name);
+    setIsCategoryModalOpen(true);
+  };
+
+  const handleSaveCategory = async () => {
+    if (!store?.id) {
+      toast.error('Loja não encontrada.');
+      return;
+    }
+
+    const name = categoryName.trim();
+
+    if (!name) {
+      toast.error('Informe o nome da categoria.');
+      return;
+    }
+
+    setSavingCategory(true);
+
+    try {
+      if (editingCategory) {
+        const { error } = await supabase
+          .from('categories')
+          .update({ name })
+          .eq('id', editingCategory.id)
+          .eq('store_id', store.id);
+
+        if (error) throw error;
+
+        toast.success('Categoria atualizada com sucesso.');
+      } else {
+        const { error } = await supabase.from('categories').insert({
+          store_id: store.id,
+          name,
+        });
+
+        if (error) throw error;
+
+        toast.success('Categoria criada com sucesso.');
+      }
+
+      await loadCategories(store.id);
+      closeCategoryModal();
+    } catch (error: any) {
+      console.error('Erro ao salvar categoria:', error);
+      toast.error(error?.message || 'Não foi possível salvar a categoria.');
+    } finally {
+      setSavingCategory(false);
+    }
+  };
+
+  const handleDeleteCategory = async (category: Category) => {
+    if (!store?.id) {
+      toast.error('Loja não encontrada.');
+      return;
+    }
+
+    const hasProducts = products.some((product) => getProductCategoryId(product) === category.id);
+
+    if (hasProducts) {
+      toast.error('Remova ou altere os produtos desta categoria antes de excluí-la.');
+      return;
+    }
+
+    const confirmed = window.confirm(`Deseja realmente excluir a categoria "${category.name}"?`);
+    if (!confirmed) return;
+
+    setDeletingCategoryId(category.id);
+
+    try {
+      const { error } = await supabase
+        .from('categories')
+        .delete()
+        .eq('id', category.id)
+        .eq('store_id', store.id);
+
+      if (error) throw error;
+
+      await loadCategories(store.id);
+      toast.success('Categoria excluída com sucesso.');
+    } catch (error: any) {
+      console.error('Erro ao excluir categoria:', error);
+      toast.error(error?.message || 'Não foi possível excluir a categoria.');
+    } finally {
+      setDeletingCategoryId(null);
+    }
   };
 
   const toggleSelect = (id: string) => {
@@ -595,6 +802,7 @@ export default function Produtos() {
       price: parsePrice(form.price),
       image: ensureUrl(form.image),
       affiliate_link: ensureUrl(form.affiliateLink),
+      category_id: form.categoryId || null,
     };
 
     if (!payload.name) {
@@ -634,6 +842,7 @@ export default function Produtos() {
             price: payload.price,
             image: payload.image,
             affiliate_link: payload.affiliate_link,
+            category_id: payload.category_id,
           })
           .eq('id', editingId)
           .eq('store_id', store.id);
@@ -770,6 +979,7 @@ export default function Produtos() {
         price: getProductPrice(product),
         image: ensureUrl(getProductImage(product)),
         affiliate_link: ensureUrl(getProductAffiliateLink(product)),
+        category_id: getProductCategoryId(product) || null,
       });
 
       if (error) throw error;
@@ -850,6 +1060,15 @@ export default function Produtos() {
               </Button>
 
               <Button
+                variant="outline"
+                className="rounded-2xl border-white/10 bg-black/20 text-white hover:bg-white/5"
+                onClick={openCreateCategoryModal}
+              >
+                <FolderPlus className="mr-2 h-4 w-4" />
+                Nova categoria
+              </Button>
+
+              <Button
                 className="rounded-2xl bg-gradient-to-r from-emerald-500 to-emerald-600 font-bold text-black hover:from-emerald-400 hover:to-emerald-500"
                 onClick={openCreateModal}
               >
@@ -859,7 +1078,7 @@ export default function Produtos() {
             </div>
           </div>
 
-          <div className="mb-8 grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4">
+          <div className="mb-8 grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-5">
             <Card className="border-white/10 bg-white/[0.04]">
               <CardContent className="py-6">
                 <div className="flex items-center gap-3">
@@ -906,6 +1125,20 @@ export default function Produtos() {
               <CardContent className="py-6">
                 <div className="flex items-center gap-3">
                   <div className="rounded-2xl bg-emerald-500/10 p-3 text-emerald-300">
+                    <FolderPlus className="h-5 w-5" />
+                  </div>
+                  <div>
+                    <p className="text-sm text-zinc-400">Categorias</p>
+                    <p className="text-2xl font-black text-white">{categories.length}</p>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+
+            <Card className="border-white/10 bg-white/[0.04]">
+              <CardContent className="py-6">
+                <div className="flex items-center gap-3">
+                  <div className="rounded-2xl bg-emerald-500/10 p-3 text-emerald-300">
                     <Package className="h-5 w-5" />
                   </div>
                   <div>
@@ -916,6 +1149,96 @@ export default function Produtos() {
               </CardContent>
             </Card>
           </div>
+
+          <Card className="mb-8 border-white/10 bg-white/[0.04]">
+            <CardHeader>
+              <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+                <div>
+                  <CardTitle className="text-white">Categorias</CardTitle>
+                  <CardDescription className="text-zinc-400">
+                    Crie, edite e organize as categorias da sua loja.
+                  </CardDescription>
+                </div>
+
+                <Button
+                  variant="outline"
+                  className="rounded-2xl border-white/10 bg-black/20 text-white hover:bg-white/5"
+                  onClick={openCreateCategoryModal}
+                >
+                  <FolderPlus className="mr-2 h-4 w-4" />
+                  Nova categoria
+                </Button>
+              </div>
+            </CardHeader>
+
+            <CardContent>
+              {categoriesLoading ? (
+                <div className="rounded-3xl border border-white/10 bg-black/20 p-8 text-center text-zinc-400">
+                  Carregando categorias...
+                </div>
+              ) : categoriesWithCount.length === 0 ? (
+                <div className="rounded-3xl border border-white/10 bg-black/20 p-8 text-center">
+                  <FolderKanban className="mx-auto mb-4 h-12 w-12 text-zinc-600" />
+                  <h3 className="text-lg font-bold text-white">Nenhuma categoria criada</h3>
+                  <p className="mt-2 text-zinc-400">
+                    Clique em nova categoria para organizar melhor seus produtos.
+                  </p>
+                </div>
+              ) : (
+                <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
+                  {categoriesWithCount.map((category) => (
+                    <div
+                      key={category.id}
+                      className="rounded-3xl border border-white/10 bg-black/20 p-5 transition hover:border-emerald-500/30"
+                    >
+                      <div className="flex items-start justify-between gap-3">
+                        <div>
+                          <p className="text-lg font-black text-white">{category.name}</p>
+                          <p className="mt-1 text-sm text-zinc-400">
+                            {category.totalProducts} {category.totalProducts === 1 ? 'produto' : 'produtos'}
+                          </p>
+                        </div>
+
+                        <span className="rounded-full border border-emerald-500/20 bg-emerald-500/10 px-3 py-1 text-xs font-semibold text-emerald-300">
+                          Categoria
+                        </span>
+                      </div>
+
+                      <div className="mt-4 grid grid-cols-2 gap-3">
+                        <Button
+                          variant="outline"
+                          className="rounded-2xl border-white/10 bg-black/20 text-white hover:bg-white/5"
+                          onClick={() => startEditCategory(category)}
+                        >
+                          <Pencil className="mr-2 h-4 w-4" />
+                          Editar
+                        </Button>
+
+                        <Button
+                          className="rounded-2xl bg-red-500 text-white hover:bg-red-600"
+                          onClick={() => handleDeleteCategory(category)}
+                          disabled={deletingCategoryId === category.id}
+                        >
+                          <Trash2 className="mr-2 h-4 w-4" />
+                          {deletingCategoryId === category.id ? 'Excluindo...' : 'Excluir'}
+                        </Button>
+                      </div>
+                    </div>
+                  ))}
+
+                  <div className="rounded-3xl border border-dashed border-white/10 bg-black/20 p-5">
+                    <p className="text-lg font-black text-white">Sem categoria</p>
+                    <p className="mt-1 text-sm text-zinc-400">
+                      {uncategorizedProductsCount} {uncategorizedProductsCount === 1 ? 'produto sem categoria' : 'produtos sem categoria'}
+                    </p>
+                    <p className="mt-3 text-sm leading-6 text-zinc-500">
+                      Produtos sem categoria continuam funcionando normalmente, mas ficam menos organizados.
+                    </p>
+                  </div>
+                </div>
+              )}
+            </CardContent>
+          </Card>
 
           <Card className="border-white/10 bg-white/[0.04]">
             <CardHeader>
@@ -1093,7 +1416,15 @@ export default function Produtos() {
                               ) : null}
                             </div>
 
-                            <h3 className="text-xl font-black text-white">{name}</h3>
+                            <div className="mt-1 flex flex-wrap items-center gap-2">
+                              <span className="rounded-full border border-white/10 bg-white/5 px-3 py-1 text-xs font-semibold text-white">
+                                {getProductCategoryId(product)
+                                  ? categoryNameMap.get(getProductCategoryId(product)) || 'Categoria'
+                                  : 'Sem categoria'}
+                              </span>
+                            </div>
+
+                            <h3 className="mt-3 text-xl font-black text-white">{name}</h3>
 
                             <p className="mt-3 line-clamp-3 text-sm leading-6 text-zinc-400">
                               {description || 'Sem descrição cadastrada.'}
@@ -1181,6 +1512,75 @@ export default function Produtos() {
           </Card>
         </div>
       </div>
+
+      {isCategoryModalOpen ? (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 p-4 backdrop-blur-sm"
+          onClick={closeCategoryModal}
+        >
+          <div
+            className="w-full max-w-lg rounded-[28px] border border-white/10 bg-[#050505] shadow-2xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-start justify-between gap-4 border-b border-white/10 px-6 py-5">
+              <div>
+                <h2 className="text-2xl font-black text-white">
+                  {editingCategory ? 'Editar categoria' : 'Nova categoria'}
+                </h2>
+                <p className="mt-1 text-sm text-zinc-400">
+                  Organize seus produtos em categorias para deixar tudo mais profissional.
+                </p>
+              </div>
+
+              <button
+                type="button"
+                onClick={closeCategoryModal}
+                className="rounded-xl border border-white/10 bg-white/5 p-2 text-zinc-400 transition hover:text-white"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+
+            <div className="px-6 py-6">
+              <label className="mb-2 flex items-center gap-2 text-sm font-medium text-white">
+                <FolderKanban className="h-4 w-4 text-emerald-400" />
+                Nome da categoria
+              </label>
+
+              <input
+                value={categoryName}
+                onChange={(e) => setCategoryName(e.target.value)}
+                className="h-12 w-full rounded-2xl border border-white/10 bg-black/30 px-4 text-white outline-none transition focus:border-emerald-500"
+                placeholder="Ex: Achadinhos premium"
+              />
+
+              <div className="mt-5 flex flex-col gap-3 sm:flex-row">
+                <Button
+                  className="flex-1 rounded-2xl bg-gradient-to-r from-emerald-500 to-emerald-600 font-bold text-black hover:from-emerald-400 hover:to-emerald-500"
+                  onClick={handleSaveCategory}
+                  disabled={savingCategory}
+                >
+                  <Save className="mr-2 h-4 w-4" />
+                  {savingCategory
+                    ? 'Salvando...'
+                    : editingCategory
+                      ? 'Salvar categoria'
+                      : 'Criar categoria'}
+                </Button>
+
+                <Button
+                  variant="outline"
+                  className="rounded-2xl border-white/10 bg-black/20 text-white hover:bg-white/5"
+                  onClick={closeCategoryModal}
+                  disabled={savingCategory}
+                >
+                  Cancelar
+                </Button>
+              </div>
+            </div>
+          </div>
+        </div>
+      ) : null}
 
       {isFormOpen ? (
         <div
@@ -1486,6 +1886,27 @@ export default function Produtos() {
                       />
                     </div>
 
+                    <div>
+                      <label className="mb-2 flex items-center gap-2 text-sm font-medium text-white">
+                        <FolderKanban className="h-4 w-4 text-emerald-400" />
+                        Categoria
+                      </label>
+                      <select
+                        value={form.categoryId}
+                        onChange={(e) =>
+                          setForm((prev) => ({ ...prev, categoryId: e.target.value }))
+                        }
+                        className="h-12 w-full rounded-2xl border border-white/10 bg-black/30 px-4 text-white outline-none transition focus:border-emerald-500"
+                      >
+                        <option value="">Sem categoria</option>
+                        {categories.map((category) => (
+                          <option key={category.id} value={category.id}>
+                            {category.name}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+
                     <div className="md:col-span-2">
                       <label className="mb-2 flex items-center gap-2 text-sm font-medium text-white">
                         <ImageIcon className="h-4 w-4 text-emerald-400" />
@@ -1554,6 +1975,12 @@ export default function Produtos() {
                         <div className="mb-3 flex flex-wrap gap-2">
                           <span className="rounded-full border border-emerald-500/20 bg-emerald-500/10 px-3 py-1 text-xs font-semibold text-emerald-300">
                             Produto pronto
+                          </span>
+
+                          <span className="rounded-full border border-white/10 bg-white/5 px-3 py-1 text-xs font-semibold text-white">
+                            {form.categoryId
+                              ? categoryNameMap.get(form.categoryId) || 'Categoria'
+                              : 'Sem categoria'}
                           </span>
 
                           {form.price ? (
