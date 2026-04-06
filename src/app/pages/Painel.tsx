@@ -923,9 +923,9 @@ export default function Painel() {
         </div>
       </header>
       <main className="relative z-10 mx-auto flex max-w-7xl flex-col gap-5 px-4 py-5 md:gap-6 md:py-6">
-        <section className="grid grid-cols-1 gap-5 xl:grid-cols-[minmax(0,1.55fr)_minmax(0,0.95fr)] xl:items-start">
-          <Card className="self-start overflow-hidden border-emerald-500/20 bg-white/[0.04] shadow-[0_20px_60px_rgba(0,0,0,0.35)]">
-            <div className="relative min-h-[240px] overflow-hidden md:min-h-[320px]">
+        <section className="grid grid-cols-1 gap-5 xl:grid-cols-[minmax(0,1.55fr)_minmax(0,0.95fr)] xl:items-stretch">
+          <Card className="overflow-hidden border-emerald-500/20 bg-white/[0.04] shadow-[0_20px_60px_rgba(0,0,0,0.35)] xl:h-full">
+            <div className="relative min-h-[240px] overflow-hidden md:min-h-[320px] xl:h-full">
               <div className="absolute inset-0 overflow-hidden bg-[linear-gradient(135deg,rgba(2,8,5,0.92)_0%,rgba(4,22,15,0.80)_45%,rgba(6,38,26,0.62)_100%)]">
                 {store.bannerUrl ? (
                   <img
@@ -989,8 +989,8 @@ export default function Painel() {
             </div>
           </Card>
 
-          <Card className="border-emerald-500/20 bg-[linear-gradient(180deg,rgba(16,185,129,0.18)_0%,rgba(5,10,8,0.9)_100%)] shadow-[0_20px_60px_rgba(0,0,0,0.35)]">
-            <CardContent className="p-5 md:p-6">
+          <Card className="border-emerald-500/20 bg-[linear-gradient(180deg,rgba(16,185,129,0.18)_0%,rgba(5,10,8,0.9)_100%)] shadow-[0_20px_60px_rgba(0,0,0,0.35)] xl:h-full">
+            <CardContent className="flex h-full flex-col p-5 md:p-6">
               <div className="inline-flex rounded-full border border-emerald-300/20 bg-emerald-300/10 px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.18em] text-emerald-200">
                 Novidade!
               </div>
@@ -998,7 +998,7 @@ export default function Painel() {
               <h3 className="mt-4 text-2xl font-black text-white">{nextBestAction.title}</h3>
               <p className="mt-3 text-sm leading-6 text-emerald-50/85">{nextBestAction.description}</p>
 
-              <div className="mt-6 rounded-3xl border border-white/10 bg-black/25 p-4">
+              <div className="mt-6 flex-1 rounded-3xl border border-white/10 bg-black/25 p-4">
                 <p className="text-xs font-semibold uppercase tracking-[0.18em] text-emerald-200/80">Potencial visual</p>
                 <div className="mt-2 text-4xl font-black text-white">
                   {estimatedEarnings.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
