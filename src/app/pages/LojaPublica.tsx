@@ -946,12 +946,6 @@ export default function LojaPublica() {
 
                             <div className="absolute inset-0 bg-[linear-gradient(180deg,rgba(0,0,0,0.00)_0%,rgba(0,0,0,0.08)_45%,rgba(0,0,0,0.62)_100%)]" />
 
-                            <div className="absolute left-4 top-4">
-                              <span className="inline-flex rounded-full border border-white/10 bg-black/45 px-3 py-1 text-[11px] font-bold uppercase tracking-[0.16em] text-white backdrop-blur-md">
-                                {group.label}
-                              </span>
-                            </div>
-
                             <div className="absolute right-4 top-4">
                               <span
                                 className="inline-flex items-center rounded-full border px-4 py-2 text-base font-black shadow-[0_10px_30px_rgba(34,197,94,0.28)]"
