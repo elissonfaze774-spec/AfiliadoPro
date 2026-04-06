@@ -564,28 +564,40 @@ export default function Produtos() {
       return;
     }
 
-    const hasProducts = products.some((product) => getProductCategoryId(product) === category.id);
+    const totalProductsInCategory = products.filter(
+      (product) => getProductCategoryId(product) === category.id,
+    ).length;
 
-    if (hasProducts) {
-      toast.error('Remova ou altere os produtos desta categoria antes de excluí-la.');
-      return;
-    }
+    const confirmMessage =
+      totalProductsInCategory > 0
+        ? `A categoria "${category.name}" possui ${totalProductsInCategory} produto(s). Ao excluir, esses produtos ficarão sem categoria. Deseja continuar?`
+        : `Deseja realmente excluir a categoria "${category.name}"?`;
 
-    const confirmed = window.confirm(`Deseja realmente excluir a categoria "${category.name}"?`);
+    const confirmed = window.confirm(confirmMessage);
     if (!confirmed) return;
 
     setDeletingCategoryId(category.id);
 
     try {
-      const { error } = await supabase
+      if (totalProductsInCategory > 0) {
+        const { error: unlinkProductsError } = await supabase
+          .from('products')
+          .update({ category_id: null })
+          .eq('store_id', store.id)
+          .eq('category_id', category.id);
+
+        if (unlinkProductsError) throw unlinkProductsError;
+      }
+
+      const { error: deleteCategoryError } = await supabase
         .from('categories')
         .delete()
         .eq('id', category.id)
         .eq('store_id', store.id);
 
-      if (error) throw error;
+      if (deleteCategoryError) throw deleteCategoryError;
 
-      await loadCategories(store.id);
+      await Promise.all([loadCategories(store.id), refreshAppData()]);
       toast.success('Categoria excluída com sucesso.');
     } catch (error: any) {
       console.error('Erro ao excluir categoria:', error);
