@@ -46,6 +46,11 @@ type StoreData = {
   accessExpiresAt: string | null;
 };
 
+type Category = {
+  id: string;
+  name: string;
+};
+
 type Product = {
   id: string;
   name: string;
@@ -53,6 +58,7 @@ type Product = {
   image: string;
   affiliateLink: string;
   priceValue: number;
+  categoryId: string;
   categoryName: string;
   createdAt: string | null;
 };
@@ -147,23 +153,21 @@ function normalizeStore(row: any): StoreData | null {
   };
 }
 
-function resolveCategoryNameFromRow(row: any, categoryNameMap: Map<string, string>, fallbackCategory: string) {
-  const categoryRelation = Array.isArray(row?.categories) ? row.categories[0] : row?.categories;
-  const relationName = categoryRelation?.name ?? '';
-  const rawCategoryId = String(row?.category_id ?? row?.categoryId ?? '').trim();
 
-  return (
-    row?.category_name ??
-    row?.category ??
-    row?.categoryLabel ??
-    relationName ??
-    (rawCategoryId ? categoryNameMap.get(rawCategoryId) : '') ??
-    row?.niche ??
-    fallbackCategory
-  );
+function normalizeCategory(row: any): Category | null {
+  if (!row?.id) return null;
+
+  return {
+    id: String(row.id),
+    name: String(row.name ?? '').trim(),
+  };
 }
 
-function normalizeProduct(row: any, fallbackCategory: string, categoryNameMap: Map<string, string>): Product {
+function normalizeProduct(
+  row: any,
+  categoriesMap: Map<string, string>,
+  fallbackCategory: string,
+): Product {
   const priceValue =
     typeof row?.price === 'number'
       ? row.price
@@ -171,7 +175,17 @@ function normalizeProduct(row: any, fallbackCategory: string, categoryNameMap: M
         ? Number(row.price)
         : 0;
 
-  const categoryName = resolveCategoryNameFromRow(row, categoryNameMap, fallbackCategory);
+  const categoryId = String(row?.category_id ?? row?.categoryId ?? '').trim();
+  const mappedCategoryName = categoryId ? categoriesMap.get(categoryId) ?? '' : '';
+
+  const categoryName =
+    mappedCategoryName ||
+    row?.category_name ||
+    row?.category ||
+    row?.categoryLabel ||
+    row?.niche ||
+    row?.categories?.name ||
+    fallbackCategory;
 
   return {
     id: String(row?.id ?? ''),
@@ -180,6 +194,7 @@ function normalizeProduct(row: any, fallbackCategory: string, categoryNameMap: M
     image: row?.image ?? '',
     affiliateLink: row?.affiliate_link ?? row?.affiliateLink ?? '',
     priceValue: Number.isFinite(priceValue) ? priceValue : 0,
+    categoryId,
     categoryName: String(categoryName ?? fallbackCategory).trim() || fallbackCategory,
     createdAt: row?.created_at ?? null,
   };
@@ -310,27 +325,34 @@ export default function LojaPublica() {
         return;
       }
 
-      const [{ data: productRows, error: productsError }, { data: categoryRows, error: categoriesError }] = await Promise.all([
-        supabase
-          .from('products')
-          .select('*')
-          .eq('store_id', normalizedStore.id)
-          .order('created_at', { ascending: false }),
-        supabase
-          .from('categories')
-          .select('id, name')
-          .eq('store_id', normalizedStore.id),
-      ]);
+      const [{ data: categoriesRows, error: categoriesError }, { data: productRows, error: productsError }] =
+        await Promise.all([
+          supabase
+            .from('categories')
+            .select('id, name')
+            .eq('store_id', normalizedStore.id)
+            .order('name', { ascending: true }),
+          supabase
+            .from('products')
+            .select('*')
+            .eq('store_id', normalizedStore.id)
+            .order('created_at', { ascending: false }),
+        ]);
 
-      if (productsError) throw productsError;
       if (categoriesError) throw categoriesError;
+      if (productsError) throw productsError;
+
+      const categoriesMap = new Map<string, string>();
+
+      (categoriesRows ?? [])
+        .map(normalizeCategory)
+        .filter(Boolean)
+        .forEach((category) => {
+          categoriesMap.set(category!.id, category!.name);
+        });
 
       const fallbackCategory = normalizedStore.niche || 'Produtos em destaque';
-      const categoryNameMap = new Map(
-        (categoryRows ?? []).map((category: any) => [String(category.id), String(category.name ?? '').trim()]),
-      );
-
-      setProducts((productRows ?? []).map((row) => normalizeProduct(row, fallbackCategory, categoryNameMap)));
+      setProducts((productRows ?? []).map((row) => normalizeProduct(row, categoriesMap, fallbackCategory)));
     } catch (error) {
       console.error('Erro ao carregar loja pública:', error);
       setStore(null);
@@ -993,6 +1015,12 @@ export default function LojaPublica() {
                             />
 
                             <div className="absolute inset-0 bg-[linear-gradient(180deg,rgba(0,0,0,0.00)_0%,rgba(0,0,0,0.08)_45%,rgba(0,0,0,0.62)_100%)]" />
+
+                            <div className="absolute left-4 top-4">
+                              <span className="inline-flex rounded-full border border-white/10 bg-black/45 px-3 py-1 text-[11px] font-bold uppercase tracking-[0.16em] text-white backdrop-blur-md">
+                                {group.label}
+                              </span>
+                            </div>
 
                             <div className="absolute right-4 top-4">
                               <span
