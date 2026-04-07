@@ -72,6 +72,8 @@ type DragState = {
 };
 
 const MONEY_GREEN_DARK = '#052e16';
+const CAROUSEL_REPEAT_SETS = 7;
+const CAROUSEL_CENTER_SET = Math.floor(CAROUSEL_REPEAT_SETS / 2);
 
 function ensureUrl(value: string) {
   const trimmed = String(value ?? '').trim();
@@ -524,7 +526,10 @@ export default function LojaPublica() {
       id: `${label}-${index}`.toLowerCase().replace(/[^a-z0-9]+/gi, '-'),
       label,
       items,
-      loopItems: items.length > 1 ? [...items, ...items, ...items] : items,
+      loopItems:
+        items.length > 1
+          ? Array.from({ length: CAROUSEL_REPEAT_SETS }, () => items).flat()
+          : items,
     }));
   }, [filteredProducts, store?.niche]);
 
@@ -544,7 +549,7 @@ export default function LojaPublica() {
         const row = categoryRowsRef.current[group.id];
         if (!row || initializedRowsRef.current[group.id]) return;
 
-        row.scrollLeft = row.scrollWidth / 3;
+        row.scrollLeft = (row.scrollWidth / CAROUSEL_REPEAT_SETS) * CAROUSEL_CENTER_SET;
         initializedRowsRef.current[group.id] = true;
       });
     }, 80);
@@ -628,14 +633,14 @@ export default function LojaPublica() {
     const row = categoryRowsRef.current[categoryId];
     if (!row) return;
 
-    const oneSetWidth = row.scrollWidth / 3;
-    const leftLimit = oneSetWidth * 0.35;
-    const rightLimit = oneSetWidth * 1.65;
+    const oneSetWidth = row.scrollWidth / CAROUSEL_REPEAT_SETS;
+    const leftLimit = oneSetWidth * 1.2;
+    const rightLimit = oneSetWidth * (CAROUSEL_REPEAT_SETS - 2.2);
 
     if (row.scrollLeft <= leftLimit) {
-      row.scrollLeft += oneSetWidth;
+      row.scrollLeft += oneSetWidth * 2;
     } else if (row.scrollLeft >= rightLimit) {
-      row.scrollLeft -= oneSetWidth;
+      row.scrollLeft -= oneSetWidth * 2;
     }
   };
 
@@ -653,17 +658,16 @@ export default function LojaPublica() {
     };
   };
 
-  const handleRowMouseMove = (event: ReactMouseEvent<HTMLDivElement>, categoryId: string) => {
+  const handleRowMouseMove = (pageX: number, categoryId: string) => {
     const row = categoryRowsRef.current[categoryId];
     const dragState = rowDragStateRef.current[categoryId];
 
     if (!row || !dragState?.isDown) return;
 
-    event.preventDefault();
-
-    const x = event.pageX - row.offsetLeft;
+    const x = pageX - row.offsetLeft;
     const walk = (x - dragState.startX) * 1.12;
     row.scrollLeft = dragState.scrollLeft - walk;
+    handleInfiniteRowScroll(categoryId, 2);
   };
 
   const handleRowMouseUp = (categoryId: string) => {
@@ -673,6 +677,31 @@ export default function LojaPublica() {
       scrollLeft: 0,
     };
   };
+
+  useEffect(() => {
+    const handleWindowMouseMove = (event: MouseEvent) => {
+      Object.keys(rowDragStateRef.current).forEach((categoryId) => {
+        if (!rowDragStateRef.current[categoryId]?.isDown) return;
+        handleRowMouseMove(event.pageX, categoryId);
+      });
+    };
+
+    const handleWindowMouseUp = () => {
+      Object.keys(rowDragStateRef.current).forEach((categoryId) => {
+        if (rowDragStateRef.current[categoryId]?.isDown) {
+          handleRowMouseUp(categoryId);
+        }
+      });
+    };
+
+    window.addEventListener('mousemove', handleWindowMouseMove);
+    window.addEventListener('mouseup', handleWindowMouseUp);
+
+    return () => {
+      window.removeEventListener('mousemove', handleWindowMouseMove);
+      window.removeEventListener('mouseup', handleWindowMouseUp);
+    };
+  }, []);
 
   if (loading) {
     return (
@@ -993,10 +1022,8 @@ export default function LojaPublica() {
                       }}
                       onScroll={() => handleInfiniteRowScroll(group.id, group.items.length)}
                       onMouseDown={(event) => handleRowMouseDown(event, group.id)}
-                      onMouseMove={(event) => handleRowMouseMove(event, group.id)}
                       onMouseUp={() => handleRowMouseUp(group.id)}
-                      onMouseLeave={() => handleRowMouseUp(group.id)}
-                      className="flex cursor-grab gap-4 overflow-x-auto px-1 pb-2 pr-14 pt-1 select-none [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+                      className="flex cursor-grab gap-4 overflow-x-auto px-1 pb-2 pr-14 pt-1 select-none touch-pan-x [scrollbar-width:none] [&::-webkit-scrollbar]:hidden active:cursor-grabbing"
                     >
                       {group.loopItems.map((product, index) => (
                         <article
